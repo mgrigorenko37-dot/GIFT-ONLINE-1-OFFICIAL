@@ -1,5 +1,11 @@
 import { simulateSales } from "./server/mockMinter";
-import { getHistory, processSale } from "./server/marketState";
+import { getHistory, processSale, initMarketStateRepository } from "./server/marketState";
+import { processTelegramMarketEvent } from "./server/telegramAdapter";
+import { handleGetCandles } from "./server/candlesHandler";
+import { attachSocketListeners } from "./server/realtimeManager";
+import { getFloorPrice, addListing, updateListingPrice, cancelListing, sellListing } from "./server/floorManager";
+import { getMarketStats } from "./server/marketStats";
+import { getIndicators } from "./server/indicatorEngine";
 import express from 'express';
 import path from 'path';
 import cors from 'cors';
@@ -8,10 +14,29 @@ import { createServer } from 'http';
 import { Server } from 'socket.io';
 
 const app = express();
-const PORT = 3000;
+const PORT = process.env.PORT ? Number(process.env.PORT) : 3000;
 
 app.use(cors());
 app.use(express.json());
+
+// External Telegram Sales Webhook / Ingestion API
+app.post('/api/telegram/webhook', (req: express.Request, res: express.Response) => {
+  const result = processTelegramMarketEvent(req.body);
+  if (result.success) {
+    return res.status(200).json(result);
+  } else {
+    return res.status(400).json(result);
+  }
+});
+
+app.post('/api/sales/ingest', (req: express.Request, res: express.Response) => {
+  const result = processTelegramMarketEvent(req.body);
+  if (result.success) {
+    return res.status(200).json(result);
+  } else {
+    return res.status(400).json(result);
+  }
+});
 
 // API route to generate a Telegram Stars invoice link
 app.post('/api/create-invoice', async (req: express.Request, res: express.Response) => {
@@ -360,26 +385,135 @@ setTimeout(syncTelegramGifts, 1000);
 
 
 // GIFTS API
-app.get('/api/market/candles', (req, res) => {
-  const rawKey = req.query.instrumentKey ? String(req.query.instrumentKey) : '';
-  const rawTf = req.query.timeframe ? String(req.query.timeframe) as Timeframe : '1m';
-  if (!rawKey || !rawTf) {
-    return res.status(400).json({ error: "Missing required parameters" });
+app.get('/api/market/candles', handleGetCandles);
+
+// Floor Price API
+app.get('/api/market/floor', (req: express.Request, res: express.Response) => {
+  const rawKey = (req.query.instrumentKey || req.query.key || req.query.collectionId || '').toString();
+  if (!rawKey || rawKey.trim() === '') {
+    return res.status(400).json({ error: 'instrumentKey is required' });
   }
-  const normKey = normalizeInstrumentKey(rawKey);
-  const fromTime = req.query.from ? parseInt(String(req.query.from)) : 0;
-  const toTime = req.query.to ? parseInt(String(req.query.to)) : Date.now() + 86400000;
-  const l = req.query.limit ? parseInt(String(req.query.limit)) : 500;
+
+  const rawCurr = (req.query.currency || 'TON').toString();
+  try {
+    const floorResult = getFloorPrice(rawKey, rawCurr as any);
+    return res.json({
+      instrumentKey: floorResult.instrumentKey,
+      currency: floorResult.currency,
+      floorPrice: floorResult.floorPrice,
+      listedCount: floorResult.listedCount,
+      updatedAt: floorResult.updatedAt,
+    });
+  } catch (err: any) {
+    return res.status(400).json({ error: err.message || 'Invalid instrumentKey' });
+  }
+});
+
+// Market Stats API
+app.get('/api/market/stats', (req: express.Request, res: express.Response) => {
+  const rawKey = (req.query.instrumentKey || req.query.key || req.query.collectionId || '').toString();
+  if (!rawKey || rawKey.trim() === '') {
+    return res.status(400).json({ error: 'instrumentKey is required' });
+  }
+
+  const currency = (req.query.currency || 'TON').toString();
+  const timeframe = req.query.timeframe ? req.query.timeframe.toString() : undefined;
   
-  const candles = getHistory(normKey, rawTf, fromTime, toTime, l);
-  res.json({
-    instrumentKey: normKey,
-    timeframe: rawTf,
-    timezone: "UTC",
-    candles,
-    hasMore: candles.length === l,
-    serverTime: Date.now()
-  });
+  const fromNum = req.query.from !== undefined ? Number(req.query.from) : undefined;
+  const toNum = req.query.to !== undefined ? Number(req.query.to) : undefined;
+
+  const from = typeof fromNum === 'number' && !isNaN(fromNum) ? fromNum : undefined;
+  const to = typeof toNum === 'number' && !isNaN(toNum) ? toNum : undefined;
+
+  try {
+    const stats = getMarketStats({
+      instrumentKey: rawKey,
+      currency: currency as any,
+      timeframe,
+      from,
+      to,
+    });
+    return res.json(stats);
+  } catch (err: any) {
+    return res.status(400).json({ error: err.message || 'Failed to compute market stats' });
+  }
+});
+
+// Indicators API
+app.get('/api/market/indicators', (req: express.Request, res: express.Response) => {
+  const rawKey = (req.query.instrumentKey || req.query.key || req.query.collectionId || '').toString();
+  if (!rawKey || rawKey.trim() === '') {
+    return res.status(400).json({ error: 'instrumentKey is required' });
+  }
+
+  const currency = (req.query.currency || 'TON').toString();
+  const timeframe = (req.query.timeframe || '1m').toString() as any;
+  const indicator = (req.query.indicator || 'sma').toString().toLowerCase() as any;
+  const source = (req.query.source || 'close').toString().toLowerCase() as any;
+
+  const period = req.query.period ? Number(req.query.period) : undefined;
+  const fastPeriod = req.query.fastPeriod ? Number(req.query.fastPeriod) : undefined;
+  const slowPeriod = req.query.slowPeriod ? Number(req.query.slowPeriod) : undefined;
+  const signalPeriod = req.query.signalPeriod ? Number(req.query.signalPeriod) : undefined;
+
+  const fromNum = req.query.from !== undefined ? Number(req.query.from) : undefined;
+  const toNum = req.query.to !== undefined ? Number(req.query.to) : undefined;
+
+  const from = typeof fromNum === 'number' && !isNaN(fromNum) ? fromNum : undefined;
+  const to = typeof toNum === 'number' && !isNaN(toNum) ? toNum : undefined;
+
+  try {
+    const result = getIndicators({
+      instrumentKey: rawKey,
+      currency: currency as any,
+      timeframe,
+      indicator,
+      source,
+      period,
+      fastPeriod,
+      slowPeriod,
+      signalPeriod,
+      from,
+      to,
+    });
+    return res.json(result);
+  } catch (err: any) {
+    return res.status(400).json({ error: err.message || 'Failed to compute indicators' });
+  }
+});
+
+// Listing Management Endpoints
+app.post('/api/market/listings', (req: express.Request, res: express.Response) => {
+  const result = addListing(req.body);
+  if (!result.success) {
+    return res.status(400).json({ error: result.error });
+  }
+  return res.status(201).json(result);
+});
+
+app.patch('/api/market/listings/:id/price', (req: express.Request, res: express.Response) => {
+  const { price } = req.body;
+  const result = updateListingPrice(String(req.params.id), price);
+  if (!result.success) {
+    return res.status(400).json({ error: result.error });
+  }
+  return res.json(result);
+});
+
+app.post('/api/market/listings/:id/cancel', (req: express.Request, res: express.Response) => {
+  const result = cancelListing(String(req.params.id));
+  if (!result.success) {
+    return res.status(400).json({ error: result.error });
+  }
+  return res.json(result);
+});
+
+app.post('/api/market/listings/:id/sell', (req: express.Request, res: express.Response) => {
+  const result = sellListing(String(req.params.id));
+  if (!result.success) {
+    return res.status(400).json({ error: result.error });
+  }
+  return res.json(result);
 });
 
 app.get('/api/collections', (req, res) => res.json(dbCollections));
@@ -416,33 +550,20 @@ app.get('/api/gifts', async (req, res) => {
 });
 
 async function startServer() {
+  initMarketStateRepository();
+
   const httpServer = createServer(app);
   const io = new Server(httpServer, {
     cors: { origin: '*' },
   });
 
-  simulateSales(io);
+  if (process.env.SIMULATION_MODE === 'true' || process.env.ENABLE_SIMULATION === 'true') {
+    simulateSales(io);
+  }
   io.on('connection', (socket) => {
     let currentRoom = '';
 
-    
-    socket.on('market_subscribe', (data) => {
-      if (data?.channel === 'gift_market' && data?.instrumentKey) {
-        const normKey = normalizeInstrumentKey(String(data.instrumentKey));
-        const room = `market_${normKey}`;
-        socket.join(room);
-        console.log(`Client ${socket.id} joined ${room}`);
-      }
-    });
-    
-    socket.on('market_unsubscribe', (data) => {
-      if (data?.channel === 'gift_market' && data?.instrumentKey) {
-        const normKey = normalizeInstrumentKey(String(data.instrumentKey));
-        const room = `market_${normKey}`;
-        socket.leave(room);
-        console.log(`Client ${socket.id} left ${room}`);
-      }
-    });
+    attachSocketListeners(socket);
 
     socket.on('subscribe', (giftName) => {
       seedGift(giftName, 100); // Seed if not already seeded
@@ -504,7 +625,7 @@ async function startServer() {
     });
   });
 
-  if (process.env.NODE_ENV !== 'production') {
+  if (process.env.NO_VITE !== 'true' && process.env.NODE_ENV !== 'production' && process.env.NODE_ENV !== 'test') {
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: 'spa',
@@ -513,7 +634,7 @@ async function startServer() {
   } else {
     const distPath = path.join(process.cwd(), 'dist');
     app.use(express.static(distPath));
-    app.get('*', (req: express.Request, res: express.Response) => {
+    app.get('*all', (req: express.Request, res: express.Response) => {
       res.sendFile(path.join(distPath, 'index.html'));
     });
   }

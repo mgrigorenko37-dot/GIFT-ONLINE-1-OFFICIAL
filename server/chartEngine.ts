@@ -8,6 +8,44 @@ import {
 
 export type { Timeframe, GiftSale, GiftCandle };
 
+// Configure Decimal for precise financial arithmetic up to 30 digits without exponential notation
+Decimal.set({ toExpNeg: -30, toExpPos: 30 });
+
+export function parsePositiveDecimal(val: any): Decimal | null {
+  if (val === null || val === undefined) return null;
+  if (typeof val === 'boolean') return null;
+  if (typeof val === 'number') {
+    if (isNaN(val) || !isFinite(val) || val <= 0) return null;
+  }
+  const str = String(val).trim();
+  if (str === '') return null;
+  try {
+    const d = new Decimal(str);
+    if (d.isNaN() || !d.isFinite() || !d.isPos() || d.isZero()) {
+      return null;
+    }
+    return d;
+  } catch {
+    return null;
+  }
+}
+
+export function isEarlierSale(timeA: number, idA: string, timeB: number | undefined, idB: string | undefined): boolean {
+  if (timeB === undefined || idB === undefined) return true;
+  if (timeA !== timeB) {
+    return timeA < timeB;
+  }
+  return idA < idB;
+}
+
+export function isLaterSale(timeA: number, idA: string, timeB: number | undefined, idB: string | undefined): boolean {
+  if (timeB === undefined || idB === undefined) return true;
+  if (timeA !== timeB) {
+    return timeA > timeB;
+  }
+  return idA > idB;
+}
+
 export function getInstrumentKey(sale: Partial<GiftSale>): string {
   return buildInstrumentKey({
     collectionId: sale.collectionId || "unknown",
@@ -103,28 +141,36 @@ export function getCandleRange(timestamp: number, timeframe: Timeframe): { start
 
 export function createCandleFromSale(sale: GiftSale, timeframe: Timeframe): GiftCandle {
   const range = getCandleRange(sale.eventTime, timeframe);
-  const qtyStr = String(sale.quantity || '1');
-  const price = new Decimal(sale.price);
-  const quantity = new Decimal(qtyStr);
-  const quote = price.mul(quantity);
+  const pDec = parsePositiveDecimal(sale.price);
+  if (!pDec) {
+    throw new Error(`Invalid sale price: ${sale.price}`);
+  }
+  const qDec = parsePositiveDecimal(sale.quantity) || new Decimal(1);
+  const quoteDec = pDec.mul(qDec);
+
+  const priceStr = pDec.toString();
+  const qtyStr = qDec.toString();
+  const quoteStr = quoteDec.toString();
 
   return {
     instrumentKey: getInstrumentKey(sale),
     timeframe,
     startTime: range.startTime,
     endTime: range.endTime,
-    open: sale.price,
-    high: sale.price,
-    low: sale.price,
-    close: sale.price,
+    open: priceStr,
+    high: priceStr,
+    low: priceStr,
+    close: priceStr,
     volume: qtyStr,
-    quoteVolume: quote.toString(),
+    quoteVolume: quoteStr,
     tradeCount: 1,
     itemCount: qtyStr,
-    sumQuote: quote.toString(),
+    sumQuote: quoteStr,
     sumQuantity: qtyStr,
     firstSaleId: sale.id,
+    firstSaleTime: sale.eventTime,
     lastSaleId: sale.id,
+    lastSaleTime: sale.eventTime,
     confirmed: false,
     revision: 1,
     updatedAt: Date.now()
@@ -132,28 +178,64 @@ export function createCandleFromSale(sale: GiftSale, timeframe: Timeframe): Gift
 }
 
 export function updateCandle(candle: GiftCandle, sale: GiftSale): GiftCandle {
-  const qtyStr = String(sale.quantity || '1');
-  const price = new Decimal(sale.price);
-  const quantity = new Decimal(qtyStr);
-  const quote = price.mul(quantity);
+  const pDec = parsePositiveDecimal(sale.price);
+  if (!pDec) {
+    throw new Error(`Invalid sale price: ${sale.price}`);
+  }
+  const qDec = parsePositiveDecimal(sale.quantity) || new Decimal(1);
+  const quoteDec = pDec.mul(qDec);
 
-  const newCandle = { ...candle };
+  const priceStr = pDec.toString();
 
-  if (price.gt(newCandle.high)) newCandle.high = sale.price;
-  if (price.lt(newCandle.low)) newCandle.low = sale.price;
+  const newCandle: GiftCandle = { ...candle };
 
-  newCandle.close = sale.price;
-  newCandle.lastSaleId = sale.id;
+  // 1. High Check (Decimal comparison)
+  const currentHighDec = new Decimal(newCandle.high);
+  if (pDec.gt(currentHighDec)) {
+    newCandle.high = priceStr;
+  }
 
-  newCandle.volume = new Decimal(newCandle.volume).plus(quantity).toString();
-  newCandle.quoteVolume = new Decimal(newCandle.quoteVolume).plus(quote).toString();
+  // 2. Low Check (Decimal comparison)
+  const currentLowDec = new Decimal(newCandle.low);
+  if (pDec.lt(currentLowDec)) {
+    newCandle.low = priceStr;
+  }
+
+  // 3. Open Check (Earliest sale tie-breaker)
+  if (isEarlierSale(sale.eventTime, sale.id, newCandle.firstSaleTime, newCandle.firstSaleId)) {
+    newCandle.open = priceStr;
+    newCandle.firstSaleId = sale.id;
+    newCandle.firstSaleTime = sale.eventTime;
+  }
+
+  // 4. Close Check (Latest sale tie-breaker)
+  if (isLaterSale(sale.eventTime, sale.id, newCandle.lastSaleTime, newCandle.lastSaleId)) {
+    newCandle.close = priceStr;
+    newCandle.lastSaleId = sale.id;
+    newCandle.lastSaleTime = sale.eventTime;
+  }
+
+  // 5. Volume & Quote Volume updates (Decimal arithmetic)
+  const newVolDec = new Decimal(newCandle.volume).plus(qDec);
+  const newQuoteVolDec = new Decimal(newCandle.quoteVolume).plus(quoteDec);
+
+  newCandle.volume = newVolDec.toString();
+  newCandle.quoteVolume = newQuoteVolDec.toString();
   newCandle.tradeCount += 1;
   newCandle.itemCount = newCandle.volume;
-  newCandle.sumQuote = new Decimal(newCandle.sumQuote || '0').plus(quote).toString();
-  newCandle.sumQuantity = new Decimal(newCandle.sumQuantity || '0').plus(quantity).toString();
-  
+  newCandle.sumQuote = newCandle.quoteVolume;
+  newCandle.sumQuantity = newCandle.volume;
+
   newCandle.revision += 1;
   newCandle.updatedAt = Date.now();
 
   return newCandle;
 }
+
+export function getAveragePrice(candle: GiftCandle): string {
+  const sumQuote = new Decimal(candle.sumQuote || candle.quoteVolume || '0');
+  const sumQuantity = new Decimal(candle.sumQuantity || candle.volume || '0');
+  if (sumQuantity.isZero()) return '0';
+  return sumQuote.div(sumQuantity).toString();
+}
+

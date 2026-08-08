@@ -19,9 +19,14 @@ export type SaleStatus = "completed" | "pending" | "reverted" | "cancelled";
 
 export type ListingStatus = "active" | "sold" | "cancelled" | "expired";
 
+export const VALID_TIMEFRAMES: Timeframe[] = [
+  "1s", "1m", "5m", "15m", "1h", "4h", "1d", "1w", "1M"
+];
+
 export interface GiftSale {
   id: string;
   collectionId: string;
+  instrumentKey?: string;
   giftId?: string;
   modelId?: string;
   backdropId?: string;
@@ -31,11 +36,13 @@ export interface GiftSale {
   currency: Currency;
   quantity: string | number;
   eventTime: number; // Unix timestamp in milliseconds
-  createdAt: number; // Unix timestamp in milliseconds
+  createdAt?: number; // Unix timestamp in milliseconds
+  timestamp?: number;
   sellerId?: string;
   buyerId?: string;
   transactionHash?: string;
   status: SaleStatus;
+  isMock?: boolean;
 }
 
 export interface GiftCandle {
@@ -54,7 +61,9 @@ export interface GiftCandle {
   sumQuote?: string;
   sumQuantity?: string;
   firstSaleId?: string;
+  firstSaleTime?: number;
   lastSaleId?: string;
+  lastSaleTime?: number;
   confirmed: boolean;
   revision: number;
   updatedAt: number; // Unix timestamp in milliseconds

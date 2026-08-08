@@ -7,7 +7,8 @@ export async function fetchMarketCandles(
   timeframe: Timeframe,
   from?: number,
   to?: number,
-  limit: number = 500
+  limit: number = 500,
+  signal?: AbortSignal
 ): Promise<GiftCandle[]> {
   const normKey = normalizeInstrumentKey(instrumentKey);
   const url = new URL('/api/market/candles', window.location.origin);
@@ -17,8 +18,8 @@ export async function fetchMarketCandles(
   if (to) url.searchParams.append('to', to.toString());
   url.searchParams.append('limit', limit.toString());
 
-  const res = await fetch(url.toString());
+  const res = await fetch(url.toString(), { signal });
   if (!res.ok) throw new Error("Failed to fetch market candles");
   const data = await res.json();
-  return data.candles;
+  return data.candles || [];
 }

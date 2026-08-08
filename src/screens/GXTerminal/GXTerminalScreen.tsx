@@ -12,7 +12,10 @@ import { useTelegramWebApp } from '../../hooks/useTelegramWebApp';
 import { formatGX} from '../../data/gifts';
 import { useGifts } from '../../context/GiftsContext';
 import { useLanguage } from '../../context/LanguageContext';
-import { Timeframe, buildInstrumentKey, msToSeconds } from '../../types/market';
+import { Timeframe, Currency, buildInstrumentKey, msToSeconds } from '../../types/market';
+import { fetchMarketCandles } from '../../lib/marketApi';
+import { processCandlesForChart } from '../../lib/chartHistory';
+import { useMarketSocket } from '../../hooks/useMarketSocket';
 
 
 type OpenOrder = {
@@ -66,13 +69,39 @@ const GXTerminalScreen = () => {
   const [mktPanelOpen, setMktPanelOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [timeframe, setTimeframe] = useState<Timeframe>('4h');
-  const activeInstrumentKey = useMemo(() => buildInstrumentKey({ collectionId: activeGift?.id || 'durov-cap', currency: 'TON' }), [activeGift?.id]);
-  const filteredGifts = gifts.filter(g => g.name.toLowerCase().includes(searchQuery.toLowerCase()));
-  
+  const [selectedCurrency, setSelectedCurrency] = useState<Currency>('TON');
+  const [chartLoading, setChartLoading] = useState<boolean>(true);
+  const [chartError, setChartError] = useState<string | null>(null);
+  const [isChartEmpty, setIsChartEmpty] = useState<boolean>(false);
+  const [retryCount, setRetryCount] = useState<number>(0);
+
   const [expandedGiftId, setExpandedGiftId] = useState<string | null>(null);
   const [variants, setVariants] = useState<any[]>([]);
   const [variantLoading, setVariantLoading] = useState(false);
   const [selectedVariant, setSelectedVariant] = useState<any>(null);
+
+  const activeInstrumentKey = useMemo(() => {
+    return buildInstrumentKey({
+      collectionId: activeGift?.id || 'durov-cap',
+      currency: selectedCurrency,
+      modelId: selectedVariant?.model_id,
+      backdropId: selectedVariant?.backdrop_id,
+    });
+  }, [activeGift?.id, selectedCurrency, selectedVariant]);
+
+  const {
+    isConnected: isSocketConnected,
+    chartCandles: realtimeChartCandles,
+    latestChartCandle,
+    recentSales: socketRecentSales,
+    mergeRestCandles,
+    activeConfig,
+  } = useMarketSocket({
+    instrumentKey: activeInstrumentKey,
+    timeframe,
+    enabled: true,
+  });
+  const filteredGifts = gifts.filter(g => g.name.toLowerCase().includes(searchQuery.toLowerCase()));
 
   useEffect(() => {
     if (expandedGiftId) {
@@ -190,70 +219,72 @@ const GXTerminalScreen = () => {
     };
   }, []);
 
-  // 2. Update Chart Data
+  // 2. Load REST Market Candles History
   useEffect(() => {
     if (!seriesRef.current || !chartRef.current) return;
 
-    const generateData = () => {
-      const data = [];
-      let currentPrice = (activeGift?.floor || 0) * 0.9;
-      const now = new Date();
-      now.setHours(0, 0, 0, 0);
+    const controller = new AbortController();
+    const currentConfigToken = activeConfig;
 
-      let step = 3600;
-      if (timeframe === '1s') step = 1;
-      else if (timeframe === '1m') step = 60;
-      else if (timeframe === '5m') step = 300;
-      else if (timeframe === '15m') step = 900;
-      else if (timeframe === '1h') step = 3600;
-      else if (timeframe === '4h') step = 14400;
-      else if (timeframe === '1d') step = 86400;
-      else if (timeframe === '1w') step = 604800;
-      else if (timeframe === '1M') step = 2592000;
-      
-      const startTime = (now.getTime() / 1000) - (60 * step);
+    setChartLoading(true);
+    setChartError(null);
+    setIsChartEmpty(false);
 
-      for (let i = 0; i < 60; i++) {
-        const open = currentPrice;
-        const close = open + (Math.random() - 0.45) * 5;
-        const high = Math.max(open, close) + Math.random() * 2;
-        const low = Math.min(open, close) - Math.random() * 2;
+    // Update timeScale options based on timeframe (e.g. show seconds for 1s)
+    chartRef.current.applyOptions({
+      timeScale: {
+        timeVisible: true,
+        secondsVisible: timeframe === '1s',
+      },
+    });
 
-        data.push({
-          time: (startTime + i * step) as UTCTimestamp,
-          open,
-          high,
-          low,
-          close,
-        });
-        currentPrice = close;
-      }
+    fetchMarketCandles(activeInstrumentKey, timeframe, undefined, undefined, 500, controller.signal)
+      .then((rawCandles) => {
+        if (controller.signal.aborted) return;
+        mergeRestCandles(rawCandles, currentConfigToken);
+        setChartLoading(false);
+      })
+      .catch((err) => {
+        if (err.name === 'AbortError' || controller.signal.aborted) return;
+        console.error('Failed to fetch REST candles:', err);
+        setChartError(err.message || 'Error loading market candles');
+        setChartLoading(false);
+      });
 
-      const last = data[data.length - 1];
-      last.close = (activeGift?.floor || 0);
-      last.high = Math.max(last.high, (activeGift?.floor || 0));
-      last.low = Math.min(last.low, (activeGift?.floor || 0));
-
-      latestCandleRef.current = last;
-      return data;
+    return () => {
+      controller.abort();
     };
+  }, [activeInstrumentKey, timeframe, retryCount, mergeRestCandles, activeConfig]);
 
-    seriesRef.current.setData(generateData());
-    chartRef.current.timeScale().fitContent();
-  }, [activeGift?.id, activeGift?.floor, timeframe]);
-
-  // Update chart when new trades happen (very simple simulation of candle updating)
+  // 3. Render realtime candles onto Lightweight Charts
   useEffect(() => {
-    if (recentTrades.length > 0 && seriesRef.current && latestCandleRef.current) {
-      const latestTrade = recentTrades[0];
-      const candle = { ...latestCandleRef.current };
-      candle.close = latestTrade.price;
-      candle.high = Math.max(candle.high, latestTrade.price);
-      candle.low = Math.min(candle.low, latestTrade.price);
-      latestCandleRef.current = candle;
-      seriesRef.current.update(candle);
+    if (!seriesRef.current || !chartRef.current) return;
+
+    if (realtimeChartCandles.length === 0) {
+      setIsChartEmpty(true);
+      seriesRef.current.setData([]);
+    } else {
+      setIsChartEmpty(false);
+      seriesRef.current.setData(realtimeChartCandles);
+      chartRef.current.timeScale().fitContent();
+      latestCandleRef.current = latestChartCandle;
     }
-  }, [recentTrades]);
+  }, [realtimeChartCandles, latestChartCandle]);
+
+  // 4. Synchronize realtime sales into recent trades list
+  useEffect(() => {
+    if (socketRecentSales.length > 0) {
+      const formattedTrades: Trade[] = socketRecentSales.map((s) => ({
+        id: s.id,
+        giftName: s.collectionId || activeGift?.name || 'Gift',
+        price: parseFloat(s.price),
+        amount: typeof s.quantity === 'number' ? s.quantity : parseFloat(s.quantity || '1'),
+        time: s.eventTime || Date.now(),
+        takerSide: 'buy' as const,
+      }));
+      setRecentTrades(formattedTrades);
+    }
+  }, [socketRecentSales, activeGift]);
 
   const submitOrder = () => {
     const numericAmount = Number(amount);
@@ -745,16 +776,62 @@ const GXTerminalScreen = () => {
               </div>
             </div>
 
-            <div className="chart-toolbar" id="tfRow">
-              {['1s', '1m', '5m', '15m', '1h', '4h', '1d', '1w', '1M'].map((tf) => (
+            <div className="chart-toolbar" id="tfRow" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ display: 'flex', gap: '3px' }}>
+                {(['1s', '1m', '5m', '15m', '1h', '4h', '1d', '1w', '1M'] as Timeframe[]).map((tf) => (
+                  <button
+                    key={tf}
+                    type="button"
+                    className={`tf-btn ${timeframe === tf ? 'active' : ''}`}
+                    onClick={() => setTimeframe(tf)}
+                  >
+                    {tf}
+                  </button>
+                ))}
+              </div>
+              <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
                 <button
-                  key={tf}
-                  className={`tf-btn ${timeframe === tf ? 'active' : ''}`}
-                  onClick={() => setTimeframe(tf as Timeframe)}
+                  type="button"
+                  className={`tf-btn ${selectedCurrency === 'TON' ? 'active' : ''}`}
+                  onClick={() => setSelectedCurrency('TON')}
+                  style={{ padding: '2px 8px', fontSize: '11px', fontWeight: 600 }}
                 >
-                  {tf}
+                  TON
                 </button>
-              ))}
+                <button
+                  type="button"
+                  className={`tf-btn ${selectedCurrency === 'STARS' ? 'active' : ''}`}
+                  onClick={() => setSelectedCurrency('STARS')}
+                  style={{ padding: '2px 8px', fontSize: '11px', fontWeight: 600 }}
+                >
+                  STARS
+                </button>
+                <div
+                  title={isSocketConnected ? 'Realtime Connected' : 'Connecting Realtime...'}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    marginLeft: '4px',
+                    padding: '2px 6px',
+                    borderRadius: '4px',
+                    background: 'rgba(255,255,255,0.05)',
+                    fontSize: '10px',
+                    color: isSocketConnected ? '#10b981' : '#f59e0b',
+                  }}
+                >
+                  <span
+                    style={{
+                      width: '6px',
+                      height: '6px',
+                      borderRadius: '50%',
+                      backgroundColor: isSocketConnected ? '#10b981' : '#f59e0b',
+                      display: 'inline-block',
+                    }}
+                  />
+                  <span>{isSocketConnected ? 'LIVE' : 'WAIT'}</span>
+                </div>
+              </div>
             </div>
 
             <div className="chart-wrap">
@@ -763,6 +840,86 @@ const GXTerminalScreen = () => {
                 ref={chartContainerRef}
                 style={{ height: '100%', width: '100%' }}
               ></div>
+
+              {chartLoading && (
+                <div style={{
+                  position: 'absolute',
+                  inset: 0,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  background: 'rgba(11, 13, 18, 0.75)',
+                  backdropFilter: 'blur(2px)',
+                  color: '#E9ECF1',
+                  fontSize: '13px',
+                  zIndex: 10,
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span style={{
+                      display: 'inline-block',
+                      width: '14px',
+                      height: '14px',
+                      border: '2px solid rgba(255,255,255,0.2)',
+                      borderTopColor: '#F2B84B',
+                      borderRadius: '50%',
+                      animation: 'spin 0.8s linear infinite'
+                    }} />
+                    <span>Загрузка истории свечей ({timeframe})...</span>
+                  </div>
+                </div>
+              )}
+
+              {!chartLoading && chartError && (
+                <div style={{
+                  position: 'absolute',
+                  inset: 0,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  background: 'rgba(11, 13, 18, 0.85)',
+                  color: '#FF5C7A',
+                  fontSize: '13px',
+                  gap: '8px',
+                  zIndex: 10,
+                  padding: '16px',
+                  textAlign: 'center'
+                }}>
+                  <span>Ошибка загрузки графика: {chartError}</span>
+                  <button
+                    type="button"
+                    onClick={() => setRetryCount(r => r + 1)}
+                    style={{
+                      background: 'rgba(255,92,122,0.15)',
+                      border: '1px solid #FF5C7A',
+                      color: '#FF5C7A',
+                      padding: '4px 12px',
+                      borderRadius: '4px',
+                      cursor: 'pointer',
+                      fontSize: '12px'
+                    }}
+                  >
+                    Повторить
+                  </button>
+                </div>
+              )}
+
+              {!chartLoading && !chartError && isChartEmpty && (
+                <div style={{
+                  position: 'absolute',
+                  inset: 0,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  background: 'rgba(11, 13, 18, 0.4)',
+                  color: '#7A8194',
+                  fontSize: '13px',
+                  zIndex: 5,
+                  pointerEvents: 'none',
+                }}>
+                  <span>Нет сделок за выбранный период ({timeframe})</span>
+                </div>
+              )}
             </div>
 
             <div className="orders-tabs">
@@ -829,7 +986,7 @@ const GXTerminalScreen = () => {
               <div className="field" style={{ opacity: orderType === 'Market' ? 0.4 : 1, pointerEvents: orderType === 'Market' ? 'none' : 'auto' }}>
                 <span className="fl">Цена</span>
                 <input type="text" value={price} onChange={(e) => setPrice(e.target.value)} disabled={orderType === 'Market'} inputMode="decimal" />
-                <span className="unit">TON</span>
+                <span className="unit">{selectedCurrency}</span>
               </div>
               <div className="field">
                 <span className="fl">Кол-во</span>
