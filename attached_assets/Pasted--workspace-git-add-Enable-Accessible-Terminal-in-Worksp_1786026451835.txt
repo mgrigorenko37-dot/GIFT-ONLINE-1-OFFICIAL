@@ -1,0 +1,246 @@
+
+
+
+
+
+
+
+
+
+
+
+
+~/workspace
+: 
+git add .
+
+
+
+Enable "Accessible Terminal" in Workspace Settings to use a screen reader with the shell.
+есть идея создать биржу как байбит только для телеграм подарков чтоб люди могли покупать подарки как криптовалюту сделать ее в телеграм и я знаю что можно все собрать из открытых источников нужно понять что нам нужно для этого изучи
+
+24 minutes ago
+Analyzing Telegram gift marketplace development
+
+Analyzing Telegram gift marketplace development
+Отличная идея! Давайте сначала разберёмся, что именно нужно для такого проекта. Исследую экосистему Telegram-подарков и доступные инструменты.
+
+
+Исследование завершено
+
+Searched the web for "Telegram gifts NFT TON blockchain API trading exchange 2024 2025"
+
+Searched the web for "Telegram collectible gifts Stars fragment marketplace API open source"
+
+Searched the web for "TON blockchain Telegram gifts smart contract trading bot"
+
+7 actions
+Поскольку прямой доступ к сайтам ограничен, дам вам полный анализ на основе имеющихся знаний об экосистеме — я хорошо знаком с Telegram, TON и тем, что уже открыто доступно.
+
+Что такое Telegram-подарки (как актив для торговли)
+С 2024–2025 года в Telegram появились коллекционные подарки — это уникальные NFT-подобные предметы на блокчейне TON. Их покупают за Telegram Stars (внутренняя валюта), они хранятся в профиле пользователя и их можно передавать. Уникальные («прокачанные») подарки имеют ограниченный выпуск, и на них уже есть вторичный рынок.
+
+Что нужно для биржи подарков
+1. Блокчейн и подарки — TON + Telegram API
+Компонент	Что использовать	Открытый?
+Данные о подарках пользователя	Telegram Bot API — метод getUserGifts	✅ Открытый
+Перевод подарка	Bot API — transferGift (через звёзды)	✅ Открытый
+TON-кошелёк	@ton/core, tonweb SDK	✅ Open source
+TON-смарт-контракты	FunC / Tact — языки контрактов TON	✅ Open source
+Данные блокчейна	TonCenter API, TON API (tonconsole.com)	✅ Бесплатный тир
+NFT на TON	Стандарт TEP-62 (NFT)	✅ Открытый
+2. Интерфейс — Telegram Mini App
+Биржа должна работать внутри Telegram как Mini App (Web App). Это React/Vue приложение, встроенное в бота:
+
+@twa-dev/sdk — официальный SDK для Telegram Web Apps
+Поддерживает: платежи Stars, авторизацию через Telegram, нативные кнопки
+Пользователю не нужно выходить из Telegram
+3. Торговый движок (биржа)
+Аналог Bybit — это ордер-бук:
+
+Покупатель → размещает заявку (цена в Stars/TON)
+Продавец → размещает подарок + цену
+Смарт-контракт → эскроу (держит подарок до оплаты)
+Матчинг-движок → находит совпадения, исполняет сделку
+
+4. Что уже существует и можно изучить
+Проект	Что взять	Ссылка
+Fragment.com	Референс для UX торговли NFT/именами в Telegram	fragment.com
+GetGems	Open-source NFT-маркетплейс на TON	getgems.io / GitHub
+Tonkeeper	TON-кошелёк, SDK для интеграции	tonkeeper.com
+TON Connect	Протокол подключения кошелька к приложению	docs.ton.org/develop/dapps/ton-connect
+Dedust / STON.fi	DEX на TON — пример торгового смарт-контракта	dedust.io
+Стек для сборки
+Frontend:    React + Vite + @twa-dev/sdk (Telegram Mini App)
+Backend:     Node.js/Express — ордер-бук, матчинг, API
+Блокчейн:   TON (смарт-контракт эскроу на Tact/FunC)
+База данных: PostgreSQL — ордера, история сделок
+Кошелёк:    TON Connect 2.0
+Платежи:    Telegram Stars API (для подарков)
+Деплой:     Replit + Telegram Bot Webhook
+
+Главные технические вопросы
+Эскроу подарков — как безопасно «заморозить» подарок на время сделки? Telegram API позволяет переводить подарки боту, бот держит их как эскроу-агент.
+
+Ценообразование — в Stars или TON? Stars проще (внутри Telegram), TON даёт больше ликвидности.
+
+KYC/антифрод — Telegram даёт верификацию через login widget, это достаточно для старта.
+
+Комиссия — берёте % с каждой сделки (как биржа).
+
+С чего начать
+Хотите, чтобы я начал строить проект? Уточните несколько вещей:
+
+
+Worked for 1 minute
+смотри и еще есть в открытых источниках интерфейс изучи
+
+22 minutes ago
+
+34 actions
+Отлично — нашёл очень много. Позвольте дать полный разбор.
+
+
+4 actions
+Вот полная картина того, что есть в открытых источниках:
+
+Что уже существует: 4 живых маркетплейса
+Биржа	Ссылка	Статус
+Tonnel	marketplace.tonnel.network	✅ Работает, главный
+Portals	t.me/PortalsBot	✅ Работает
+MRKT	t.me/mrkt_app	✅ Работает
+Fragment	fragment.com	✅ Официальный Telegram
+Это ваши главные конкуренты — и одновременно источники данных.
+
+Что нашёл в открытом доступе
+🔑 API маркетплейсов — уже реверс-инженеринговано
+Tonnel API — полностью задокументирован в tg-gifts-sdk:
+
+Base: https://gifts2.tonnel.network
+POST /api/pageGifts   — список листингов (с фильтром, сортировкой)
+POST /api/filterStats — floor price по типу подарка
+Авторизация: Telegram initData (из Mini App)
+
+Portals API — полный клиент в telegram-gift-reseller/portal.py (20 000 строк!), включая размещение ордеров, покупку, историю.
+
+MRKT API — также задокументирован через тот же SDK.
+
+📦 Готовые open-source компоненты
+Репозиторий	Язык	Что даёт
+tg-gifts-sdk	Python	Единый SDK для Tonnel + Portals + Fragment
+TonnelGiftSniper	Python	Полный цикл торговли: мониторинг → анализ → покупка
+nft-gift-trading-bot	React + FastAPI	Самое полное: маркетплейс + WebApp + графики цен
+telegram-gift-reseller	Python	Автоперепродажа на 3 биржах сразу
+Gift-Price bot	Python	Сравнение floor price на Tonnel + MRKT + Portals
+🎨 UI-код (frontend)
+nft-gift-trading-bot — React 18 + TypeScript + Tailwind CSS:
+
+Маркетплейс (листинг подарков)
+Личный портфель
+Интерактивные графики цен (как на бирже)
+История транзакций
+Telegram WebApp интеграция
+Что это значит для вашего проекта
+Хорошая новость: API бирж известны, фронтенд-референс есть, авторизация через Telegram решена.
+
+Где ваше преимущество перед конкурентами:
+
+Tonnel / Portals / MRKT — это маркетплейсы (фиксированная цена)
+Ваша идея — настоящая биржа (ордер-бук как Bybit):
+  → лимитные и рыночные ордера
+  → стакан цен
+  → графики свечей
+  → агрегация ликвидности со всех 3 бирж
+
+Технический план сборки
+Уровень 1 — Данные (открытые API)
+  ├── Tonnel API    → цены, листинги
+  ├── Portals API   → цены, листинги  
+  └── MRKT API      → цены, листинги
+Уровень 2 — Бэкенд (ваш)
+  ├── Агрегатор цен (лучшая цена по всем биржам)
+  ├── Ордер-бук (лимитные ордера, матчинг)
+  ├── Эскроу-бот (держит подарок до оплаты)
+  └── История сделок + свечи
+Уровень 3 — Интерфейс (Telegram Mini App)
+  ├── React + TypeScript + Tailwind
+  ├── @twa-dev/sdk (Telegram WebApp)
+  ├── Графики свечей (TradingView Lightweight Charts — бесплатный)
+  └── TON Connect (кошелёк)
+
+Что нужно от вас для старта
+Ваши ответы на форму выше помогут решить главное: Stars или TON и MVP маркетплейс или полная биржа. Также потребуется:
+
+Telegram Bot Token — создаётся через @BotFather (бесплатно, 1 минута)
+TON-кошелёк — для получения комиссий (опционально для MVP)
+Хотите начать строить, как только ответите на вопросы из формы выше?
+
+
+Worked for 2 minutes
+
+Checkpoint made
+20 minutes ago
+есть телеграм токен смотри мы сделаем оплату так за старс монжно пополнять баланс так же будет и юздт есть боты в телеграм вывод только криптовалюта через боты в телеграм сейчас наша задача сделать интерфейс если есть в открытых источника гдето уже готовая биржа которую мы в долнешем можем переделать под себя найди поиши на гит хабе в гугл гдето еще посмотри что мы не создавали все с нуля сейчас интерфейс делаем а и внутренея валюта у нас будет GX
+
+13 minutes ago
+Researching open-source trading exchange interfaces
+
+Researching open-source trading exchange interfaces
+Понял! Ищу готовые биржевые интерфейсы с открытым кодом, которые можно переделать под вашу платформу GX.
+
+
+39 actions
+Продолжаю искать — смотрю на детали самых подходящих репозиториев параллельно.
+
+
+5 actions
+Нашёл отличную базу! frammawiliansyah/react-exchange-platform-sample — готовый биржевой интерфейс (тёмная тема, Binance-стиль): Watchlist, Chart, OrderBook, OrderForm, TradingTabs. Смотрю полностью, и сразу начинаем строить.
+
+
+5 actions
+Отлично — нашёл идеальную базу! frammawiliansyah/react-exchange-platform-sample — это почти готовый Bybit/Binance интерфейс: свечи через lightweight-charts, стакан ордеров, форма покупки/продажи, watchlist. Адаптируем под GX и подарки.
+
+Сейчас создаю интерфейс на основе этой базы.
+
+
+6 actions
+У меня всё что нужно. Создаю артефакт и сразу запускаю дизайн-агента строить биржевой интерфейс GX на базе найденного open-source кода.
+
+
+3 actions
+Пишу OpenAPI спек и запускаю дизайн-агента параллельно с бэкендом.
+
+
+4 actions
+Два типа ошибок: zod.int() (версия zod) и коллизии имён query params. Читаю конфиг и фикшу параллельно.
+
+
+Show less
+
+Opened orval.config.ts
+
+Opened pnpm-workspace.yaml
+Resolving codegen schema and type collisions
+
+Resolving codegen schema and type collisions
+Проблема: Orval 8.23 генерирует zod.int() (синтаксис v4), но установлен zod v3. И query params создают коллизии имён. Фикшу спек: убираю integer → number, убираю query params из проблемных эндпоинтов.
+
+
+4 actions
+Codegen прошёл. Сразу запускаю дизайн-агента.
+
+
+5 actions
+Дизайн-агент работает. Строю бэкенд параллельно — схема БД, роуты и seed данные.
+
+
+4 actions
+Строю схему БД и роуты параллельно.
+
+
+13 actions
+DB готова. Пишу все роуты одновременно.
+
+
+6 actions
+You've reached your daily free quota limit. It will reset at 12:00 AM UTC.
