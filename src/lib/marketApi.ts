@@ -1,20 +1,6 @@
-export type Timeframe = "1s" | "1m" | "5m" | "15m" | "1h" | "4h" | "1d" | "1w" | "1M";
+import { GiftCandle, Timeframe, normalizeInstrumentKey } from '../types/market';
 
-export interface GiftCandle {
-  instrumentKey: string;
-  timeframe: Timeframe;
-  startTime: number;
-  endTime: number;
-  open: string;
-  high: string;
-  low: string;
-  close: string;
-  volume: string;
-  quoteVolume: string;
-  tradeCount: number;
-  confirmed: boolean;
-  revision: number;
-}
+export type { GiftCandle, Timeframe };
 
 export async function fetchMarketCandles(
   instrumentKey: string,
@@ -23,8 +9,9 @@ export async function fetchMarketCandles(
   to?: number,
   limit: number = 500
 ): Promise<GiftCandle[]> {
+  const normKey = normalizeInstrumentKey(instrumentKey);
   const url = new URL('/api/market/candles', window.location.origin);
-  url.searchParams.append('instrumentKey', instrumentKey);
+  url.searchParams.append('instrumentKey', normKey);
   url.searchParams.append('timeframe', timeframe);
   if (from) url.searchParams.append('from', from.toString());
   if (to) url.searchParams.append('to', to.toString());

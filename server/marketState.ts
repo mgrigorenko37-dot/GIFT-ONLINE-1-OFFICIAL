@@ -1,12 +1,14 @@
 import { GiftSale, GiftCandle, Timeframe, getInstrumentKey, createCandleFromSale, updateCandle, getCandleRange } from './chartEngine';
+import { normalizeInstrumentKey } from '../src/types/market';
 
 export const allSales: GiftSale[] = [];
 export const activeCandles: Record<string, Record<string, GiftCandle>> = {};
 export const closedCandles: Record<string, Record<string, GiftCandle[]>> = {};
 
 export function getHistory(instrumentKey: string, timeframe: Timeframe, from: number, to: number, limit: number = 500) {
-  const closed = closedCandles[instrumentKey]?.[timeframe] || [];
-  const active = activeCandles[instrumentKey]?.[timeframe];
+  const normKey = normalizeInstrumentKey(instrumentKey);
+  const closed = closedCandles[normKey]?.[timeframe] || [];
+  const active = activeCandles[normKey]?.[timeframe];
 
   let result = closed.filter(c => c.startTime >= from && c.startTime < to);
   if (active && active.startTime >= from && active.startTime < to) {

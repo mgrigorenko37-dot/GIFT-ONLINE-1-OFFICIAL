@@ -1,6 +1,5 @@
 import { simulateSales } from "./server/mockMinter";
 import { getHistory, processSale } from "./server/marketState";
-import { Timeframe } from "./server/chartEngine";
 import express from 'express';
 import path from 'path';
 import cors from 'cors';
@@ -232,9 +231,7 @@ const matchOrder = (order: Order, io: Server) => {
 
 import { gifts as hardcodedGifts } from './src/data/gifts';
 import { mapTelegramGift } from './src/utils/giftMapper';
-
-
-import { gifts as hardcodedGifts } from './src/data/gifts';
+import { normalizeInstrumentKey, Timeframe } from './src/types/market';
 
 
 export interface GiftCollection {
@@ -364,18 +361,20 @@ setTimeout(syncTelegramGifts, 1000);
 
 // GIFTS API
 app.get('/api/market/candles', (req, res) => {
-  const { instrumentKey, timeframe, from, to, limit } = req.query;
-  if (!instrumentKey || !timeframe) {
+  const rawKey = req.query.instrumentKey ? String(req.query.instrumentKey) : '';
+  const rawTf = req.query.timeframe ? String(req.query.timeframe) as Timeframe : '1m';
+  if (!rawKey || !rawTf) {
     return res.status(400).json({ error: "Missing required parameters" });
   }
-  const fromTime = from ? parseInt(from) : 0;
-  const toTime = to ? parseInt(to) : Date.now() + 86400000;
-  const l = limit ? parseInt(limit) : 500;
+  const normKey = normalizeInstrumentKey(rawKey);
+  const fromTime = req.query.from ? parseInt(String(req.query.from)) : 0;
+  const toTime = req.query.to ? parseInt(String(req.query.to)) : Date.now() + 86400000;
+  const l = req.query.limit ? parseInt(String(req.query.limit)) : 500;
   
-  const candles = getHistory(instrumentKey, timeframe, fromTime, toTime, l);
+  const candles = getHistory(normKey, rawTf, fromTime, toTime, l);
   res.json({
-    instrumentKey,
-    timeframe,
+    instrumentKey: normKey,
+    timeframe: rawTf,
     timezone: "UTC",
     candles,
     hasMore: candles.length === l,
@@ -428,16 +427,18 @@ async function startServer() {
 
     
     socket.on('market_subscribe', (data) => {
-      if (data.channel === 'gift_market' && data.instrumentKey) {
-        const room = `market_${data.instrumentKey}`;
+      if (data?.channel === 'gift_market' && data?.instrumentKey) {
+        const normKey = normalizeInstrumentKey(String(data.instrumentKey));
+        const room = `market_${normKey}`;
         socket.join(room);
         console.log(`Client ${socket.id} joined ${room}`);
       }
     });
     
     socket.on('market_unsubscribe', (data) => {
-      if (data.channel === 'gift_market' && data.instrumentKey) {
-        const room = `market_${data.instrumentKey}`;
+      if (data?.channel === 'gift_market' && data?.instrumentKey) {
+        const normKey = normalizeInstrumentKey(String(data.instrumentKey));
+        const room = `market_${normKey}`;
         socket.leave(room);
         console.log(`Client ${socket.id} left ${room}`);
       }

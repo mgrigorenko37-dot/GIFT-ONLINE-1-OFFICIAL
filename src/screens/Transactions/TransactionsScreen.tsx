@@ -2,6 +2,8 @@ import { useNavigate } from 'react-router-dom';
 import { useTelegramWebApp } from '../../hooks/useTelegramWebApp';
 import { formatGX } from '../../data/gifts';
 import { useGifts } from '../../context/GiftsContext';
+import { useLanguage } from '../../context/LanguageContext';
+
 
 const mockOrders = [
   {
@@ -69,7 +71,9 @@ const mockOrders = [
 const TransactionsScreen: React.FC = () => {
   const { gifts, loading } = useGifts();
   const navigate = useNavigate();
+  const { currentLang, openLangModal, t } = useLanguage();
   const { isTelegram, user } = useTelegramWebApp();
+
   const displayName = user
     ? [user.first_name, user.last_name].filter(Boolean).join(' ')
     : 'Alex Smith';
@@ -92,34 +96,34 @@ const TransactionsScreen: React.FC = () => {
             Gift<span>X</span>
           </span>
         </div>
-        <div className='gx-workspace-label'>Workspace</div>
+        <div className='gx-workspace-label'>{t('nav.workspace', 'Workspace')}</div>
         <nav className='gx-nav' aria-label='Main navigation'>
           <button className='gx-nav-item' type='button' onClick={() => navigate('/market')}>
             <i className='material-icons'>candlestick_chart</i>
-            <span>Trade</span>
+            <span>{t('nav.trade', 'Trade')}</span>
           </button>
           <button className='gx-nav-item' type='button' onClick={() => navigate('/capital')}>
             <i className='material-icons'>storefront</i>
-            <span>Gifts</span>
+            <span>{t('nav.gifts', 'Gifts')}</span>
           </button>
           <button className='gx-nav-item' type='button' onClick={() => navigate('/portfolio')}>
             <i className='material-icons'>card_giftcard</i>
-            <span>Portfolio</span>
+            <span>{t('nav.portfolio', 'Portfolio')}</span>
           </button>
           <button className='gx-nav-item gx-nav-item-active' type='button'>
             <i className='material-icons'>history</i>
-            <span>Activity</span>
+            <span>{t('nav.activity', 'Activity')}</span>
           </button>
         </nav>
-        <div className='gx-workspace-label gx-workspace-label-space'>Account</div>
+        <div className='gx-workspace-label gx-workspace-label-space'>{t('nav.account', 'Account')}</div>
         <nav className='gx-nav' aria-label='Account navigation'>
           <button className='gx-nav-item' type='button' onClick={() => navigate('/profile')}>
             <i className='material-icons'>person_outline</i>
-            <span>Profile</span>
+            <span>{t('nav.profile', 'Profile')}</span>
           </button>
           <button className='gx-nav-item' type='button' onClick={() => navigate('/dashboard')}>
             <i className='material-icons'>add_card</i>
-            <span>Deposit</span>
+            <span>{t('nav.deposit', 'Deposit')}</span>
           </button>
           <button
             className='gx-nav-item'
@@ -127,20 +131,21 @@ const TransactionsScreen: React.FC = () => {
             onClick={() => navigate('/dashboard', { state: { tab: 'withdraw' } })}
           >
             <i className='material-icons'>output</i>
-            <span>Withdraw</span>
+            <span>{t('nav.withdraw', 'Withdraw')}</span>
           </button>
-          <button className='gx-nav-item' type='button' onClick={() => navigate('/profile')}>
+          <button className='gx-nav-item' type='button' onClick={openLangModal}>
             <i className='material-icons'>settings</i>
-            <span>Settings</span>
+            <span>{t('nav.settings', 'Settings')}</span>
           </button>
         </nav>
         <div className='gx-sidebar-bottom'>
           <div className='gx-status'>
-            <span className='gx-status-dot' /> All systems operational
+            <span className='gx-status-dot' /> {t('nav.operational', 'All systems operational')}
           </div>
           <button className='gx-help-button' type='button'>
-            <i className='material-icons'>help_outline</i> Help center <span>↗</span>
+            <i className='material-icons'>help_outline</i> {t('nav.help', 'Help center')} <span>↗</span>
           </button>
+
           <div className='gx-user-mini'>
             {user?.photo_url ? (
               <img className='gx-avatar gx-avatar-image' src={user.photo_url} alt='' />
@@ -159,14 +164,38 @@ const TransactionsScreen: React.FC = () => {
       <main className='gx-main'>
         <header className='gx-topbar'>
           <div className='gx-breadcrumb'>
-            <span>Account</span>
+            <span>{t('nav.account', 'Account')}</span>
             <i className='material-icons'>chevron_right</i>
-            <strong>Activity</strong>
+            <strong>{t('nav.activity', 'Activity')}</strong>
           </div>
           <div className='gx-top-actions'>
+            <button
+              type='button'
+              onClick={openLangModal}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                background: 'rgba(139, 118, 255, 0.12)',
+                border: '1px solid rgba(139, 118, 255, 0.3)',
+                borderRadius: '20px',
+                padding: '4px 12px',
+                color: '#f6f3ff',
+                fontSize: '13px',
+                cursor: 'pointer',
+                fontWeight: 500,
+              }}
+            >
+              <span>{currentLang.flag}</span>
+              <span>{currentLang.nativeName}</span>
+              <i className='material-icons' style={{ fontSize: '16px', color: '#8b76ff' }}>
+                arrow_drop_down
+              </i>
+            </button>
             <span className='gx-live-pill'>
               <span /> {isTelegram ? 'Telegram Mini App' : 'Browser preview'}
             </span>
+
             <button
               type='button'
               className='gx-icon-button'

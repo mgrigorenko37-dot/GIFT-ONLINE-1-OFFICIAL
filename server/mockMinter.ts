@@ -1,5 +1,6 @@
 import { processSale } from "./marketState";
 import { GiftSale } from "./chartEngine";
+import { buildInstrumentKey } from "../src/types/market";
 
 export function simulateSales(io: any) {
   // Simulate some sales for the UI to show
@@ -19,7 +20,7 @@ export function simulateSales(io: any) {
     
     if (updatedCandles) {
       // Broadcast to clients in this room
-      const instrumentKey = `durov-cap:any:any:TON`;
+      const instrumentKey = buildInstrumentKey({ collectionId: "durov-cap", currency: "TON" });
       const room = `market_${instrumentKey}`;
       
       // Send individual sale event

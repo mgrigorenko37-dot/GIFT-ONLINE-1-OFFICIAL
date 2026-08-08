@@ -1,5 +1,6 @@
 import { processSale, activeCandles, closedCandles, allSales } from './marketState';
 import { GiftSale } from './chartEngine';
+import { buildInstrumentKey } from '../src/types/market';
 
 const testSale1: GiftSale = {
   id: "s1",
@@ -50,7 +51,7 @@ processSale(testSale2);
 processSale(testSale3);
 processSale(testLateSale);
 
-const ik = "coll1:any:any:TON";
+const ik = buildInstrumentKey({ collectionId: "coll1", currency: "TON" });
 console.log("1m Closed:", closedCandles[ik]["1m"]);
 console.log("1m Active:", activeCandles[ik]["1m"]);
 

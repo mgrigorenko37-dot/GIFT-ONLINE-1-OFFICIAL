@@ -11,6 +11,9 @@ import { io } from 'socket.io-client';
 import { useTelegramWebApp } from '../../hooks/useTelegramWebApp';
 import { formatGX} from '../../data/gifts';
 import { useGifts } from '../../context/GiftsContext';
+import { useLanguage } from '../../context/LanguageContext';
+import { Timeframe, buildInstrumentKey, msToSeconds } from '../../types/market';
+
 
 type OpenOrder = {
   id: string;
@@ -53,14 +56,17 @@ function GiftArtwork({ className, small, emoji }: { className: string; small?: b
 const GXTerminalScreen = () => {
   const { gifts, loading } = useGifts();
   const navigate = useNavigate();
+  const { currentLang, openLangModal, t } = useLanguage();
   const [searchParams, setSearchParams] = useSearchParams();
+
   const [giftId, setGiftId] = useState(searchParams.get('gift') || 'durov-cap');
   const { isTelegram, user } = useTelegramWebApp();
 
   const activeGift = useMemo(() => gifts.find((g) => g.id === giftId) || gifts[0], [giftId, gifts]);
   const [mktPanelOpen, setMktPanelOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [timeframe, setTimeframe] = useState('4h');
+  const [timeframe, setTimeframe] = useState<Timeframe>('4h');
+  const activeInstrumentKey = useMemo(() => buildInstrumentKey({ collectionId: activeGift?.id || 'durov-cap', currency: 'TON' }), [activeGift?.id]);
   const filteredGifts = gifts.filter(g => g.name.toLowerCase().includes(searchQuery.toLowerCase()));
   
   const [expandedGiftId, setExpandedGiftId] = useState<string | null>(null);
@@ -116,11 +122,13 @@ const GXTerminalScreen = () => {
     });
 
     socket.emit('subscribe', (activeGift?.id || ''));
+    socket.emit('market_subscribe', { channel: 'gift_market', instrumentKey: activeInstrumentKey });
 
     return () => {
+      socket.emit('market_unsubscribe', { channel: 'gift_market', instrumentKey: activeInstrumentKey });
       socket.disconnect();
     };
-  }, [activeGift?.id]);
+  }, [activeGift?.id, activeInstrumentKey]);
 
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<any>(null);
@@ -197,7 +205,6 @@ const GXTerminalScreen = () => {
       else if (timeframe === '1m') step = 60;
       else if (timeframe === '5m') step = 300;
       else if (timeframe === '15m') step = 900;
-      else if (timeframe === '30m') step = 1800;
       else if (timeframe === '1h') step = 3600;
       else if (timeframe === '4h') step = 14400;
       else if (timeframe === '1d') step = 86400;
@@ -301,34 +308,34 @@ const GXTerminalScreen = () => {
             Gift<span>X</span>
           </span>
         </div>
-        <div className='gx-workspace-label'>Workspace</div>
+        <div className='gx-workspace-label'>{t('nav.workspace', 'Workspace')}</div>
         <nav className='gx-nav' aria-label='Main navigation'>
           <button className='gx-nav-item gx-nav-item-active' type='button'>
             <i className='material-icons'>candlestick_chart</i>
-            <span>Trade</span>
+            <span>{t('nav.trade', 'Trade')}</span>
           </button>
           <button className='gx-nav-item' type='button' onClick={() => navigate('/capital')}>
             <i className='material-icons'>storefront</i>
-            <span>Gifts</span>
+            <span>{t('nav.gifts', 'Gifts')}</span>
           </button>
           <button className='gx-nav-item' type='button' onClick={() => navigate('/portfolio')}>
             <i className='material-icons'>card_giftcard</i>
-            <span>Portfolio</span>
+            <span>{t('nav.portfolio', 'Portfolio')}</span>
           </button>
           <button className='gx-nav-item' type='button' onClick={() => navigate('/transactions')}>
             <i className='material-icons'>history</i>
-            <span>Activity</span>
+            <span>{t('nav.activity', 'Activity')}</span>
           </button>
         </nav>
-        <div className='gx-workspace-label gx-workspace-label-space'>Account</div>
+        <div className='gx-workspace-label gx-workspace-label-space'>{t('nav.account', 'Account')}</div>
         <nav className='gx-nav' aria-label='Account navigation'>
           <button className='gx-nav-item' type='button' onClick={() => navigate('/profile')}>
             <i className='material-icons'>person_outline</i>
-            <span>Profile</span>
+            <span>{t('nav.profile', 'Profile')}</span>
           </button>
           <button className='gx-nav-item' type='button' onClick={() => navigate('/dashboard')}>
             <i className='material-icons'>add_card</i>
-            <span>Deposit</span>
+            <span>{t('nav.deposit', 'Deposit')}</span>
           </button>
           <button
             className='gx-nav-item'
@@ -336,9 +343,14 @@ const GXTerminalScreen = () => {
             onClick={() => navigate('/dashboard', { state: { tab: 'withdraw' } })}
           >
             <i className='material-icons'>output</i>
-            <span>Withdraw</span>
+            <span>{t('nav.withdraw', 'Withdraw')}</span>
+          </button>
+          <button className='gx-nav-item' type='button' onClick={() => navigate('/profile')}>
+            <i className='material-icons'>settings</i>
+            <span>{t('nav.settings', 'Settings')}</span>
           </button>
         </nav>
+
         <div className='gx-sidebar-bottom'>
           <div className='gx-user-profile'>
             {user?.photo_url ? (
@@ -592,11 +604,34 @@ const GXTerminalScreen = () => {
 
         <div className="topbar">
           <div className="brand" onClick={() => navigate('/market')}>
-            <div className="brand-mark">🎁</div>
-            <div className="crumbs">Markets <span>›</span> <b>{(activeGift?.name || '').toUpperCase().replace(/[^A-Z0-9]/g, '_')} {selectedVariant ? ` / ${selectedVariant.model_name.toUpperCase()}` : ''}</b></div>
+            <div className="crumbs">{t('terminal.markets', 'Markets')} <span>›</span> <b>{(activeGift?.name || '').toUpperCase().replace(/[^A-Z0-9]/g, '_')} {selectedVariant ? ` / ${selectedVariant.model_name.toUpperCase()}` : ''}</b></div>
           </div>
-          <div className="live-pill"><span className="dot"></span> Live</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <button
+              type="button"
+              onClick={openLangModal}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                background: 'rgba(139, 118, 255, 0.12)',
+                border: '1px solid rgba(139, 118, 255, 0.25)',
+                borderRadius: '16px',
+                padding: '3px 10px',
+                color: '#f6f3ff',
+                fontSize: '12px',
+                cursor: 'pointer',
+                fontWeight: 500,
+              }}
+            >
+              <span>{currentLang.flag}</span>
+              <span>{currentLang.code.toUpperCase()}</span>
+              <i className="material-icons" style={{ fontSize: '14px', color: '#8b76ff' }}>arrow_drop_down</i>
+            </button>
+            <div className="live-pill"><span className="dot"></span> {t('terminal.live', 'Live')}</div>
+          </div>
         </div>
+
 
         <div className={`mkt-strip ${mktPanelOpen ? 'open' : ''}`} id="mktStrip">
           <div className="mkt-current" onClick={() => setMktPanelOpen(!mktPanelOpen)}>
@@ -715,7 +750,7 @@ const GXTerminalScreen = () => {
                 <button
                   key={tf}
                   className={`tf-btn ${timeframe === tf ? 'active' : ''}`}
-                  onClick={() => setTimeframe(tf)}
+                  onClick={() => setTimeframe(tf as Timeframe)}
                 >
                   {tf}
                 </button>
