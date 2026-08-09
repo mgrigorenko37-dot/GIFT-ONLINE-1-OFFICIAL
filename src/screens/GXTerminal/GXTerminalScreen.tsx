@@ -224,7 +224,7 @@ const GXTerminalScreen = () => {
     if (!seriesRef.current || !chartRef.current) return;
 
     const controller = new AbortController();
-    const currentConfigToken = activeConfig;
+    const currentConfigToken = { instrumentKey: activeInstrumentKey, timeframe };
 
     setChartLoading(true);
     setChartError(null);
@@ -254,7 +254,7 @@ const GXTerminalScreen = () => {
     return () => {
       controller.abort();
     };
-  }, [activeInstrumentKey, timeframe, retryCount, mergeRestCandles, activeConfig]);
+  }, [activeInstrumentKey, timeframe, retryCount, mergeRestCandles]);
 
   // 3. Render realtime candles onto Lightweight Charts
   useEffect(() => {
@@ -928,9 +928,16 @@ const GXTerminalScreen = () => {
             </div>
             <div className="orders-empty">
               {activityTab === 'history' ? 'История пуста' : userOrders.length === 0 ? 'Нет открытых ордеров' : userOrders.map(o => (
-                <div key={o.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', borderBottom: '1px solid #1E222C' }}>
+                <div key={o.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', borderBottom: '1px solid #1E222C', alignItems: 'center' }}>
                   <span>{o.side === 'buy' ? 'Покупка' : 'Продажа'} {o.amount} {o.giftName}</span>
-                  <span>{o.price} TON</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <span>{o.price} TON</span>
+                    {o.status === 'open' && (
+                      <button onClick={() => cancelOrder(o.id)} style={{ background: '#2C313C', border: 'none', color: '#FFF', padding: '2px 8px', borderRadius: '4px', cursor: 'pointer', fontSize: '11px' }}>
+                        Отменить
+                      </button>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>
