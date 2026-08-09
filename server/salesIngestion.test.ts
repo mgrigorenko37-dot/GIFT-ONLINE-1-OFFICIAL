@@ -1,6 +1,9 @@
+import { describe, test } from 'vitest';
 import { acceptCompletedSale, clearMarketState, allSales, processedSaleIds, getHistory } from './marketState';
 import { GiftSale } from './chartEngine';
 
+describe('Stage 3: Complete 25 Sales Ingestion, Validation & Deduplication Scenarios', () => {
+  test('Runs Stage 3 Sales Ingestion Scenarios', () => {
 function assert(condition: boolean, message: string) {
   if (!condition) {
     throw new Error(`Assertion failed: ${message}`);
@@ -273,6 +276,6 @@ console.log("=== Running Stage 3: Complete 25 Sales Ingestion, Validation & Dedu
 
   console.log("✓ Test 25 passed: Timestamp = 0 supported correctly according to contract");
 }
-
-console.log("\nALL 25 STAGE 3 SALES INGESTION, VALIDATION & DEDUPLICATION TESTS PASSED SUCCESSFULLY!");
+  });
+});
 

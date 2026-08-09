@@ -3,6 +3,14 @@ import { normalizeInstrumentKey, parseInstrumentKey, buildInstrumentKey, Timefra
 import { onSaleAccepted, AcceptSaleResult, getMarketSnapshot } from './marketState';
 import { onFloorUpdated, getFloorPrice, FloorResult } from './floorManager';
 import { getInstrumentKey } from './chartEngine';
+import {
+  initRedisManager,
+  isRedisActive,
+  getNextGlobalSequence,
+  publishMarketEventToRedis,
+  onRedisMarketEvent,
+  resetLocalSequence
+} from './redisManager';
 
 export const VALID_TIMEFRAMES = new Set<Timeframe>([
   "1s", "1m", "5m", "15m", "1h", "4h", "1d", "1w", "1M"
@@ -27,15 +35,16 @@ export interface SubscriptionInfo {
   socket: Socket;
 }
 
-// Global sequence counter for all emitted market_event messages
-let globalSequence = 0;
+// Sequence counter
+let localSequence = 0;
 
 export function getNextSequence(): number {
-  return ++globalSequence;
+  return ++localSequence;
 }
 
 export function resetSequence(value: number = 0) {
-  globalSequence = value;
+  localSequence = value;
+  resetLocalSequence(value);
 }
 
 // Map: socketId -> (subKey -> SubscriptionInfo)
@@ -99,6 +108,37 @@ export function parseSubscriptionParams(data: any): { instrumentKey: string; tim
   return { instrumentKey, timeframes };
 }
 
+export const MAX_SUBSCRIPTIONS_PER_SOCKET = 50;
+export const MAX_SOCKET_CONNECTIONS_PER_IP = 20;
+
+const ipConnectionCounts = new Map<string, number>();
+
+export function checkSocketIpConnection(ip: string): boolean {
+  const current = ipConnectionCounts.get(ip) || 0;
+  if (current >= MAX_SOCKET_CONNECTIONS_PER_IP) {
+    return false;
+  }
+  ipConnectionCounts.set(ip, current + 1);
+  return true;
+}
+
+export function releaseSocketIpConnection(ip: string) {
+  const current = ipConnectionCounts.get(ip) || 0;
+  if (current <= 1) {
+    ipConnectionCounts.delete(ip);
+  } else {
+    ipConnectionCounts.set(ip, current - 1);
+  }
+}
+
+export function resetSocketIpConnectionCounts(): void {
+  ipConnectionCounts.clear();
+}
+
+export function clearSocketSubscriptions(): void {
+  socketSubscriptions.clear();
+}
+
 export function handleSubscribe(socket: any, data: any): { success: boolean; isDuplicate: boolean; subKey?: string; error?: string } {
   try {
     const { instrumentKey, timeframes } = parseSubscriptionParams(data);
@@ -117,6 +157,16 @@ export function handleSubscribe(socket: any, data: any): { success: boolean; isD
       // Duplicate subscription: do not create second stream, emit snapshot for recovery
       emitSnapshot(socket, instrumentKey, timeframes);
       return { success: true, isDuplicate: true, subKey };
+    }
+
+    if (subsMap.size >= MAX_SUBSCRIPTIONS_PER_SOCKET) {
+      if (typeof socket.emit === 'function') {
+        socket.emit('market_event', {
+          type: 'error',
+          message: 'Maximum subscription limit reached',
+        });
+      }
+      return { success: false, isDuplicate: false, error: 'Maximum subscription limit reached' };
     }
 
     const subInfo: SubscriptionInfo = {
@@ -202,33 +252,40 @@ export function clearAllSubscriptions() {
 function emitSnapshot(socket: any, instrumentKey: string, timeframes: Timeframe[] | null) {
   const snapshotData = getMarketSnapshot(instrumentKey, timeframes);
   const floorData = getFloorPrice(instrumentKey);
-  const sequence = getNextSequence();
 
-  const payload = {
-    type: 'snapshot',
-    sequence,
-    instrumentKey,
-    timeframes: snapshotData.timeframes,
-    recentSales: snapshotData.recentSales,
-    floorPrice: floorData.floorPrice,
-    listedCount: floorData.listedCount,
-    serverTime: snapshotData.serverTime
+  const sendSnapshotPayload = (sequence: number) => {
+    const payload = {
+      type: 'snapshot',
+      sequence,
+      instrumentKey,
+      timeframes: snapshotData.timeframes,
+      recentSales: snapshotData.recentSales,
+      floorPrice: floorData.floorPrice,
+      listedCount: floorData.listedCount,
+      serverTime: snapshotData.serverTime
+    };
+
+    if (typeof socket.emit === 'function') {
+      socket.emit('market_event', payload);
+      socket.emit('floor_update', floorData);
+    }
   };
 
-  if (typeof socket.emit === 'function') {
-    socket.emit('market_event', payload);
-    socket.emit('floor_update', floorData);
+  if (isRedisActive()) {
+    getNextGlobalSequence().then(seq => sendSnapshotPayload(seq));
+  } else {
+    sendSnapshotPayload(getNextSequence());
   }
 }
 
-export function broadcastSaleResult(result: AcceptSaleResult) {
+export function broadcastLocalSaleResult(result: AcceptSaleResult, saleSeq?: number, candleSeqs?: number[]) {
   if (!result.accepted || !result.sale) return;
 
   const sale = result.sale;
   const instrumentKey = getInstrumentKey(sale);
   const candleEvents = result.candleEvents || [];
 
-  const saleSequence = getNextSequence();
+  const saleSequence = saleSeq !== undefined ? saleSeq : getNextSequence();
   const saleEvent = {
     type: 'sale',
     sequence: saleSequence,
@@ -248,9 +305,10 @@ export function broadcastSaleResult(result: AcceptSaleResult) {
           saleSentToSocket = true;
         }
 
+        let cIdx = 0;
         for (const ce of candleEvents) {
           if (sub.timeframes === null || sub.timeframes.includes(ce.timeframe)) {
-            const candleSequence = getNextSequence();
+            const candleSequence = candleSeqs && candleSeqs[cIdx] !== undefined ? candleSeqs[cIdx] : getNextSequence();
             const candleEvent = {
               type: ce.type,
               sequence: candleSequence,
@@ -263,14 +321,70 @@ export function broadcastSaleResult(result: AcceptSaleResult) {
               sub.socket.emit('market_event', candleEvent);
             }
           }
+          cIdx++;
         }
       }
     }
   }
 }
 
-export function broadcastFloorResult(floorResult: FloorResult) {
-  const sequence = getNextSequence();
+import { getOutboxWorker } from './outboxWorker';
+
+export async function broadcastSaleResult(result: AcceptSaleResult) {
+  if (!result.accepted || !result.sale) return;
+
+  const requireRedis = process.env.REQUIRE_REDIS === 'true' || process.env.NODE_ENV === 'production';
+
+  if (requireRedis) {
+    if (!isRedisActive()) {
+      throw new Error("Redis is required for cluster realtime synchronization, but Redis is inactive.");
+    }
+    const saleSeq = await getNextGlobalSequence();
+    const candleSeqs: number[] = [];
+    const candleEvents = result.candleEvents || [];
+    for (let i = 0; i < candleEvents.length; i++) {
+      candleSeqs.push(await getNextGlobalSequence());
+    }
+
+    const payload = {
+      kind: 'sale_result',
+      result,
+      saleSeq,
+      candleSeqs
+    };
+
+    const published = await publishMarketEventToRedis(payload);
+    if (!published) {
+      throw new Error("Failed to publish sale event to Redis cluster.");
+    }
+  } else {
+    if (isRedisActive()) {
+      const saleSeq = await getNextGlobalSequence();
+      const candleSeqs: number[] = [];
+      const candleEvents = result.candleEvents || [];
+      for (let i = 0; i < candleEvents.length; i++) {
+        candleSeqs.push(await getNextGlobalSequence());
+      }
+
+      const payload = {
+        kind: 'sale_result',
+        result,
+        saleSeq,
+        candleSeqs
+      };
+
+      const published = await publishMarketEventToRedis(payload);
+      if (!published) {
+        broadcastLocalSaleResult(result, saleSeq, candleSeqs);
+      }
+    } else {
+      broadcastLocalSaleResult(result);
+    }
+  }
+}
+
+export function broadcastLocalFloorResult(floorResult: FloorResult, seq?: number) {
+  const sequence = seq !== undefined ? seq : getNextSequence();
   const floorEvent = {
     type: 'floor_update',
     sequence,
@@ -295,9 +409,64 @@ export function broadcastFloorResult(floorResult: FloorResult) {
   }
 }
 
+export async function broadcastFloorResult(floorResult: FloorResult) {
+  const requireRedis = process.env.REQUIRE_REDIS === 'true' || process.env.NODE_ENV === 'production';
+
+  if (requireRedis) {
+    if (!isRedisActive()) {
+      throw new Error("Redis is required for cluster realtime synchronization, but Redis is inactive.");
+    }
+    const sequence = await getNextGlobalSequence();
+    const payload = {
+      kind: 'floor_result',
+      floorResult,
+      sequence
+    };
+
+    const published = await publishMarketEventToRedis(payload);
+    if (!published) {
+      throw new Error("Failed to publish floor update to Redis cluster.");
+    }
+  } else {
+    if (isRedisActive()) {
+      const sequence = await getNextGlobalSequence();
+      const payload = {
+        kind: 'floor_result',
+        floorResult,
+        sequence
+      };
+
+      const published = await publishMarketEventToRedis(payload);
+      if (!published) {
+        broadcastLocalFloorResult(floorResult, sequence);
+      }
+    } else {
+      broadcastLocalFloorResult(floorResult);
+    }
+  }
+}
+
+// Listen to incoming Redis Pub/Sub events from any instance
+onRedisMarketEvent((payload: any) => {
+  if (!payload || typeof payload !== 'object') return;
+  if (payload.kind === 'sale_result') {
+    broadcastLocalSaleResult(payload.result, payload.saleSeq, payload.candleSeqs);
+  } else if (payload.kind === 'floor_result') {
+    broadcastLocalFloorResult(payload.floorResult, payload.sequence);
+  }
+});
+
 // Auto-register listener on marketState sale acceptance
-onSaleAccepted((result) => {
-  broadcastSaleResult(result);
+onSaleAccepted(async (result) => {
+  const worker = getOutboxWorker();
+  if (worker) {
+    const processed = await worker.triggerImmediateProcessing();
+    if (processed === 0) {
+      await broadcastSaleResult(result);
+    }
+  } else {
+    await broadcastSaleResult(result);
+  }
 });
 
 // Auto-register listener on floor update
@@ -320,7 +489,32 @@ export function attachSocketListeners(socket: any) {
 }
 
 export function initRealtimeManager(io: Server) {
+  initRedisManager(io);
+
+  io.use((socket: Socket, next: (err?: Error) => void) => {
+    const clientIp =
+      socket.handshake.headers['x-forwarded-for']
+        ? String(socket.handshake.headers['x-forwarded-for']).split(',')[0].trim()
+        : socket.handshake.address || 'unknown_ip';
+
+    if (!checkSocketIpConnection(clientIp)) {
+      console.warn(`[SocketSecurity] Connection limit exceeded for IP ${clientIp}`);
+      return next(new Error('Connection limit exceeded for this IP address.'));
+    }
+
+    (socket as any).clientIp = clientIp;
+    next();
+  });
+
   io.on('connection', (socket: Socket) => {
     attachSocketListeners(socket);
+
+    socket.on('disconnect', () => {
+      const clientIp = (socket as any).clientIp;
+      if (clientIp) {
+        releaseSocketIpConnection(clientIp);
+      }
+    });
   });
 }
+

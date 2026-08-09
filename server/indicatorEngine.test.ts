@@ -1,3 +1,4 @@
+import { describe, test } from 'vitest';
 import Decimal from 'decimal.js';
 import { GiftCandle, Timeframe } from '../src/types/market';
 import { clearMarketState, acceptCompletedSale, getActiveCandle } from './marketState';
@@ -10,7 +11,8 @@ function assert(condition: boolean, message: string) {
   }
 }
 
-console.log('=== Running Stage 12: Telegram Gifts Technical Indicators Scenarios ===');
+describe('Stage 12: Telegram Gifts Technical Indicators Scenarios', () => {
+  test('Runs Stage 12 Indicator Engine Scenarios', () => {
 
 // 1. SMA Test
 {
@@ -282,5 +284,5 @@ console.log('=== Running Stage 12: Telegram Gifts Technical Indicators Scenarios
 
   console.log('✓ Test 9 passed: Explicit sources (close, average, floor) strictly separated');
 }
-
-console.log('ALL STAGE 12 TELEGRAM GIFTS TECHNICAL INDICATORS TESTS PASSED SUCCESSFULLY!');
+  });
+});

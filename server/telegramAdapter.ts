@@ -7,6 +7,7 @@ export interface RawTelegramMarketEvent {
   event_id?: string;
   id?: string;
   sale_id?: string;
+  saleId?: string;
   transaction_hash?: string;
   transactionHash?: string;
   collection_id?: string;

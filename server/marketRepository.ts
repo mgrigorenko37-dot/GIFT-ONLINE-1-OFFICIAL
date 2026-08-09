@@ -13,6 +13,26 @@ export interface MarketSnapshot {
   isSimulation?: boolean;
 }
 
+export interface OutboxEvent {
+  id?: number;
+  eventId: string;
+  eventType: string;
+  aggregateType: string;
+  aggregateId: string;
+  instrumentKey: string;
+  timeframe?: string;
+  payload: any;
+  sequence?: number;
+  status: 'pending' | 'processing' | 'published' | 'failed';
+  attempts: number;
+  availableAt: number;
+  lockedAt?: number;
+  publishedAt?: number;
+  lastError?: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
 export interface IMarketRepository {
   saveSnapshot(snapshot: MarketSnapshot): Promise<void> | void;
   loadSnapshot(): Promise<MarketSnapshot | null> | MarketSnapshot | null;
@@ -21,7 +41,13 @@ export interface IMarketRepository {
   saveCandles(instrumentKey: string, timeframe: Timeframe, candles: GiftCandle[]): Promise<void> | void;
   getCandles(instrumentKey: string, timeframe: Timeframe, options?: { from?: number; to?: number; limit?: number }): Promise<GiftCandle[]> | GiftCandle[];
   clear(): Promise<void> | void;
-  saveSaleAndCandlesAtomic?(sale: GiftSale, candles: GiftCandle[]): Promise<{ isNew: boolean }>;
+  saveSaleAndCandlesAtomic?(sale: GiftSale, candles: GiftCandle[], outboxEvents?: OutboxEvent[]): Promise<{ isNew: boolean }>;
+
+  saveOutboxEvent?(event: OutboxEvent): Promise<void>;
+  fetchPendingOutboxEvents?(limit?: number, lockLeaseMs?: number): Promise<OutboxEvent[]>;
+  markOutboxEventPublished?(eventId: string, publishedAt?: number): Promise<void>;
+  markOutboxEventFailed?(eventId: string, errorMsg: string, nextAvailableAt?: number): Promise<void>;
+  getOutboxEventById?(eventId: string): Promise<OutboxEvent | null>;
 }
 
 /**
@@ -31,6 +57,7 @@ export class InMemoryMarketRepository implements IMarketRepository {
   private snapshot: MarketSnapshot | null = null;
   private sales: GiftSale[] = [];
   private candles: Map<string, GiftCandle[]> = new Map();
+  private outboxEvents: OutboxEvent[] = [];
 
   public saveSnapshot(snapshot: MarketSnapshot): void {
     this.snapshot = JSON.parse(JSON.stringify(snapshot));
@@ -75,10 +102,93 @@ export class InMemoryMarketRepository implements IMarketRepository {
     return list;
   }
 
+  public async saveSaleAndCandlesAtomic(sale: GiftSale, candles: GiftCandle[], outboxEvents?: OutboxEvent[]): Promise<{ isNew: boolean }> {
+    const exists = this.sales.some(s => s.id === sale.id);
+    if (exists) {
+      return { isNew: false };
+    }
+    this.saveSale(sale);
+    for (const c of candles) {
+      const key = `${c.instrumentKey}:${c.timeframe}`;
+      let existingList = this.candles.get(key) || [];
+      const idx = existingList.findIndex(item => item.startTime === c.startTime);
+      if (idx !== -1) {
+        if ((c.revision ?? 0) >= (existingList[idx].revision ?? 0)) {
+          existingList[idx] = { ...c };
+        }
+      } else {
+        existingList.push({ ...c });
+      }
+      this.candles.set(key, existingList);
+    }
+    if (outboxEvents && outboxEvents.length > 0) {
+      for (const evt of outboxEvents) {
+        await this.saveOutboxEvent(evt);
+      }
+    }
+    return { isNew: true };
+  }
+
+  public async saveOutboxEvent(event: OutboxEvent): Promise<void> {
+    const idx = this.outboxEvents.findIndex(e => e.eventId === event.eventId);
+    if (idx !== -1) {
+      this.outboxEvents[idx] = JSON.parse(JSON.stringify(event));
+    } else {
+      this.outboxEvents.push(JSON.parse(JSON.stringify(event)));
+    }
+  }
+
+  public async fetchPendingOutboxEvents(limit: number = 20, lockLeaseMs: number = 30000): Promise<OutboxEvent[]> {
+    const now = Date.now();
+    const staleThreshold = now - lockLeaseMs;
+    const pending = this.outboxEvents.filter(e =>
+      (e.status === 'pending' && e.availableAt <= now) ||
+      (e.status === 'processing' && (e.lockedAt === undefined || e.lockedAt < staleThreshold))
+    ).slice(0, limit);
+
+    for (const p of pending) {
+      p.status = 'processing';
+      p.lockedAt = now;
+      p.attempts += 1;
+      p.updatedAt = now;
+    }
+    return pending.map(p => JSON.parse(JSON.stringify(p)));
+  }
+
+  public async markOutboxEventPublished(eventId: string, publishedAt: number = Date.now()): Promise<void> {
+    const item = this.outboxEvents.find(e => e.eventId === eventId);
+    if (item) {
+      item.status = 'published';
+      item.publishedAt = publishedAt;
+      item.updatedAt = publishedAt;
+    }
+  }
+
+  public async markOutboxEventFailed(eventId: string, errorMsg: string, nextAvailableAt?: number): Promise<void> {
+    const item = this.outboxEvents.find(e => e.eventId === eventId);
+    if (item) {
+      item.lastError = errorMsg;
+      item.availableAt = nextAvailableAt || (Date.now() + 5000);
+      item.lockedAt = undefined;
+      item.updatedAt = Date.now();
+      if (item.attempts >= 10) {
+        item.status = 'failed';
+      } else {
+        item.status = 'pending';
+      }
+    }
+  }
+
+  public async getOutboxEventById(eventId: string): Promise<OutboxEvent | null> {
+    const item = this.outboxEvents.find(e => e.eventId === eventId);
+    return item ? JSON.parse(JSON.stringify(item)) : null;
+  }
+
   public clear(): void {
     this.snapshot = null;
     this.sales = [];
     this.candles.clear();
+    this.outboxEvents = [];
   }
 }
 
@@ -252,6 +362,14 @@ export class PostgresMarketRepository implements IMarketRepository {
 
   public async initSchema(): Promise<void> {
     if (this.initialized) return;
+    
+    // Safety check: do not run DDL in production during regular runtime
+    if (process.env.NODE_ENV === 'production' && process.env.RUN_MIGRATIONS !== 'true') {
+      console.log('PostgresMarketRepository: Skipping initSchema in production. Migrations must be run explicitly.');
+      this.initialized = true;
+      return;
+    }
+
     const client = await this.pool.connect();
     try {
       await client.query('BEGIN');
@@ -306,6 +424,28 @@ export class PostgresMarketRepository implements IMarketRepository {
           snapshot JSONB NOT NULL,
           is_simulation BOOLEAN NOT NULL DEFAULT false
         );
+
+        CREATE TABLE IF NOT EXISTS outbox_events (
+          id SERIAL PRIMARY KEY,
+          event_id TEXT UNIQUE NOT NULL,
+          event_type TEXT NOT NULL,
+          aggregate_type TEXT NOT NULL,
+          aggregate_id TEXT NOT NULL,
+          instrument_key TEXT NOT NULL,
+          timeframe TEXT,
+          payload JSONB NOT NULL,
+          sequence BIGINT,
+          status TEXT NOT NULL DEFAULT 'pending',
+          attempts INTEGER NOT NULL DEFAULT 0,
+          available_at BIGINT NOT NULL,
+          locked_at BIGINT,
+          published_at BIGINT,
+          last_error TEXT,
+          created_at BIGINT NOT NULL,
+          updated_at BIGINT NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_outbox_events_pending ON outbox_events (status, available_at) WHERE status IN ('pending', 'processing');
       `);
       await client.query('COMMIT');
       this.initialized = true;
@@ -354,7 +494,7 @@ export class PostgresMarketRepository implements IMarketRepository {
     );
   }
 
-  public async saveSaleAndCandlesAtomic(sale: GiftSale, candles: GiftCandle[]): Promise<{ isNew: boolean }> {
+  public async saveSaleAndCandlesAtomic(sale: GiftSale, candles: GiftCandle[], outboxEvents?: OutboxEvent[]): Promise<{ isNew: boolean }> {
     await this.initSchema();
     const client = await this.pool.connect();
     try {
@@ -413,6 +553,26 @@ export class PostgresMarketRepository implements IMarketRepository {
         );
       }
 
+      if (outboxEvents && outboxEvents.length > 0) {
+        for (const evt of outboxEvents) {
+          await client.query(
+            `INSERT INTO outbox_events (
+              event_id, event_type, aggregate_type, aggregate_id, instrument_key, timeframe,
+              payload, sequence, status, attempts, available_at, locked_at, published_at,
+              last_error, created_at, updated_at
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+            ON CONFLICT (event_id) DO NOTHING`,
+            [
+              evt.eventId, evt.eventType, evt.aggregateType, evt.aggregateId, evt.instrumentKey,
+              evt.timeframe || null, JSON.stringify(evt.payload), evt.sequence || null,
+              evt.status || 'pending', evt.attempts || 0, evt.availableAt || Date.now(),
+              evt.lockedAt || null, evt.publishedAt || null, evt.lastError || null,
+              evt.createdAt || Date.now(), evt.updatedAt || Date.now()
+            ]
+          );
+        }
+      }
+
       await client.query('COMMIT');
       return { isNew: true };
     } catch (err) {
@@ -422,6 +582,140 @@ export class PostgresMarketRepository implements IMarketRepository {
     } finally {
       client.release();
     }
+  }
+
+  public async saveOutboxEvent(event: OutboxEvent): Promise<void> {
+    await this.initSchema();
+    await this.pool.query(
+      `INSERT INTO outbox_events (
+        event_id, event_type, aggregate_type, aggregate_id, instrument_key, timeframe,
+        payload, sequence, status, attempts, available_at, locked_at, published_at,
+        last_error, created_at, updated_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+      ON CONFLICT (event_id) DO NOTHING`,
+      [
+        event.eventId, event.eventType, event.aggregateType, event.aggregateId, event.instrumentKey,
+        event.timeframe || null, JSON.stringify(event.payload), event.sequence || null,
+        event.status || 'pending', event.attempts || 0, event.availableAt || Date.now(),
+        event.lockedAt || null, event.publishedAt || null, event.lastError || null,
+        event.createdAt || Date.now(), event.updatedAt || Date.now()
+      ]
+    );
+  }
+
+  public async fetchPendingOutboxEvents(limit: number = 20, lockLeaseMs: number = 30000): Promise<OutboxEvent[]> {
+    await this.initSchema();
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      const now = Date.now();
+      const staleThreshold = now - lockLeaseMs;
+
+      const selectRes = await client.query(
+        `SELECT id, event_id as "eventId", event_type as "eventType", aggregate_type as "aggregateType",
+                aggregate_id as "aggregateId", instrument_key as "instrumentKey", timeframe, payload,
+                sequence, status, attempts, available_at as "availableAt", locked_at as "lockedAt",
+                published_at as "publishedAt", last_error as "lastError", created_at as "createdAt",
+                updated_at as "updatedAt"
+         FROM outbox_events
+         WHERE (status = 'pending' AND available_at <= $1)
+            OR (status = 'processing' AND (locked_at IS NULL OR locked_at < $2))
+         ORDER BY id ASC
+         LIMIT $3
+         FOR UPDATE SKIP LOCKED`,
+        [now, staleThreshold, limit]
+      );
+
+      if (selectRes.rows.length === 0) {
+        await client.query('COMMIT');
+        return [];
+      }
+
+      const eventIds = selectRes.rows.map(r => r.eventId);
+      await client.query(
+        `UPDATE outbox_events
+         SET status = 'processing',
+             locked_at = $1,
+             attempts = attempts + 1,
+             updated_at = $1
+         WHERE event_id = ANY($2::text[])`,
+        [now, eventIds]
+      );
+
+      await client.query('COMMIT');
+
+      return selectRes.rows.map(r => ({
+        ...r,
+        id: Number(r.id),
+        attempts: Number(r.attempts) + 1,
+        availableAt: Number(r.availableAt),
+        lockedAt: now,
+        publishedAt: r.publishedAt ? Number(r.publishedAt) : undefined,
+        createdAt: Number(r.createdAt),
+        updatedAt: now,
+        sequence: r.sequence ? Number(r.sequence) : undefined
+      }));
+    } catch (err) {
+      await client.query('ROLLBACK');
+      console.error('PostgresMarketRepository fetchPendingOutboxEvents error:', err);
+      return [];
+    } finally {
+      client.release();
+    }
+  }
+
+  public async markOutboxEventPublished(eventId: string, publishedAt: number = Date.now()): Promise<void> {
+    await this.initSchema();
+    await this.pool.query(
+      `UPDATE outbox_events
+       SET status = 'published',
+           published_at = $1,
+           updated_at = $1
+       WHERE event_id = $2`,
+      [publishedAt, eventId]
+    );
+  }
+
+  public async markOutboxEventFailed(eventId: string, errorMsg: string, nextAvailableAt?: number): Promise<void> {
+    await this.initSchema();
+    const now = Date.now();
+    const availAt = nextAvailableAt || (now + 5000);
+    await this.pool.query(
+      `UPDATE outbox_events
+       SET status = CASE WHEN attempts >= 10 THEN 'failed' ELSE 'pending' END,
+           last_error = $1,
+           available_at = $2,
+           locked_at = NULL,
+           updated_at = $3
+       WHERE event_id = $4`,
+      [errorMsg, availAt, now, eventId]
+    );
+  }
+
+  public async getOutboxEventById(eventId: string): Promise<OutboxEvent | null> {
+    await this.initSchema();
+    const res = await this.pool.query(
+      `SELECT id, event_id as "eventId", event_type as "eventType", aggregate_type as "aggregateType",
+              aggregate_id as "aggregateId", instrument_key as "instrumentKey", timeframe, payload,
+              sequence, status, attempts, available_at as "availableAt", locked_at as "lockedAt",
+              published_at as "publishedAt", last_error as "lastError", created_at as "createdAt",
+              updated_at as "updatedAt"
+       FROM outbox_events WHERE event_id = $1`,
+      [eventId]
+    );
+    if (res.rows.length === 0) return null;
+    const r = res.rows[0];
+    return {
+      ...r,
+      id: Number(r.id),
+      attempts: Number(r.attempts),
+      availableAt: Number(r.availableAt),
+      lockedAt: r.lockedAt ? Number(r.lockedAt) : undefined,
+      publishedAt: r.publishedAt ? Number(r.publishedAt) : undefined,
+      createdAt: Number(r.createdAt),
+      updatedAt: Number(r.updatedAt),
+      sequence: r.sequence ? Number(r.sequence) : undefined
+    };
   }
 
   public async getSales(): Promise<GiftSale[]> {
@@ -542,19 +836,21 @@ export function resolveMarketRepository(): IMarketRepository {
   const storageMode = process.env.STORAGE_MODE;
   const allowFileInProd = process.env.ALLOW_FILE_STORAGE_IN_PRODUCTION === 'true';
 
-  if (hasDatabaseUrl) {
+  if (isProduction) {
+    if (allowFileInProd) {
+      console.warn('CRITICAL WARNING: ALLOW_FILE_STORAGE_IN_PRODUCTION=true is set but IGNORED in production mode. File storage is strictly forbidden in production.');
+    }
+    if (!hasDatabaseUrl) {
+      const errMsg = 'CRITICAL CONFIGURATION ERROR: Production mode requires DATABASE_URL for Postgres persistence. File storage is STRICTLY BANNED in production environment.';
+      console.error(errMsg);
+      throw new Error(errMsg);
+    }
     console.log('Production Persistence: Initializing PostgresMarketRepository with DATABASE_URL.');
     return new PostgresMarketRepository();
   }
 
-  if (isProduction && !hasDatabaseUrl) {
-    if (storageMode === 'file' && allowFileInProd) {
-      console.warn('WARNING: Running file persistence in production because ALLOW_FILE_STORAGE_IN_PRODUCTION=true is explicitly set.');
-      return new FilePersistentMarketRepository();
-    }
-    const errMsg = 'CRITICAL CONFIGURATION ERROR: Production mode requires DATABASE_URL for Postgres persistence. File storage in production is insecure. To override, set STORAGE_MODE=file and ALLOW_FILE_STORAGE_IN_PRODUCTION=true.';
-    console.error(errMsg);
-    throw new Error(errMsg);
+  if (hasDatabaseUrl && storageMode !== 'file') {
+    return new PostgresMarketRepository();
   }
 
   if (storageMode === 'file') {

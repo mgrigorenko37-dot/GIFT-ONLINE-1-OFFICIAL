@@ -1,3 +1,4 @@
+import { describe, test } from 'vitest';
 import assert from 'assert';
 import {
   clearMarketState,
@@ -43,6 +44,9 @@ import {
   secondsToMs,
   msToSeconds
 } from '../src/types/market';
+
+describe('Stage 16: End-to-End Scenario & Integration Tests', () => {
+  test('Runs full E2E scenario', () => {
 
 console.log('=== Running Stage 16: Complete End-to-End User Scenario & Integration Verification ===');
 
@@ -281,5 +285,5 @@ const currencies = ['TON', 'STARS'] as const;
 
   console.log('✓ Steps 21-23 passed: Reconnect state recovery, late sale correction & revision incrementing verified');
 }
-
-console.log('ALL STAGE 16 END-TO-END SCENARIO & INTEGRATION TESTS PASSED SUCCESSFULLY!');
+  });
+});

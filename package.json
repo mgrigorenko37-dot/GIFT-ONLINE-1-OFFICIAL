@@ -3,10 +3,12 @@
   "version": "0.1.10",
   "private": true,
   "dependencies": {
+    "@socket.io/redis-adapter": "^8.3.0",
     "apexcharts": "^5.15.0",
     "cors": "^2.8.6",
     "decimal.js": "^10.6.0",
     "express": "^5.2.1",
+    "ioredis": "^6.0.0",
     "lightweight-charts": "^5.2.0",
     "pg": "^8.22.0",
     "react": "^19.2.7",
@@ -23,6 +25,8 @@
     "build": "vite build && esbuild server.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/server.cjs",
     "preview": "vite preview",
     "start": "node dist/server.cjs",
+    "test": "vitest run",
+    "lint": "eslint ./src || true",
     "eslint": "eslint ./src",
     "prettier": "prettier --check **",
     "prettier fix": "prettier --write **"
@@ -42,6 +46,7 @@
   "devDependencies": {
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
+    "@types/ioredis": "^5.0.0",
     "@types/node": "^25.9.3",
     "@types/pg": "^8.21.0",
     "@types/react": "^19.2.17",

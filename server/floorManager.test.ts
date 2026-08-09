@@ -1,3 +1,4 @@
+import { describe, test } from 'vitest';
 import {
   clearFloorState,
   addListing,
@@ -18,7 +19,8 @@ function assert(condition: boolean, message: string) {
   }
 }
 
-console.log('=== Running Stage 10: Telegram Gifts Floor Price System Scenarios ===');
+describe('Stage 10: Telegram Gifts Floor Price System Scenarios', () => {
+  test('Runs Stage 10 Floor Manager Scenarios', () => {
 
 // 1. Active listing & floor calculation
 {
@@ -233,5 +235,5 @@ console.log('=== Running Stage 10: Telegram Gifts Floor Price System Scenarios =
 
   console.log('✓ Test 10 passed: Sales and floor_update are processed independently');
 }
-
-console.log('ALL STAGE 10 TELEGRAM GIFTS FLOOR PRICE TESTS PASSED SUCCESSFULLY!');
+  });
+});

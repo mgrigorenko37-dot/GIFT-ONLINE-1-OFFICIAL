@@ -1,7 +1,10 @@
+import { describe, test } from 'vitest';
 import { clearMarketState, acceptCompletedSale } from './marketState';
 import { clearFloorState, addListing } from './floorManager';
 import { getMarketStats } from './marketStats';
 
+describe('Stage 11: Telegram Gifts Market Statistics Scenarios', () => {
+  test('Runs Stage 11 Market Statistics Scenarios', () => {
 function assert(condition: boolean, message: string) {
   if (!condition) {
     throw new Error(`Assertion failed: ${message}`);
@@ -357,5 +360,5 @@ console.log('=== Running Stage 11: Telegram Gifts Market Statistics Scenarios ==
 
   console.log('✓ Test 10 passed: Non-completed/pending/cancelled sales are excluded');
 }
-
-console.log('ALL STAGE 11 TELEGRAM GIFTS MARKET STATS TESTS PASSED SUCCESSFULLY!');
+  });
+});

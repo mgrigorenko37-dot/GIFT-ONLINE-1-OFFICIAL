@@ -54,7 +54,7 @@ export function getMarketStats(options: MarketStatsOptions): MarketStatsResult {
 
   // Handle timeframe shortcut if explicitly given without from/to
   if (from === undefined && options.timeframe) {
-    const tf = options.timeframe.toLowerCase();
+    const tf = options.timeframe;
     const now = Date.now();
     if (tf === '24h' || tf === '1d') {
       from = now - 24 * 3600 * 1000;
@@ -65,8 +65,23 @@ export function getMarketStats(options: MarketStatsOptions): MarketStatsResult {
     } else if (tf === '7d' || tf === '1w') {
       from = now - 7 * 24 * 3600 * 1000;
       to = now + 1000;
-    } else if (tf === '30d' || tf === '1m') {
+    } else if (tf === '30d' || tf === '1M') {
       from = now - 30 * 24 * 3600 * 1000;
+      to = now + 1000;
+    } else if (tf === '1m') {
+      from = now - 60 * 1000;
+      to = now + 1000;
+    } else if (tf === '5m') {
+      from = now - 5 * 60 * 1000;
+      to = now + 1000;
+    } else if (tf === '15m') {
+      from = now - 15 * 60 * 1000;
+      to = now + 1000;
+    } else if (tf === '4h') {
+      from = now - 4 * 3600 * 1000;
+      to = now + 1000;
+    } else if (tf === '1s') {
+      from = now - 1000;
       to = now + 1000;
     }
   }

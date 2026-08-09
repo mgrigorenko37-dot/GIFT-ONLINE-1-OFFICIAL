@@ -1,26 +1,43 @@
 import { simulateSales } from "./server/mockMinter";
-import { getHistory, processSale, initMarketStateRepository } from "./server/marketState";
+import { getHistory, processSale, initMarketStateRepository, getMarketRepository } from "./server/marketState";
 import { processTelegramMarketEvent } from "./server/telegramAdapter";
 import { handleGetCandles } from "./server/candlesHandler";
-import { attachSocketListeners } from "./server/realtimeManager";
+import { attachSocketListeners, initRealtimeManager } from "./server/realtimeManager";
+import { getRedisHealthStatus, closeRedisConnections } from "./server/redisManager";
 import { getFloorPrice, addListing, updateListingPrice, cancelListing, sellListing } from "./server/floorManager";
 import { getMarketStats } from "./server/marketStats";
 import { getIndicators } from "./server/indicatorEngine";
+import { initOutboxWorker, stopOutboxWorker } from "./server/outboxWorker";
+import {
+  webhookRateLimiter,
+  restApiRateLimiter,
+  validateTelegramWebhookSecret,
+  requestTimeoutMiddleware
+} from "./server/rateLimiter";
 import express from 'express';
 import path from 'path';
 import cors from 'cors';
 import { createServer as createViteServer } from 'vite';
-import { createServer } from 'http';
+import { createServer, Server as HttpServer } from 'http';
 import { Server } from 'socket.io';
 
 const app = express();
 const PORT = process.env.PORT ? Number(process.env.PORT) : 3000;
 
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '100kb' }));
+app.use(requestTimeoutMiddleware(30000));
+
+// Apply REST API rate limiter globally to all /api/ endpoints (webhook routes override with specific webhook limiter)
+app.use('/api', (req, res, next) => {
+  if (req.path.startsWith('/telegram/webhook') || req.path.startsWith('/sales/ingest')) {
+    return next();
+  }
+  return restApiRateLimiter(req, res, next);
+});
 
 // External Telegram Sales Webhook / Ingestion API
-app.post('/api/telegram/webhook', (req: express.Request, res: express.Response) => {
+app.post('/api/telegram/webhook', webhookRateLimiter, validateTelegramWebhookSecret, (req: express.Request, res: express.Response) => {
   const result = processTelegramMarketEvent(req.body);
   if (result.success) {
     return res.status(200).json(result);
@@ -29,7 +46,7 @@ app.post('/api/telegram/webhook', (req: express.Request, res: express.Response) 
   }
 });
 
-app.post('/api/sales/ingest', (req: express.Request, res: express.Response) => {
+app.post('/api/sales/ingest', webhookRateLimiter, validateTelegramWebhookSecret, (req: express.Request, res: express.Response) => {
   const result = processTelegramMarketEvent(req.body);
   if (result.success) {
     return res.status(200).json(result);
@@ -549,13 +566,149 @@ app.get('/api/gifts', async (req, res) => {
   }
 });
 
+// Production Deployment Probes: Health, Readiness, Liveness
+app.get(['/health', '/api/health'], (req: express.Request, res: express.Response) => {
+  const redisHealth = getRedisHealthStatus();
+  const repo = getMarketRepository();
+  const dbConnected = Boolean(process.env.DATABASE_URL);
+
+  res.status(200).json({
+    status: 'ok',
+    timestamp: Date.now(),
+    uptime: process.uptime(),
+    redis: redisHealth,
+    database: {
+      connected: dbConnected,
+      repository: repo ? repo.constructor.name : 'Unknown'
+    },
+    environment: {
+      nodeEnv: process.env.NODE_ENV || 'development',
+      port: PORT,
+      requireRedis: process.env.REQUIRE_REDIS === 'true',
+      simulationMode: process.env.SIMULATION_MODE === 'true',
+      allowFileStorageInProd: process.env.ALLOW_FILE_STORAGE_IN_PRODUCTION === 'true'
+    }
+  });
+});
+
+app.get(['/readiness', '/api/readiness'], (req: express.Request, res: express.Response) => {
+  const requireRedis = process.env.REQUIRE_REDIS === 'true';
+  const redisHealth = getRedisHealthStatus();
+  const isProduction = process.env.NODE_ENV === 'production';
+  const hasDb = Boolean(process.env.DATABASE_URL);
+  const allowFileInProd = process.env.ALLOW_FILE_STORAGE_IN_PRODUCTION === 'true';
+
+  if (requireRedis && !redisHealth.isConnected) {
+    return res.status(503).json({
+      ready: false,
+      reason: 'Redis is required (REQUIRE_REDIS=true) but Redis connection is inactive.'
+    });
+  }
+
+  if (isProduction && !hasDb) {
+    return res.status(503).json({
+      ready: false,
+      reason: 'PostgreSQL (DATABASE_URL) is strictly required in production.'
+    });
+  }
+
+  return res.status(200).json({
+    ready: true,
+    timestamp: Date.now(),
+    redisActive: redisHealth.isConnected
+  });
+});
+
+app.get(['/live', '/api/live'], (req: express.Request, res: express.Response) => {
+  res.status(200).json({ alive: true, timestamp: Date.now() });
+});
+
+// Express error handling for Payload Too Large
+app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+  if (err && (err.type === 'entity.too.large' || err.status === 413)) {
+    return res.status(413).json({ error: 'Payload Too Large: Maximum JSON payload size is 100kb.' });
+  }
+  next(err);
+});
+
+let httpServerRef: HttpServer | null = null;
+let ioRef: Server | null = null;
+let isShuttingDown = false;
+
+export async function stopServerGracefully(signal = 'SIGTERM'): Promise<void> {
+  if (isShuttingDown) return;
+  isShuttingDown = true;
+  console.log(`[Server] Received ${signal}. Executing graceful shutdown sequence...`);
+
+  try {
+    stopOutboxWorker();
+    console.log('[Server] OutboxWorker stopped.');
+  } catch (e) {
+    console.error('[Server] Error stopping OutboxWorker:', e);
+  }
+
+  if (ioRef) {
+    try {
+      ioRef.close();
+      console.log('[Server] Socket.io server closed.');
+    } catch (e) {
+      console.error('[Server] Error closing Socket.io:', e);
+    }
+  }
+
+  if (httpServerRef) {
+    await new Promise<void>((resolve) => {
+      httpServerRef?.close(() => {
+        console.log('[Server] HTTP listener stopped.');
+        resolve();
+      });
+    });
+  }
+
+  try {
+    await closeRedisConnections();
+  } catch (e) {
+    console.error('[Server] Error closing Redis connections:', e);
+  }
+
+  try {
+    const repo = getMarketRepository() as any;
+    if (repo && typeof repo.close === 'function') {
+      await repo.close();
+      console.log('[Server] Database pool closed.');
+    }
+  } catch (e) {
+    console.error('[Server] Error closing database pool:', e);
+  }
+
+  console.log('[Server] Graceful shutdown completed.');
+}
+
+process.on('SIGTERM', () => {
+  stopServerGracefully('SIGTERM').then(() => process.exit(0));
+});
+
+process.on('SIGINT', () => {
+  stopServerGracefully('SIGINT').then(() => process.exit(0));
+});
+
 async function startServer() {
   initMarketStateRepository();
+  initOutboxWorker(getMarketRepository());
 
   const httpServer = createServer(app);
+  httpServerRef = httpServer;
+
   const io = new Server(httpServer, {
     cors: { origin: '*' },
+    transports: ['websocket', 'polling'],
+    pingTimeout: 20000,
+    pingInterval: 10000,
   });
+  ioRef = io;
+
+  // Initialize Realtime Manager & Redis Pub/Sub Adapter
+  initRealtimeManager(io);
 
   if (process.env.SIMULATION_MODE === 'true' || process.env.ENABLE_SIMULATION === 'true') {
     simulateSales(io);

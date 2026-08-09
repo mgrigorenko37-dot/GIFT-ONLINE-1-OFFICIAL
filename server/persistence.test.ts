@@ -82,7 +82,7 @@ describe('Production Persistence & Safety Tests', () => {
     }
   });
 
-  it('resolveMarketRepository allows explicit file override in production when ALLOW_FILE_STORAGE_IN_PRODUCTION=true', () => {
+  it('resolveMarketRepository ignores ALLOW_FILE_STORAGE_IN_PRODUCTION=true in production and throws error', () => {
     const origNodeEnv = process.env.NODE_ENV;
     const origDbUrl = process.env.DATABASE_URL;
     const origStorage = process.env.STORAGE_MODE;
@@ -94,8 +94,7 @@ describe('Production Persistence & Safety Tests', () => {
       process.env.STORAGE_MODE = 'file';
       process.env.ALLOW_FILE_STORAGE_IN_PRODUCTION = 'true';
 
-      const repo = resolveMarketRepository();
-      expect(repo).toBeInstanceOf(FilePersistentMarketRepository);
+      expect(() => resolveMarketRepository()).toThrow('CRITICAL CONFIGURATION ERROR');
     } finally {
       process.env.NODE_ENV = origNodeEnv;
       if (origDbUrl) process.env.DATABASE_URL = origDbUrl;

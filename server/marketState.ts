@@ -1,6 +1,6 @@
 import { GiftSale, GiftCandle, Timeframe, getInstrumentKey, createCandleFromSale, updateCandle, getCandleRange, parsePositiveDecimal } from './chartEngine';
 import { normalizeInstrumentKey, parseInstrumentKey } from '../src/types/market';
-import { MarketSnapshot, IMarketRepository, InMemoryMarketRepository, resolveMarketRepository } from './marketRepository';
+import { MarketSnapshot, IMarketRepository, InMemoryMarketRepository, resolveMarketRepository, OutboxEvent } from './marketRepository';
 
 export const allSales: GiftSale[] = [];
 export const processedSaleIds = new Set<string>();
@@ -54,11 +54,14 @@ export function onSaleAccepted(listener: SaleAcceptedListener) {
   };
 }
 
-export function clearMarketState() {
+export function clearMarketState(clearRepo = true) {
   allSales.length = 0;
   processedSaleIds.clear();
   for (const k in activeCandles) delete activeCandles[k];
   for (const k in closedCandles) delete closedCandles[k];
+  if (clearRepo && activeRepository && typeof activeRepository.clear === 'function') {
+    activeRepository.clear();
+  }
 }
 
 export interface HistoryOptions {
@@ -260,16 +263,50 @@ export function acceptCompletedSale(rawSale: any): AcceptSaleResult {
     allSales.splice(0, allSales.length - 10000);
   }
 
-  // Persist sale and updated candles to active repository
+  // Construct outbox event for transactional messaging
+  const outboxEvent: OutboxEvent = {
+    eventId: `evt_sale_${sale.id}`,
+    eventType: 'sale_accepted',
+    aggregateType: 'sale',
+    aggregateId: sale.id,
+    instrumentKey: getInstrumentKey(sale),
+    payload: {
+      sale,
+      candles: updatedCandles,
+      candleEvents
+    },
+    status: 'pending',
+    attempts: 0,
+    availableAt: Date.now(),
+    createdAt: Date.now(),
+    updatedAt: Date.now()
+  };
+
+  // Persist sale, updated candles, and outbox event atomically to active repository
   try {
     if (activeRepository.saveSaleAndCandlesAtomic) {
-      activeRepository.saveSaleAndCandlesAtomic(sale, updatedCandles);
+      const p = activeRepository.saveSaleAndCandlesAtomic(sale, updatedCandles, [outboxEvent]);
+      if (p && typeof (p as any).catch === 'function') {
+        (p as any).catch((err: any) => console.error("Error persisting sale to market repository:", err));
+      }
     } else {
-      activeRepository.saveSale(sale);
+      const p = activeRepository.saveSale(sale);
+      if (p && typeof (p as any).catch === 'function') {
+        (p as any).catch((err: any) => console.error("Error persisting sale:", err));
+      }
+      if (activeRepository.saveOutboxEvent) {
+        const p2 = activeRepository.saveOutboxEvent(outboxEvent);
+        if (p2 && typeof (p2 as any).catch === 'function') {
+          (p2 as any).catch((err: any) => console.error("Error persisting outbox event:", err));
+        }
+      }
       const normKey = getInstrumentKey(sale);
       for (const c of updatedCandles) {
         const closedList = closedCandles[normKey]?.[c.timeframe] || [];
-        activeRepository.saveCandles(normKey, c.timeframe, closedList);
+        const p3 = activeRepository.saveCandles(normKey, c.timeframe, closedList);
+        if (p3 && typeof (p3 as any).catch === 'function') {
+          (p3 as any).catch((err: any) => console.error("Error persisting candles:", err));
+        }
       }
     }
   } catch (err) {
@@ -287,7 +324,12 @@ export function acceptCompletedSale(rawSale: any): AcceptSaleResult {
 
   for (const listener of saleAcceptedListeners) {
     try {
-      listener(res);
+      const p = listener(res) as unknown as Promise<unknown>;
+      if (p && typeof p.catch === 'function') {
+        (p as any).catch((err: any) => {
+          console.warn("[MarketState] Async saleAcceptedListener rejection caught:", err?.message || err);
+        });
+      }
     } catch (err) {
       console.error("Error in saleAcceptedListener:", err);
     }
@@ -339,7 +381,8 @@ function processSaleInternal(sale: GiftSale): ProcessSaleInternalResult {
         updatedCandles.push(currentCandle);
         candleEvents.push({ type: "candle_update", timeframe: tf, candle: { ...currentCandle } });
       } else if (sale.eventTime < currentCandle.startTime) {
-        const pastCandleIdx = closedCandles[instrumentKey][tf].findIndex(c => sale.eventTime >= c.startTime && sale.eventTime < c.endTime);
+        const pastRange = getCandleRange(sale.eventTime, tf);
+        const pastCandleIdx = closedCandles[instrumentKey][tf].findIndex(c => c.startTime === pastRange.startTime);
         if (pastCandleIdx !== -1) {
           const pc = closedCandles[instrumentKey][tf][pastCandleIdx];
           const updatedPc = updateCandle(pc, sale);

@@ -15,7 +15,7 @@ export class CandleStore {
    * Applies a candle update or closed candle.
    * Returns whether state was updated, and whether it was a new candle.
    */
-  public applyCandle(candle: GiftCandle): { updated: boolean; isNew: boolean } {
+  public applyCandle(candle: GiftCandle): { updated: boolean; isNew: boolean; conflict?: boolean } {
     if (!candle || typeof candle !== 'object') {
       return { updated: false, isNew: false };
     }
@@ -60,19 +60,15 @@ export class CandleStore {
         existing.low === candle.low &&
         existing.close === candle.close &&
         existing.volume === candle.volume &&
-        existing.tradeCount === candle.tradeCount;
+        existing.tradeCount === candle.tradeCount &&
+        existing.confirmed === candle.confirmed;
 
       if (isIdentical) {
         return { updated: false, isNew: false };
       }
 
-      if (currentUpdatedAt > existingUpdatedAt) {
-        this.candlesByStartTime.set(startTime, candle);
-        return { updated: true, isNew: false };
-      } else {
-        console.warn(`[CandleStore] Revision conflict for startTime ${startTime}: equal revision ${currentRev} with conflicting OHLCV data.`);
-        return { updated: false, isNew: false };
-      }
+      console.warn(`[CandleStore] Revision conflict for startTime ${startTime}: equal revision ${currentRev} with conflicting data.`);
+      return { updated: false, isNew: false, conflict: true };
     }
 
     // Stale or duplicate event

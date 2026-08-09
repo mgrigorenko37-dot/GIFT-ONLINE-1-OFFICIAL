@@ -1,3 +1,4 @@
+import { describe, test } from 'vitest';
 import { acceptCompletedSale, clearMarketState, allSales, getHistory } from './marketState';
 import { GiftSale, GiftCandle, getAveragePrice, parsePositiveDecimal } from './chartEngine';
 import Decimal from 'decimal.js';
@@ -8,7 +9,8 @@ function assert(condition: boolean, message: string) {
   }
 }
 
-console.log("=== Running Stage 4: 27 Financial Precision & OHLCV Scenarios ===");
+describe('Stage 4: Financial Precision & OHLCV Scenarios', () => {
+  test('Runs all 27 Financial Precision & OHLCV Scenarios', () => {
 
 // ----------------------------------------------------
 // Test 1: 0.1 + 0.2 gives exact 0.3
@@ -415,5 +417,5 @@ console.log("=== Running Stage 4: 27 Financial Precision & OHLCV Scenarios ===")
   assert(candleAfterDup.revision === 2, `Test 27: Revision remains 2 after duplicate, got ${candleAfterDup.revision}`);
   console.log("✓ Test 27 passed: Revision increments strictly on real market changes");
 }
-
-console.log("\nALL 27 STAGE 4 FINANCIAL PRECISION & OHLCV TESTS PASSED SUCCESSFULLY!");
+  });
+});

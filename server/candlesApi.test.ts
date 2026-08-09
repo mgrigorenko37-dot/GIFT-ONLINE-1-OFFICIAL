@@ -1,3 +1,4 @@
+import { describe, test } from 'vitest';
 import { acceptCompletedSale, clearMarketState, getHistory } from './marketState';
 import { handleGetCandles } from './candlesHandler';
 
@@ -27,7 +28,8 @@ function mockApiCall(query: Record<string, any>) {
   return { status: statusCode, body: jsonBody };
 }
 
-console.log("=== Running Stage 5: 33 REST API Candle History Scenarios ===");
+describe('Stage 5: 33 REST API Candle History Scenarios', () => {
+  test('Runs all 33 REST API Candle History Scenarios', () => {
 
 // Scenario 1: Successful request 1s
 {
@@ -379,5 +381,5 @@ console.log("=== Running Stage 5: 33 REST API Candle History Scenarios ===");
 
   console.log("✓ Scenario 33 passed: Cursor pagination does not skip or duplicate candles");
 }
-
-console.log("\nALL 33 STAGE 5 REST API CANDLE HISTORY TESTS PASSED SUCCESSFULLY!");
+  });
+});

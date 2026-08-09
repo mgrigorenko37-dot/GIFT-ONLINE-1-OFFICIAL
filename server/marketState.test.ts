@@ -1,8 +1,12 @@
-import { processSale, activeCandles, closedCandles, allSales } from './marketState';
+import { describe, test } from 'vitest';
+import assert from 'assert';
+import { processSale, activeCandles, closedCandles, allSales, clearMarketState } from './marketState';
 import { GiftSale } from './chartEngine';
 import { buildInstrumentKey } from '../src/types/market';
 
-const testSale1: GiftSale = {
+describe('Market State Engine', () => {
+  test('Runs market state scenario', () => {
+    const testSale1: GiftSale = {
   id: "s1",
   collectionId: "coll1",
   price: "100",
@@ -54,4 +58,5 @@ processSale(testLateSale);
 const ik = buildInstrumentKey({ collectionId: "coll1", currency: "TON" });
 console.log("1m Closed:", closedCandles[ik]["1m"]);
 console.log("1m Active:", activeCandles[ik]["1m"]);
-
+  });
+});

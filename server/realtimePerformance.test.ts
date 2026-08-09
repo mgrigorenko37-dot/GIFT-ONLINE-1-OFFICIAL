@@ -1,11 +1,12 @@
+import { describe, test } from 'vitest';
 import assert from 'assert';
 import { clearMarketState, acceptCompletedSale, allSales, processedSaleIds, closedCandles, activeCandles, getMarketCandlesHistory } from './marketState';
 import { handleSubscribe, handleUnsubscribe, handleDisconnect, clearAllSubscriptions, getSocketSubscriptions, broadcastSaleResult } from './realtimeManager';
 import { CandleStore, SaleTracker, SequenceTracker } from '../src/lib/realtimeStream';
 import { GiftCandle, GiftSale, Timeframe } from '../src/types/market';
 
-console.log('=== Running Stage 14: Realtime Chart Performance & Resource Optimization Scenarios ===');
-
+describe('Stage 14: Realtime Chart Performance & Resource Optimization Scenarios', () => {
+  test('Runs Stage 14 Performance Scenarios', async () => {
 // Clear state
 clearMarketState();
 clearAllSubscriptions();
@@ -295,5 +296,5 @@ const tf1h: Timeframe = '1h';
 
   console.log(`✓ Scenario 8 passed: 1,000 incremental sale updates executed in ${duration.toFixed(2)}ms`);
 }
-
-console.log('ALL STAGE 14 PERFORMANCE & RESOURCE OPTIMIZATION TESTS PASSED SUCCESSFULLY!');
+  }, 120000); // 2 minute timeout
+});
