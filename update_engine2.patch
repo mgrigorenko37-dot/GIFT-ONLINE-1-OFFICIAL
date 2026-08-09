@@ -1,0 +1,97 @@
+--- src/engine/TradingEngine.ts
++++ src/engine/TradingEngine.ts
+@@ -1,5 +1,6 @@
+ import fs from 'fs';
+ import path from 'path';
++import { EventEmitter } from 'events';
+ 
+ export type Side = 'Buy' | 'Sell';
+ export type PositionSide = 'Long' | 'Short';
+@@ -41,7 +42,7 @@
+   timestamp: number;
+ }
+ 
+-export class TradingEngine {
++export class TradingEngine extends EventEmitter {
+   private orders: Map<string, Order> = new Map();
+   private positions: Map<string, Position> = new Map(); // key: userId:instrumentKey
+   private balances: Map<string, number> = new Map();
+@@ -50,6 +51,7 @@
+ 
+   constructor(dataPath?: string) {
++    super();
+     this.dataPath = dataPath || path.resolve(process.cwd(), '.data', 'trading_engine.json');
+     this.loadState();
+   }
+@@ -134,6 +136,8 @@
+ 
+     this.orders.set(order.orderId, order);
+     this.saveState();
++    this.emit('orderPlaced', order);
+     return order;
+   }
+ 
+@@ -147,6 +151,7 @@
+       order.status = 'Cancelled';
+       order.updatedAt = Date.now();
+       this.saveState();
++      this.emit('orderCancelled', order);
+       return order;
+     }
+     return null; // Cannot cancel Filled or already Cancelled/Rejected orders
+@@ -194,18 +199,23 @@
+     if (order.side === 'Buy') {
+       if (order.orderType === 'Market') {
+         this.setBalance(order.userId, currentBalance - (fillQty * fillPrice));
++        this.emit('balanceUpdated', { userId: order.userId, balance: this.getBalance(order.userId) });
+       }
+     } else {
+       this.setBalance(order.userId, currentBalance + (fillQty * fillPrice));
++      this.emit('balanceUpdated', { userId: order.userId, balance: this.getBalance(order.userId) });
+     }
+ 
+     this.updatePosition(order, fillQty, fillPrice);
+ 
++    this.emit('orderUpdated', order);
++
+     const trade: Trade = {
+       tradeId: Math.random().toString(36).substring(2, 11),
+       orderId: order.orderId,
+       userId: order.userId,
+       instrumentKey: order.instrumentKey,
+       side: order.side,
+       qty: fillQty,
+       price: fillPrice,
+@@ -213,6 +223,7 @@
+     };
+     this.trades.push(trade);
+ 
++    this.emit('tradeExecuted', trade);
+     this.saveState();
+     return trade;
+   }
+@@ -242,6 +253,7 @@
+           updatedAt: Date.now()
+         };
+         this.positions.set(posKey, position);
++        this.emit('positionUpdated', position);
+       }
+       return;
+     }
+@@ -253,6 +265,7 @@
+       position.qty += fillQty;
+       position.avgEntryPrice = totalValue / position.qty;
+       position.updatedAt = Date.now();
++      this.emit('positionUpdated', position);
+     } else {
+       // Decrease Long position (Sell)
+       const realizedPnl = (fillPrice - position.avgEntryPrice) * fillQty;
+@@ -263,6 +276,7 @@
+       if (position.qty <= 0) {
+         position.qty = 0;
+         position.status = 'Closed';
+       }
++      this.emit('positionUpdated', position);
+     }
+   }
+ }

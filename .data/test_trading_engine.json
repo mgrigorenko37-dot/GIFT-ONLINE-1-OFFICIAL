@@ -1,0 +1,61 @@
+{
+  "orders": [
+    [
+      "15nm084sf",
+      {
+        "userId": "user1",
+        "instrumentKey": "TEST:all:all:TON",
+        "side": "Buy",
+        "orderType": "Market",
+        "qty": 10,
+        "price": 100,
+        "reduceOnly": false,
+        "orderId": "15nm084sf",
+        "status": "Filled",
+        "executedQty": 10,
+        "remainingQty": 0,
+        "avgFillPrice": 100,
+        "fee": 0,
+        "createdAt": 1786293666843,
+        "updatedAt": 1786293666843
+      }
+    ]
+  ],
+  "positions": [
+    [
+      "user1:TEST:all:all:TON",
+      {
+        "positionId": "cuzc9gw2h",
+        "userId": "user1",
+        "instrumentKey": "TEST:all:all:TON",
+        "side": "Long",
+        "qty": 10,
+        "avgEntryPrice": 100,
+        "markPrice": 100,
+        "unrealizedPnl": 0,
+        "realizedPnl": 0,
+        "status": "Open",
+        "openedAt": 1786293666843,
+        "updatedAt": 1786293666843
+      }
+    ]
+  ],
+  "balances": [
+    [
+      "user1",
+      11480.5
+    ]
+  ],
+  "trades": [
+    {
+      "tradeId": "k8n5nfkgt",
+      "orderId": "15nm084sf",
+      "userId": "user1",
+      "instrumentKey": "TEST:all:all:TON",
+      "side": "Buy",
+      "qty": 10,
+      "price": 100,
+      "timestamp": 1786293666843
+    }
+  ]
+}

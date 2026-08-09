@@ -1,0 +1,146 @@
+--- src/engine/TradingEngine.ts
++++ src/engine/TradingEngine.ts
+@@ -43,6 +43,7 @@
+ export class TradingEngine {
+   private orders: Map<string, Order> = new Map();
+   private positions: Map<string, Position> = new Map(); // key: userId:instrumentKey
++  private balances: Map<string, number> = new Map();
+   private trades: Trade[] = [];
+   private dataPath: string;
+ 
+@@ -58,6 +59,7 @@
+         this.orders = new Map(data.orders || []);
+         this.positions = new Map(data.positions || []);
+         this.trades = data.trades || [];
++        this.balances = new Map(data.balances || []);
+       }
+     } catch (e) {
+       console.error('Failed to load trading engine state', e);
+@@ -72,6 +74,7 @@
+         orders: Array.from(this.orders.entries()),
+         positions: Array.from(this.positions.entries()),
+         trades: this.trades,
++        balances: Array.from(this.balances.entries()),
+       };
+       fs.writeFileSync(this.dataPath, JSON.stringify(data, null, 2));
+     } catch (e) {
+@@ -79,7 +82,15 @@
+     }
+   }
+ 
+-  public placeOrder(orderData: Omit<Order, 'orderId' | 'status' | 'executedQty' | 'remainingQty' | 'avgFillPrice' | 'fee' | 'createdAt' | 'updatedAt'>): Order {
++  public getBalance(userId: string): number {
++    return this.balances.get(userId) || 12480.5; // Default initial balance
++  }
++
++  public setBalance(userId: string, amount: number) {
++    this.balances.set(userId, amount);
++  }
++
++  public placeOrder(orderData: Omit<Order, 'orderId' | 'status' | 'executedQty' | 'remainingQty' | 'avgFillPrice' | 'fee' | 'createdAt' | 'updatedAt'>, initialBalanceDeduct?: boolean): Order {
+     const now = Date.now();
+     const order: Order = {
+       ...orderData,
+@@ -103,6 +114,13 @@
+       }
+       
+       // If we have a long position, any sell can only reduce it.
++      if (order.qty > position.qty) {
++        order.qty = position.qty;
++        order.remainingQty = position.qty;
++      }
++    } else {
++      // Buy
++      // if reduceOnly is true, reject because Buy cannot reduce a Long position
+       if (order.reduceOnly) {
+         order.status = 'Rejected';
+         this.orders.set(order.orderId, order);
+@@ -109,6 +127,11 @@
+         return order;
+       }
++      
++      if (initialBalanceDeduct && order.orderType === 'Limit') {
++        const currentBalance = this.getBalance(order.userId);
++        this.setBalance(order.userId, currentBalance - (order.price * order.qty));
++      }
+     }
+ 
+     this.orders.set(order.orderId, order);
+@@ -142,6 +165,16 @@
+     return Array.from(this.positions.values()).filter(p => p.userId === userId);
+   }
+ 
++  public updateMarkPrice(instrumentKey: string, markPrice: number) {
++    for (const [key, position] of this.positions.entries()) {
++      if (position.instrumentKey === instrumentKey && position.status === 'Open') {
++        position.markPrice = markPrice;
++        position.unrealizedPnl = (markPrice - position.avgEntryPrice) * position.qty;
++      }
++    }
++    this.saveState();
++  }
++
+   public getOpenOrders(instrumentKey?: string): Order[] {
+     return Array.from(this.orders.values()).filter(o => 
+       (o.status === 'Open' || o.status === 'PartiallyFilled') && 
+@@ -165,8 +198,16 @@
+           continue;
+         }
+ 
+         const fillQty = Math.min(buy.remainingQty, sell.remainingQty);
++        if (fillQty <= 0) continue;
++
+         const fillPrice = sell.price > 0 ? sell.price : (buy.price > 0 ? buy.price : 0); // Simplify execution price
+ 
+-        this.executeTrade(buy.orderId, fillQty, fillPrice);
+-        this.executeTrade(sell.orderId, fillQty, fillPrice);
++        const buyExecuted = this.executeTrade(buy.orderId, fillQty, fillPrice);
++        const sellExecuted = this.executeTrade(sell.orderId, fillQty, fillPrice);
++        
++        if (!buyExecuted || !sellExecuted) continue; // Should not happen if logic is correct
+ 
+         const trade: Trade = {
+           tradeId: Math.random().toString(36).substring(2, 11),
+@@ -185,12 +226,14 @@
+   }
+ 
+   // Basic simulation of execution
+-  public executeTrade(orderId: string, fillQty: number, fillPrice: number) {
++  public executeTrade(orderId: string, fillQty: number, fillPrice: number): boolean {
+     const order = this.orders.get(orderId);
+-    if (!order || (order.status !== 'Open' && order.status !== 'PartiallyFilled')) return;
++    if (!order || (order.status !== 'Open' && order.status !== 'PartiallyFilled')) return false;
++
++    if (fillQty <= 0) return false;
+ 
+     if (fillQty > order.remainingQty) {
+       fillQty = order.remainingQty;
+     }
+ 
+     const totalCost = (order.avgFillPrice * order.executedQty) + (fillPrice * fillQty);
+@@ -198,10 +241,18 @@
+     order.executedQty += fillQty;
+     order.remainingQty -= fillQty;
+     order.avgFillPrice = totalCost / order.executedQty;
+     order.updatedAt = Date.now();
+ 
+     if (order.remainingQty === 0) {
+       order.status = 'Filled';
+     } else {
+       order.status = 'PartiallyFilled';
+     }
+ 
++    // Update balance
++    const currentBalance = this.getBalance(order.userId);
++    if (order.side === 'Buy' && order.orderType === 'Market') {
++      this.setBalance(order.userId, currentBalance - (fillQty * fillPrice));
++    } else if (order.side === 'Sell') {
++      this.setBalance(order.userId, currentBalance + (fillQty * fillPrice));
++    }
++
+     this.updatePosition(order, fillQty, fillPrice);
+     this.saveState();
++    return true;
+   }
+ 
+   private updatePosition(order: Order, fillQty: number, fillPrice: number) {

@@ -90,6 +90,10 @@ app.post('/api/create-invoice', async (req: express.Request, res: express.Respon
   }
 });
 
+import { TradingEngine } from './src/engine/TradingEngine';
+
+export const tradingEngine = new TradingEngine();
+
 // ORDER MATCHING ENGINE
 type Order = {
   id: string;
