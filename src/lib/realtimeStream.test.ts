@@ -24,9 +24,16 @@ describe('Stage 8: Realtime Stream & Socket Data Rules', () => {
       timeframe: tf1m,
       startTime: 1710000000000,
       endTime: 1710000060000,
-      open: '10', high: '10', low: '10', close: '10',
-      volume: '1', quoteVolume: '10', tradeCount: 1,
-      confirmed: false, revision: 1, updatedAt: 1710000010000
+      open: '10',
+      high: '10',
+      low: '10',
+      close: '10',
+      volume: '1',
+      quoteVolume: '10',
+      tradeCount: 1,
+      confirmed: false,
+      revision: 1,
+      updatedAt: 1710000010000,
     };
 
     const candleV2: GiftCandle = {
@@ -34,9 +41,16 @@ describe('Stage 8: Realtime Stream & Socket Data Rules', () => {
       timeframe: tf1m,
       startTime: 1710000000000,
       endTime: 1710000060000,
-      open: '10', high: '12', low: '10', close: '11.5',
-      volume: '2', quoteVolume: '21.5', tradeCount: 2,
-      confirmed: false, revision: 2, updatedAt: 1710000020000
+      open: '10',
+      high: '12',
+      low: '10',
+      close: '11.5',
+      volume: '2',
+      quoteVolume: '21.5',
+      tradeCount: 2,
+      confirmed: false,
+      revision: 2,
+      updatedAt: 1710000020000,
     };
 
     const res1 = candleStore.applyCandle(candleV1);
@@ -57,9 +71,16 @@ describe('Stage 8: Realtime Stream & Socket Data Rules', () => {
       timeframe: tf1m,
       startTime: 1710000000000,
       endTime: 1710000060000,
-      open: '10', high: '12', low: '9', close: '11',
-      volume: '5', quoteVolume: '50', tradeCount: 3,
-      confirmed: false, revision: 3, updatedAt: 1710000050000
+      open: '10',
+      high: '12',
+      low: '9',
+      close: '11',
+      volume: '5',
+      quoteVolume: '50',
+      tradeCount: 3,
+      confirmed: false,
+      revision: 3,
+      updatedAt: 1710000050000,
     };
 
     const closed: GiftCandle = {
@@ -67,9 +88,16 @@ describe('Stage 8: Realtime Stream & Socket Data Rules', () => {
       timeframe: tf1m,
       startTime: 1710000000000,
       endTime: 1710000060000,
-      open: '10', high: '13', low: '9', close: '12.5',
-      volume: '6', quoteVolume: '62.5', tradeCount: 4,
-      confirmed: true, revision: 4, updatedAt: 1710000060000
+      open: '10',
+      high: '13',
+      low: '9',
+      close: '12.5',
+      volume: '6',
+      quoteVolume: '62.5',
+      tradeCount: 4,
+      confirmed: true,
+      revision: 4,
+      updatedAt: 1710000060000,
     };
 
     candleStore.applyCandle(active);
@@ -87,9 +115,16 @@ describe('Stage 8: Realtime Stream & Socket Data Rules', () => {
       timeframe: tf1m,
       startTime: 1710000000000,
       endTime: 1710000060000,
-      open: '10', high: '15', low: '9', close: '14',
-      volume: '10', quoteVolume: '140', tradeCount: 5,
-      confirmed: false, revision: 2, updatedAt: 1710000030000
+      open: '10',
+      high: '15',
+      low: '9',
+      close: '14',
+      volume: '10',
+      quoteVolume: '140',
+      tradeCount: 5,
+      confirmed: false,
+      revision: 2,
+      updatedAt: 1710000030000,
     };
 
     const candleV1Stale: GiftCandle = {
@@ -97,9 +132,16 @@ describe('Stage 8: Realtime Stream & Socket Data Rules', () => {
       timeframe: tf1m,
       startTime: 1710000000000,
       endTime: 1710000060000,
-      open: '10', high: '10', low: '10', close: '10',
-      volume: '1', quoteVolume: '10', tradeCount: 1,
-      confirmed: false, revision: 1, updatedAt: 1710000010000
+      open: '10',
+      high: '10',
+      low: '10',
+      close: '10',
+      volume: '1',
+      quoteVolume: '10',
+      tradeCount: 1,
+      confirmed: false,
+      revision: 1,
+      updatedAt: 1710000010000,
     };
 
     candleStore.applyCandle(candleV2);
@@ -148,9 +190,16 @@ describe('Stage 8: Realtime Stream & Socket Data Rules', () => {
       timeframe: '1m',
       startTime: 1710000000000,
       endTime: 1710000060000,
-      open: '10', high: '11', low: '9', close: '10.5',
-      volume: '1', quoteVolume: '10.5', tradeCount: 1,
-      confirmed: true, revision: 1, updatedAt: 1710000060000
+      open: '10',
+      high: '11',
+      low: '9',
+      close: '10.5',
+      volume: '1',
+      quoteVolume: '10.5',
+      tradeCount: 1,
+      confirmed: true,
+      revision: 1,
+      updatedAt: 1710000060000,
     };
 
     const candle1M: GiftCandle = {
@@ -158,9 +207,16 @@ describe('Stage 8: Realtime Stream & Socket Data Rules', () => {
       timeframe: '1M',
       startTime: 1710000000000,
       endTime: 1712678400000,
-      open: '10', high: '100', low: '5', close: '80',
-      volume: '500', quoteVolume: '40000', tradeCount: 200,
-      confirmed: false, revision: 10, updatedAt: 1710000060000
+      open: '10',
+      high: '100',
+      low: '5',
+      close: '80',
+      volume: '500',
+      quoteVolume: '40000',
+      tradeCount: 200,
+      confirmed: false,
+      revision: 10,
+      updatedAt: 1710000060000,
     };
 
     // Store is set to 1m, so 1M candle must be rejected
@@ -179,9 +235,16 @@ describe('Stage 8: Realtime Stream & Socket Data Rules', () => {
       timeframe: tf1m,
       startTime: 1710000000000,
       endTime: 1710000060000,
-      open: '10', high: '11', low: '9', close: '10.5',
-      volume: '1', quoteVolume: '10.5', tradeCount: 1,
-      confirmed: true, revision: 1, updatedAt: 1710000060000
+      open: '10',
+      high: '11',
+      low: '9',
+      close: '10.5',
+      volume: '1',
+      quoteVolume: '10.5',
+      tradeCount: 1,
+      confirmed: true,
+      revision: 1,
+      updatedAt: 1710000060000,
     };
 
     const candleB: GiftCandle = {
@@ -189,9 +252,16 @@ describe('Stage 8: Realtime Stream & Socket Data Rules', () => {
       timeframe: tf1m,
       startTime: 1710000000000,
       endTime: 1710000060000,
-      open: '100', high: '110', low: '90', close: '105',
-      volume: '1', quoteVolume: '105', tradeCount: 1,
-      confirmed: true, revision: 1, updatedAt: 1710000060000
+      open: '100',
+      high: '110',
+      low: '90',
+      close: '105',
+      volume: '1',
+      quoteVolume: '105',
+      tradeCount: 1,
+      confirmed: true,
+      revision: 1,
+      updatedAt: 1710000060000,
     };
 
     // Store expects instA, so candleB must be ignored
@@ -213,7 +283,7 @@ describe('Stage 8: Realtime Stream & Socket Data Rules', () => {
       eventTime: 1710000010000,
       timestamp: 1710000010000,
       status: 'completed',
-      instrumentKey: instA
+      instrumentKey: instA,
     };
 
     const saleA1Dup: GiftSale = { ...saleA1 };
@@ -229,7 +299,7 @@ describe('Stage 8: Realtime Stream & Socket Data Rules', () => {
       eventTime: 1710000015000,
       timestamp: 1710000015000,
       status: 'completed',
-      instrumentKey: instB
+      instrumentKey: instB,
     };
 
     expect(saleTracker.addSale(saleA1)).toBe(true);

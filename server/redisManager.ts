@@ -22,7 +22,11 @@ export function isRedisActive(): boolean {
   return isConnected && pubClient !== null && pubClient.status === 'ready';
 }
 
-export function getRedisHealthStatus(): { status: 'healthy' | 'unhealthy' | 'disabled'; isConnected: boolean; isRequired: boolean } {
+export function getRedisHealthStatus(): {
+  status: 'healthy' | 'unhealthy' | 'disabled';
+  isConnected: boolean;
+  isRequired: boolean;
+} {
   const isRequireRedis = process.env.REQUIRE_REDIS === 'true';
   if (!pubClient) {
     return {
@@ -49,7 +53,10 @@ export async function getNextGlobalSequence(): Promise<number> {
       const seq = await pubClient.incr(REDIS_SEQUENCE_KEY);
       return seq;
     } catch (err) {
-      console.warn('[RedisManager] Redis INCR sequence failed, using local sequence fallback:', err);
+      console.warn(
+        '[RedisManager] Redis INCR sequence failed, using local sequence fallback:',
+        err
+      );
     }
   }
   return ++fallbackLocalSequence;
@@ -74,17 +81,26 @@ export function onRedisMarketEvent(handler: MarketEventHandler) {
   };
 }
 
-export function initRedisManager(io?: Server, config?: RedisManagerConfig): { success: boolean; mode: 'multi-instance' | 'single-instance' } {
+export function initRedisManager(
+  io?: Server,
+  config?: RedisManagerConfig
+): { success: boolean; mode: 'multi-instance' | 'single-instance' } {
   const redisUrl = config?.redisUrl || process.env.REDIS_URL;
-  const isMultiInstance = config?.multiInstanceMode || process.env.MULTI_INSTANCE_MODE === 'true' || process.env.NODE_ENV === 'production';
+  const isMultiInstance =
+    config?.multiInstanceMode ||
+    process.env.MULTI_INSTANCE_MODE === 'true' ||
+    process.env.NODE_ENV === 'production';
   const isRequireRedis = config?.requireRedis || process.env.REQUIRE_REDIS === 'true';
 
   if (!redisUrl) {
-    const warnMsg = '[RedisManager] WARNING: Redis is not configured. Realtime multi-instance mode is disabled.';
+    const warnMsg =
+      '[RedisManager] WARNING: Redis is not configured. Realtime multi-instance mode is disabled.';
     console.warn(warnMsg);
 
     if (isRequireRedis) {
-      throw new Error('CRITICAL CONFIGURATION ERROR: REDIS_URL is strictly required for multi-instance deployment (REQUIRE_REDIS=true).');
+      throw new Error(
+        'CRITICAL CONFIGURATION ERROR: REDIS_URL is strictly required for multi-instance deployment (REQUIRE_REDIS=true).'
+      );
     }
 
     return { success: false, mode: 'single-instance' };
@@ -101,7 +117,7 @@ export function initRedisManager(io?: Server, config?: RedisManagerConfig): { su
       reconnectOnError(err) {
         console.warn('[RedisManager] Redis reconnectOnError trigger:', err.message);
         return true;
-      }
+      },
     };
 
     pubClient = new Redis(redisUrl, redisOptions);
@@ -146,7 +162,9 @@ export function initRedisManager(io?: Server, config?: RedisManagerConfig): { su
       if (err) {
         console.error('[RedisManager] Failed to subscribe to market events channel:', err);
       } else {
-        console.log(`[RedisManager] Subscribed to channel ${MARKET_EVENTS_CHANNEL}. Subscribed count: ${count}`);
+        console.log(
+          `[RedisManager] Subscribed to channel ${MARKET_EVENTS_CHANNEL}. Subscribed count: ${count}`
+        );
       }
     });
 
@@ -210,10 +228,18 @@ export function setTestRedisClients(pub: any, sub?: any) {
   subClient = sub || pub;
   if (pubClient) {
     isConnected = pubClient.status === 'ready';
-    pubClient.on('ready', () => { isConnected = true; });
-    pubClient.on('close', () => { isConnected = false; });
-    pubClient.on('reconnecting', () => { isConnected = false; });
-    pubClient.on('error', () => { isConnected = false; });
+    pubClient.on('ready', () => {
+      isConnected = true;
+    });
+    pubClient.on('close', () => {
+      isConnected = false;
+    });
+    pubClient.on('reconnecting', () => {
+      isConnected = false;
+    });
+    pubClient.on('error', () => {
+      isConnected = false;
+    });
   } else {
     isConnected = false;
   }

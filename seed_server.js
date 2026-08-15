@@ -45,7 +45,7 @@ const seedData = () => {
 
 code = code.replace(
   /\/\/ Seed some initial order book data[\s\S]*?seedData\(\);/,
-  newSeed + "\nseedData();"
+  newSeed + '\nseedData();'
 );
 
 // We should also hook subscribe to seed dynamically just in case it's a telegram gift not in hardcoded

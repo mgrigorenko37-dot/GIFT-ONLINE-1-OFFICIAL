@@ -9,7 +9,7 @@ export interface MarketStatsOptions {
   currency?: Currency;
   timeframe?: string;
   from?: number; // timestamp in ms (inclusive)
-  to?: number;   // timestamp in ms (exclusive)
+  to?: number; // timestamp in ms (exclusive)
 }
 
 export interface MarketStatsResult {

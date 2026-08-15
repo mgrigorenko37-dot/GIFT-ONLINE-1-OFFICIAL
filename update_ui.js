@@ -27,7 +27,10 @@ const stateHooks = `  const [mktPanelOpen, setMktPanelOpen] = useState(false);
     }
   }, [expandedGiftId]);`;
 
-code = code.replace(/  const \[mktPanelOpen, setMktPanelOpen\] = useState\(false\);\n  const \[searchQuery, setSearchQuery\] = useState\(''\);\n  const \[timeframe, setTimeframe\] = useState\('4h'\);\n  const filteredGifts = gifts\.filter\(g => g\.name\.toLowerCase\(\)\.includes\(searchQuery\.toLowerCase\(\)\)\);/, stateHooks);
+code = code.replace(
+  /  const \[mktPanelOpen, setMktPanelOpen\] = useState\(false\);\n  const \[searchQuery, setSearchQuery\] = useState\(''\);\n  const \[timeframe, setTimeframe\] = useState\('4h'\);\n  const filteredGifts = gifts\.filter\(g => g\.name\.toLowerCase\(\)\.includes\(searchQuery\.toLowerCase\(\)\)\);/,
+  stateHooks
+);
 
 // 2. Add CSS for variants
 const cssInsert = `          .trade-wrapper .mkt-row:hover { background: var(--panel); }
@@ -45,7 +48,10 @@ const cssInsert = `          .trade-wrapper .mkt-row:hover { background: var(--p
           .trade-wrapper .variant-price { font-size: 11px; font-family: 'JetBrains Mono', monospace; font-weight: 600; }
           .trade-wrapper .mkt-row .left { display: flex; flex-direction: column; gap: 2px; }`;
 
-code = code.replace(/          \.trade-wrapper \.mkt-row:hover \{ background: var\(--panel\); \}\n          \.trade-wrapper \.mkt-row\.active \{ background: rgba\(242,184,75,\.08\); \}\n          \.trade-wrapper \.mkt-row \.left \{ display: flex; flex-direction: column; gap: 2px; \}/, cssInsert);
+code = code.replace(
+  /          \.trade-wrapper \.mkt-row:hover \{ background: var\(--panel\); \}\n          \.trade-wrapper \.mkt-row\.active \{ background: rgba\(242,184,75,\.08\); \}\n          \.trade-wrapper \.mkt-row \.left \{ display: flex; flex-direction: column; gap: 2px; \}/,
+  cssInsert
+);
 
 // 3. Update the markup for the list
 const mktListOld = `<div 
@@ -160,6 +166,5 @@ const titleOld = `<div className="crumbs">Markets <span>›</span> <b>{(activeGi
 const titleNew = `<div className="crumbs">Markets <span>›</span> <b>{(activeGift?.name || '').toUpperCase().replace(/[^A-Z0-9]/g, '_')} {selectedVariant ? \` / \${selectedVariant.model_name.toUpperCase()}\` : ''}</b></div>`;
 code = code.replace(titleOld, titleNew);
 
-
 fs.writeFileSync('src/screens/GXTerminal/GXTerminalScreen.tsx', code);
-console.log("Updated UI!");
+console.log('Updated UI!');

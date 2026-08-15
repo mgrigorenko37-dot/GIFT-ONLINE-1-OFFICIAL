@@ -9,11 +9,15 @@ import {
   closeRedisConnections,
   MARKET_EVENTS_CHANNEL,
   REDIS_SEQUENCE_KEY,
-  resetLocalSequence
+  resetLocalSequence,
 } from './redisManager';
 import { acceptCompletedSale, clearMarketState, setMarketRepository } from './marketState';
 import { InMemoryMarketRepository } from './marketRepository';
-import { broadcastSaleResult, broadcastLocalSaleResult, clearAllSubscriptions } from './realtimeManager';
+import {
+  broadcastSaleResult,
+  broadcastLocalSaleResult,
+  clearAllSubscriptions,
+} from './realtimeManager';
 
 // Mock Redis client constructor helper
 class MockRedisClient extends EventEmitter {
@@ -143,9 +147,9 @@ describe('Stage 6: Multi-Instance Realtime & Redis Architecture Tests', () => {
           price: '15',
           quantity: '1',
           eventTime: 1710000010000,
-          status: 'completed'
-        }
-      }
+          status: 'completed',
+        },
+      },
     };
 
     await mockPub.publish(MARKET_EVENTS_CHANNEL, JSON.stringify(eventPayload));
@@ -164,7 +168,7 @@ describe('Stage 6: Multi-Instance Realtime & Redis Architecture Tests', () => {
       price: '10',
       quantity: 1,
       eventTime: 1710000010000,
-      status: 'completed'
+      status: 'completed',
     };
 
     // First acceptance

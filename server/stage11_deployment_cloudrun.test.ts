@@ -130,6 +130,7 @@ describe('Stage 11: Cloud Run & Multi-Instance Realtime Deployment Verification'
     try {
       process.env.NODE_ENV = 'production';
       delete process.env.DATABASE_URL;
+      delete process.env.SQL_HOST;
       delete process.env.ALLOW_FILE_STORAGE_IN_PRODUCTION;
 
       expect(() => resolveMarketRepository()).toThrow('CRITICAL CONFIGURATION ERROR');

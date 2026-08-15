@@ -67,9 +67,16 @@ describe('Stage 13 / Stage 4 Realtime Manager & Reconnect Recovery Tests', () =>
         timeframe: tf1m,
         startTime: 1710000000000,
         endTime: 1710000060000,
-        open: '10', high: '12', low: '9', close: '11',
-        volume: '5', quoteVolume: '50', tradeCount: 3,
-        confirmed: true, revision: 1, updatedAt: 1710000060000,
+        open: '10',
+        high: '12',
+        low: '9',
+        close: '11',
+        volume: '5',
+        quoteVolume: '50',
+        tradeCount: 3,
+        confirmed: true,
+        revision: 1,
+        updatedAt: 1710000060000,
       },
     ];
     candleStore.mergeCandles(restCandles);
@@ -83,9 +90,16 @@ describe('Stage 13 / Stage 4 Realtime Manager & Reconnect Recovery Tests', () =>
       timeframe: tf1m,
       startTime: 1710000060000,
       endTime: 1710000120000,
-      open: '11', high: '13', low: '11', close: '12.5',
-      volume: '2', quoteVolume: '24', tradeCount: 2,
-      confirmed: false, revision: 1, updatedAt: 1710000080000,
+      open: '11',
+      high: '13',
+      low: '11',
+      close: '12.5',
+      volume: '2',
+      quoteVolume: '24',
+      tradeCount: 2,
+      confirmed: false,
+      revision: 1,
+      updatedAt: 1710000080000,
     };
     sequenceTracker.processSequence(1);
     candleStore.applyCandle(activeCandle1);
@@ -125,7 +139,9 @@ describe('Stage 13 / Stage 4 Realtime Manager & Reconnect Recovery Tests', () =>
     mockSocket.clearEmitted();
     handleSubscribe(mockSocket, { instrumentKey: instA, timeframe: tf1m });
 
-    const snapshotEvent = mockSocket.emittedEvents.find((e) => e.event === 'market_event' && e.payload?.type === 'snapshot');
+    const snapshotEvent = mockSocket.emittedEvents.find(
+      (e) => e.event === 'market_event' && e.payload?.type === 'snapshot'
+    );
     assert.ok(snapshotEvent, 'Snapshot event should be emitted');
 
     const snapshotPayload = snapshotEvent.payload;
@@ -178,9 +194,16 @@ describe('Stage 13 / Stage 4 Realtime Manager & Reconnect Recovery Tests', () =>
       timeframe: tf1m,
       startTime: 1710000000000,
       endTime: 1710000060000,
-      open: '10', high: '10', low: '10', close: '10',
-      volume: '1', quoteVolume: '10', tradeCount: 1,
-      confirmed: true, revision: 1, updatedAt: 1710000060000,
+      open: '10',
+      high: '10',
+      low: '10',
+      close: '10',
+      volume: '1',
+      quoteVolume: '10',
+      tradeCount: 1,
+      confirmed: true,
+      revision: 1,
+      updatedAt: 1710000060000,
     };
 
     const mergeWithTokenValidation = (
@@ -188,17 +211,28 @@ describe('Stage 13 / Stage 4 Realtime Manager & Reconnect Recovery Tests', () =>
       token: typeof oldConfigToken,
       activeToken: typeof activeConfigToken
     ) => {
-      if (token.requestId !== activeToken.requestId || token.subscriptionId !== activeToken.subscriptionId) {
+      if (
+        token.requestId !== activeToken.requestId ||
+        token.subscriptionId !== activeToken.subscriptionId
+      ) {
         return 0;
       }
       return candleStore.mergeCandles(candles);
     };
 
-    const rejectedCount = mergeWithTokenValidation([staleRestCandle], oldConfigToken, activeConfigToken);
+    const rejectedCount = mergeWithTokenValidation(
+      [staleRestCandle],
+      oldConfigToken,
+      activeConfigToken
+    );
     assert.strictEqual(rejectedCount, 0, 'Stale REST response rejected');
     assert.strictEqual(candleStore.getSortedCandles().length, 0);
 
-    const acceptedCount = mergeWithTokenValidation([staleRestCandle], activeConfigToken, activeConfigToken);
+    const acceptedCount = mergeWithTokenValidation(
+      [staleRestCandle],
+      activeConfigToken,
+      activeConfigToken
+    );
     assert.strictEqual(acceptedCount, 1, 'Matching REST response accepted');
     assert.strictEqual(candleStore.getSortedCandles().length, 1);
   });
@@ -217,9 +251,16 @@ describe('Stage 13 / Stage 4 Realtime Manager & Reconnect Recovery Tests', () =>
       timeframe: tf1m,
       startTime: 1710000000000,
       endTime: 1710000060000,
-      open: '10', high: '12', low: '9', close: '11',
-      volume: '5', quoteVolume: '50', tradeCount: 3,
-      confirmed: true, revision: 1, updatedAt: 1710000060000,
+      open: '10',
+      high: '12',
+      low: '9',
+      close: '11',
+      volume: '5',
+      quoteVolume: '50',
+      tradeCount: 3,
+      confirmed: true,
+      revision: 1,
+      updatedAt: 1710000060000,
     };
 
     const candle1h: GiftCandle = {
@@ -227,13 +268,28 @@ describe('Stage 13 / Stage 4 Realtime Manager & Reconnect Recovery Tests', () =>
       timeframe: tf1h,
       startTime: 1710000000000,
       endTime: 1710003600000,
-      open: '10', high: '20', low: '8', close: '18',
-      volume: '100', quoteVolume: '1500', tradeCount: 50,
-      confirmed: false, revision: 1, updatedAt: 1710000100000,
+      open: '10',
+      high: '20',
+      low: '8',
+      close: '18',
+      volume: '100',
+      quoteVolume: '1500',
+      tradeCount: 50,
+      confirmed: false,
+      revision: 1,
+      updatedAt: 1710000100000,
     };
 
-    assert.strictEqual(store1h.applyCandle(candle1m).updated, false, '1m candle rejected by 1h store');
-    assert.strictEqual(store1h.applyCandle(candle1h).updated, true, '1h candle accepted by 1h store');
+    assert.strictEqual(
+      store1h.applyCandle(candle1m).updated,
+      false,
+      '1m candle rejected by 1h store'
+    );
+    assert.strictEqual(
+      store1h.applyCandle(candle1h).updated,
+      true,
+      '1h candle accepted by 1h store'
+    );
     assert.strictEqual(store1h.getSortedCandles().length, 1);
     assert.strictEqual(store1h.getSortedCandles()[0].timeframe, '1h');
   });
@@ -267,9 +323,16 @@ describe('Stage 13 / Stage 4 Realtime Manager & Reconnect Recovery Tests', () =>
       timeframe: tf1m,
       startTime: 1710000000000,
       endTime: 1710000060000,
-      open: '10', high: '12', low: '9', close: '11',
-      volume: '5', quoteVolume: '50', tradeCount: 3,
-      confirmed: true, revision: 1, updatedAt: 1710000060000,
+      open: '10',
+      high: '12',
+      low: '9',
+      close: '11',
+      volume: '5',
+      quoteVolume: '50',
+      tradeCount: 3,
+      confirmed: true,
+      revision: 1,
+      updatedAt: 1710000060000,
     };
 
     const sale: GiftSale = {
@@ -296,7 +359,11 @@ describe('Stage 13 / Stage 4 Realtime Manager & Reconnect Recovery Tests', () =>
     candleStore.mergeCandles([candle]);
     saleTracker.mergeSales([sale]);
 
-    assert.strictEqual(candleStore.getSortedCandles().length, 1, 'Duplicate snapshot candle ignored');
+    assert.strictEqual(
+      candleStore.getSortedCandles().length,
+      1,
+      'Duplicate snapshot candle ignored'
+    );
     assert.strictEqual(saleTracker.getRecentSales().length, 1, 'Duplicate snapshot sale ignored');
   });
 
@@ -309,9 +376,16 @@ describe('Stage 13 / Stage 4 Realtime Manager & Reconnect Recovery Tests', () =>
       timeframe: tf1m,
       startTime: 1710000000000,
       endTime: 1710000060000,
-      open: '10', high: '15', low: '9', close: '14',
-      volume: '10', quoteVolume: '120', tradeCount: 5,
-      confirmed: false, revision: 2, updatedAt: 1710000030000,
+      open: '10',
+      high: '15',
+      low: '9',
+      close: '14',
+      volume: '10',
+      quoteVolume: '120',
+      tradeCount: 5,
+      confirmed: false,
+      revision: 2,
+      updatedAt: 1710000030000,
     };
 
     const rev1StaleCandle: GiftCandle = {
@@ -319,9 +393,16 @@ describe('Stage 13 / Stage 4 Realtime Manager & Reconnect Recovery Tests', () =>
       timeframe: tf1m,
       startTime: 1710000000000,
       endTime: 1710000060000,
-      open: '10', high: '10', low: '10', close: '10',
-      volume: '1', quoteVolume: '10', tradeCount: 1,
-      confirmed: false, revision: 1, updatedAt: 1710000010000,
+      open: '10',
+      high: '10',
+      low: '10',
+      close: '10',
+      volume: '1',
+      quoteVolume: '10',
+      tradeCount: 1,
+      confirmed: false,
+      revision: 1,
+      updatedAt: 1710000010000,
     };
 
     candleStore.applyCandle(rev2Candle);
@@ -392,7 +473,9 @@ describe('Stage 13 / Stage 4 Realtime Manager & Reconnect Recovery Tests', () =>
     assert.strictEqual(res2.success, true);
     assert.strictEqual(res2.isDuplicate, true);
 
-    const snapEvent = mockSocket.emittedEvents.find((e) => e.event === 'market_event' && e.payload?.type === 'snapshot');
+    const snapEvent = mockSocket.emittedEvents.find(
+      (e) => e.event === 'market_event' && e.payload?.type === 'snapshot'
+    );
     assert.ok(snapEvent, 'Snapshot re-emitted for duplicate sub');
 
     const activeSubs = getSocketSubscriptions(mockSocket.id);
@@ -424,10 +507,14 @@ describe('Stage 13 / Stage 4 Realtime Manager & Reconnect Recovery Tests', () =>
 
     broadcastSaleResult(saleAResult);
 
-    const eventA = clientA.emittedEvents.find((e) => e.event === 'market_event' && e.payload?.instrumentKey === instA);
+    const eventA = clientA.emittedEvents.find(
+      (e) => e.event === 'market_event' && e.payload?.instrumentKey === instA
+    );
     assert.ok(eventA, 'Client A received event for Instrument A');
 
-    const eventBForA = clientB.emittedEvents.find((e) => e.event === 'market_event' && e.payload?.instrumentKey === instA);
+    const eventBForA = clientB.emittedEvents.find(
+      (e) => e.event === 'market_event' && e.payload?.instrumentKey === instA
+    );
     assert.strictEqual(eventBForA, undefined, 'Client B received NO event for Instrument A');
 
     clientA.clearEmitted();
@@ -447,11 +534,14 @@ describe('Stage 13 / Stage 4 Realtime Manager & Reconnect Recovery Tests', () =>
 
     broadcastSaleResult(saleBResult);
 
-    const eventB = clientB.emittedEvents.find((e) => e.event === 'market_event' && e.payload?.instrumentKey === instB);
+    const eventB = clientB.emittedEvents.find(
+      (e) => e.event === 'market_event' && e.payload?.instrumentKey === instB
+    );
     assert.ok(eventB, 'Client B received event for Instrument B');
 
-    const eventAForB = clientA.emittedEvents.find((e) => e.event === 'market_event' && e.payload?.instrumentKey === instB);
+    const eventAForB = clientA.emittedEvents.find(
+      (e) => e.event === 'market_event' && e.payload?.instrumentKey === instB
+    );
     assert.strictEqual(eventAForB, undefined, 'Client A received NO event for Instrument B');
   });
 });
-

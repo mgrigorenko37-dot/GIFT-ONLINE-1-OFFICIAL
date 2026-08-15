@@ -27,7 +27,10 @@ const artworkNew = `function GiftArtwork({ className, small, emoji }: { classNam
 code = code.replace(artworkOld, artworkNew);
 
 // Also need to pass emoji to GiftArtwork
-code = code.replace(/<GiftArtwork className=\{activeGift\?\.className \|\| ''\} \/>/, `<GiftArtwork className={activeGift?.className || ''} emoji={activeGift?.emoji} />`);
+code = code.replace(
+  /<GiftArtwork className=\{activeGift\?\.className \|\| ''\} \/>/,
+  `<GiftArtwork className={activeGift?.className || ''} emoji={activeGift?.emoji} />`
+);
 
 fs.writeFileSync('src/screens/GXTerminal/GXTerminalScreen.tsx', code);
-console.log("Updated GiftArtwork");
+console.log('Updated GiftArtwork');

@@ -22,9 +22,16 @@ describe('Stage 8: Socket Handler & Realtime Integration Logic', () => {
       timeframe: tf,
       startTime: 1710000000000,
       endTime: 1710000060000,
-      open: '10', high: '10', low: '10', close: '10',
-      volume: '1', quoteVolume: '10', tradeCount: 1,
-      confirmed: false, revision: 1, updatedAt: 1710000010000
+      open: '10',
+      high: '10',
+      low: '10',
+      close: '10',
+      volume: '1',
+      quoteVolume: '10',
+      tradeCount: 1,
+      confirmed: false,
+      revision: 1,
+      updatedAt: 1710000010000,
     };
 
     // Process sequence 1
@@ -41,7 +48,7 @@ describe('Stage 8: Socket Handler & Realtime Integration Logic', () => {
       ...candleV1,
       close: '15',
       revision: 2,
-      updatedAt: 1710000020000
+      updatedAt: 1710000020000,
     };
 
     const seqRes2 = sequenceTracker.processSequence(2);
@@ -60,9 +67,16 @@ describe('Stage 8: Socket Handler & Realtime Integration Logic', () => {
       timeframe: tf,
       startTime: 1710000000000,
       endTime: 1710000060000,
-      open: '10', high: '12', low: '9', close: '11',
-      volume: '5', quoteVolume: '50', tradeCount: 3,
-      confirmed: true, revision: 5, updatedAt: 1710000060000
+      open: '10',
+      high: '12',
+      low: '9',
+      close: '11',
+      volume: '5',
+      quoteVolume: '50',
+      tradeCount: 3,
+      confirmed: true,
+      revision: 5,
+      updatedAt: 1710000060000,
     };
 
     const activeCandle: GiftCandle = {
@@ -70,9 +84,16 @@ describe('Stage 8: Socket Handler & Realtime Integration Logic', () => {
       timeframe: tf,
       startTime: 1710000060000,
       endTime: 1710000120000,
-      open: '11', high: '13', low: '11', close: '12',
-      volume: '2', quoteVolume: '23', tradeCount: 2,
-      confirmed: false, revision: 1, updatedAt: 1710000080000
+      open: '11',
+      high: '13',
+      low: '11',
+      close: '12',
+      volume: '2',
+      quoteVolume: '23',
+      tradeCount: 2,
+      confirmed: false,
+      revision: 1,
+      updatedAt: 1710000080000,
     };
 
     const sale: GiftSale = {
@@ -86,7 +107,7 @@ describe('Stage 8: Socket Handler & Realtime Integration Logic', () => {
       eventTime: 1710000080000,
       timestamp: 1710000080000,
       status: 'completed',
-      instrumentKey: instKey
+      instrumentKey: instKey,
     };
 
     // Process snapshot at sequence 10
@@ -117,9 +138,16 @@ describe('Stage 8: Socket Handler & Realtime Integration Logic', () => {
       timeframe: tf,
       startTime: 1710000000000,
       endTime: 1710000060000,
-      open: '100', high: '100', low: '100', close: '100',
-      volume: '1', quoteVolume: '100', tradeCount: 1,
-      confirmed: false, revision: 1, updatedAt: 1710000010000
+      open: '100',
+      high: '100',
+      low: '100',
+      close: '100',
+      volume: '1',
+      quoteVolume: '100',
+      tradeCount: 1,
+      confirmed: false,
+      revision: 1,
+      updatedAt: 1710000010000,
     };
 
     const wrongTfCandle: GiftCandle = {
@@ -127,9 +155,16 @@ describe('Stage 8: Socket Handler & Realtime Integration Logic', () => {
       timeframe: '5m',
       startTime: 1710000000000,
       endTime: 1710000300000,
-      open: '10', high: '10', low: '10', close: '10',
-      volume: '1', quoteVolume: '10', tradeCount: 1,
-      confirmed: false, revision: 1, updatedAt: 1710000010000
+      open: '10',
+      high: '10',
+      low: '10',
+      close: '10',
+      volume: '1',
+      quoteVolume: '10',
+      tradeCount: 1,
+      confirmed: false,
+      revision: 1,
+      updatedAt: 1710000010000,
     };
 
     expect(candleStore.applyCandle(wrongInstCandle).updated).toBe(false);
@@ -159,9 +194,16 @@ describe('Stage 8: Socket Handler & Realtime Integration Logic', () => {
       timeframe: '1m',
       startTime: 1710000000000,
       endTime: 1710000060000,
-      open: '10', high: '12', low: '8', close: '11',
-      volume: '10', quoteVolume: '100', tradeCount: 5,
-      confirmed: true, revision: 1, updatedAt: 1710000060000,
+      open: '10',
+      high: '12',
+      low: '8',
+      close: '11',
+      volume: '10',
+      quoteVolume: '100',
+      tradeCount: 5,
+      confirmed: true,
+      revision: 1,
+      updatedAt: 1710000060000,
     };
 
     const newStore = new CandleStore('durov-cap:all:all:TON', '1h');
@@ -169,8 +211,20 @@ describe('Stage 8: Socket Handler & Realtime Integration Logic', () => {
     // Simulate mergeRestCandles logic for config token check:
     const mergeWithTokenCheck = (
       candles: GiftCandle[],
-      token?: { instrumentKey: string; currency: string; timeframe: string; requestId: number; subscriptionId: string },
-      activeToken?: { instrumentKey: string; currency: string; timeframe: string; requestId: number; subscriptionId: string }
+      token?: {
+        instrumentKey: string;
+        currency: string;
+        timeframe: string;
+        requestId: number;
+        subscriptionId: string;
+      },
+      activeToken?: {
+        instrumentKey: string;
+        currency: string;
+        timeframe: string;
+        requestId: number;
+        subscriptionId: string;
+      }
     ) => {
       if (!token || !activeToken) return 0;
       if (token.requestId !== activeToken.requestId) return 0;
@@ -179,7 +233,8 @@ describe('Stage 8: Socket Handler & Realtime Integration Logic', () => {
       if (token.instrumentKey !== activeToken.instrumentKey) return 0;
 
       const valid = candles.filter(
-        c => c.timeframe === activeToken.timeframe && c.instrumentKey === activeToken.instrumentKey
+        (c) =>
+          c.timeframe === activeToken.timeframe && c.instrumentKey === activeToken.instrumentKey
       );
       return newStore.mergeCandles(valid);
     };
@@ -195,9 +250,16 @@ describe('Stage 8: Socket Handler & Realtime Integration Logic', () => {
       timeframe: '1h',
       startTime: 1710000000000,
       endTime: 1710003600000,
-      open: '10', high: '15', low: '8', close: '14',
-      volume: '100', quoteVolume: '1200', tradeCount: 25,
-      confirmed: false, revision: 1, updatedAt: 1710000100000,
+      open: '10',
+      high: '15',
+      low: '8',
+      close: '14',
+      volume: '100',
+      quoteVolume: '1200',
+      tradeCount: 25,
+      confirmed: false,
+      revision: 1,
+      updatedAt: 1710000100000,
     };
 
     const freshResult = mergeWithTokenCheck([fresh1hCandle], activeConfigToken, activeConfigToken);
@@ -228,17 +290,43 @@ describe('Stage 8: Socket Handler & Realtime Integration Logic', () => {
     const isEventValidForConfig = (event: any, currentConfig: typeof activeConfig) => {
       if (event.instrumentKey && event.instrumentKey !== currentConfig.instrumentKey) return false;
       if (event.currency && event.currency !== currentConfig.currency) return false;
-      if (event.subscriptionId && event.subscriptionId !== currentConfig.subscriptionId) return false;
-      if (event.requestId !== undefined && event.requestId !== currentConfig.requestId) return false;
+      if (event.subscriptionId && event.subscriptionId !== currentConfig.subscriptionId)
+        return false;
+      if (event.requestId !== undefined && event.requestId !== currentConfig.requestId)
+        return false;
       if (event.timeframe && event.timeframe !== currentConfig.timeframe) return false;
       return true;
     };
 
     // Socket events from previous timeframes
-    const event1m = { type: 'candle_update', instrumentKey: 'durov-cap:all:all:TON', timeframe: '1m', subscriptionId: 'sub_1', requestId: 1 };
-    const event1h = { type: 'candle_update', instrumentKey: 'durov-cap:all:all:TON', timeframe: '1h', subscriptionId: 'sub_2', requestId: 2 };
-    const event1M = { type: 'candle_update', instrumentKey: 'durov-cap:all:all:TON', timeframe: '1M', subscriptionId: 'sub_3', requestId: 3 };
-    const event1s = { type: 'candle_update', instrumentKey: 'durov-cap:all:all:TON', timeframe: '1s', subscriptionId: 'sub_4', requestId: 4 };
+    const event1m = {
+      type: 'candle_update',
+      instrumentKey: 'durov-cap:all:all:TON',
+      timeframe: '1m',
+      subscriptionId: 'sub_1',
+      requestId: 1,
+    };
+    const event1h = {
+      type: 'candle_update',
+      instrumentKey: 'durov-cap:all:all:TON',
+      timeframe: '1h',
+      subscriptionId: 'sub_2',
+      requestId: 2,
+    };
+    const event1M = {
+      type: 'candle_update',
+      instrumentKey: 'durov-cap:all:all:TON',
+      timeframe: '1M',
+      subscriptionId: 'sub_3',
+      requestId: 3,
+    };
+    const event1s = {
+      type: 'candle_update',
+      instrumentKey: 'durov-cap:all:all:TON',
+      timeframe: '1s',
+      subscriptionId: 'sub_4',
+      requestId: 4,
+    };
 
     expect(isEventValidForConfig(event1m, activeConfig)).toBe(false);
     expect(isEventValidForConfig(event1h, activeConfig)).toBe(false);

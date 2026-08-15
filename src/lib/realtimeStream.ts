@@ -67,7 +67,9 @@ export class CandleStore {
         return { updated: false, isNew: false };
       }
 
-      console.warn(`[CandleStore] Revision conflict for startTime ${startTime}: equal revision ${currentRev} with conflicting data.`);
+      console.warn(
+        `[CandleStore] Revision conflict for startTime ${startTime}: equal revision ${currentRev} with conflicting data.`
+      );
       return { updated: false, isNew: false, conflict: true };
     }
 
@@ -108,7 +110,8 @@ export class CandleStore {
         const cl = parseFloat(c.close);
         if (isNaN(o) || isNaN(h) || isNaN(l) || isNaN(cl)) return false;
         // Skip OHLC=0 without tradeCount
-        if (o === 0 && h === 0 && l === 0 && cl === 0 && (!c.tradeCount || c.tradeCount === 0)) return false;
+        if (o === 0 && h === 0 && l === 0 && cl === 0 && (!c.tradeCount || c.tradeCount === 0))
+          return false;
         return true;
       })
       .map((c) => ({
@@ -205,7 +208,9 @@ export class SaleTracker {
 
   private pruneOldSales(maxCapacity: number = 500) {
     if (this.salesById.size <= maxCapacity) return;
-    const sortedSales = Array.from(this.salesById.values()).sort((a, b) => (a.eventTime || 0) - (b.eventTime || 0));
+    const sortedSales = Array.from(this.salesById.values()).sort(
+      (a, b) => (a.eventTime || 0) - (b.eventTime || 0)
+    );
     const toDeleteCount = this.salesById.size - maxCapacity;
     for (let i = 0; i < toDeleteCount; i++) {
       this.salesById.delete(sortedSales[i].id);

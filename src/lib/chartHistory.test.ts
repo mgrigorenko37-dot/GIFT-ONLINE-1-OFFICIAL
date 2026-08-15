@@ -21,7 +21,7 @@ describe('Stage 7: REST History & Chart Data Processing', () => {
         tradeCount: 5,
         confirmed: true,
         revision: 1,
-        updatedAt: 1710000060000
+        updatedAt: 1710000060000,
       };
 
       const result = processCandlesForChart([mockCandle], tf);
@@ -48,7 +48,7 @@ describe('Stage 7: REST History & Chart Data Processing', () => {
       tradeCount: 1,
       confirmed: true,
       revision: 1,
-      updatedAt: msTime + 60000
+      updatedAt: msTime + 60000,
     };
 
     const result = processCandlesForChart([candle], '1m');
@@ -71,7 +71,7 @@ describe('Stage 7: REST History & Chart Data Processing', () => {
       tradeCount: 1,
       confirmed: true,
       revision: 1,
-      updatedAt: 1710000060000
+      updatedAt: 1710000060000,
     };
 
     const candle1M: GiftCandle = {
@@ -88,7 +88,7 @@ describe('Stage 7: REST History & Chart Data Processing', () => {
       tradeCount: 100,
       confirmed: false,
       revision: 10,
-      updatedAt: 1710000060000
+      updatedAt: 1710000060000,
     };
 
     // Asking for 1m should ONLY include 1m candle
@@ -122,7 +122,7 @@ describe('Stage 7: REST History & Chart Data Processing', () => {
       tradeCount: 2,
       confirmed: true,
       revision: 1,
-      updatedAt: 1710000300000
+      updatedAt: 1710000300000,
     };
 
     const result = processCandlesForChart([candle], '5m');
@@ -138,9 +138,16 @@ describe('Stage 7: REST History & Chart Data Processing', () => {
       timeframe: '1m',
       startTime: 1710000060000, // second
       endTime: 1710000120000,
-      open: '10', high: '11', low: '9', close: '10',
-      volume: '1', quoteVolume: '10', tradeCount: 1,
-      confirmed: true, revision: 1, updatedAt: 1710000120000
+      open: '10',
+      high: '11',
+      low: '9',
+      close: '10',
+      volume: '1',
+      quoteVolume: '10',
+      tradeCount: 1,
+      confirmed: true,
+      revision: 1,
+      updatedAt: 1710000120000,
     };
 
     const c2Old: GiftCandle = {
@@ -148,9 +155,16 @@ describe('Stage 7: REST History & Chart Data Processing', () => {
       timeframe: '1m',
       startTime: 1710000000000, // first (old rev)
       endTime: 1710000060000,
-      open: '10', high: '10', low: '10', close: '10',
-      volume: '1', quoteVolume: '10', tradeCount: 1,
-      confirmed: false, revision: 1, updatedAt: 1710000030000
+      open: '10',
+      high: '10',
+      low: '10',
+      close: '10',
+      volume: '1',
+      quoteVolume: '10',
+      tradeCount: 1,
+      confirmed: false,
+      revision: 1,
+      updatedAt: 1710000030000,
     };
 
     const c2New: GiftCandle = {
@@ -158,9 +172,16 @@ describe('Stage 7: REST History & Chart Data Processing', () => {
       timeframe: '1m',
       startTime: 1710000000000, // first (new rev)
       endTime: 1710000060000,
-      open: '10', high: '15', low: '10', close: '14',
-      volume: '2', quoteVolume: '24', tradeCount: 2,
-      confirmed: true, revision: 2, updatedAt: 1710000060000
+      open: '10',
+      high: '15',
+      low: '10',
+      close: '14',
+      volume: '2',
+      quoteVolume: '24',
+      tradeCount: 2,
+      confirmed: true,
+      revision: 2,
+      updatedAt: 1710000060000,
     };
 
     // Pass in unsorted order with duplicate startTime
@@ -182,10 +203,17 @@ describe('Stage 7: REST History & Chart Data Processing', () => {
         timeframe: '1h',
         startTime: 1710000000000,
         endTime: 1710003600000,
-        open: '10', high: '20', low: '5', close: '15',
-        volume: '10', quoteVolume: '150', tradeCount: 5,
-        confirmed: true, revision: 1, updatedAt: 1710003600000
-      }
+        open: '10',
+        high: '20',
+        low: '5',
+        close: '15',
+        volume: '10',
+        quoteVolume: '150',
+        tradeCount: 5,
+        confirmed: true,
+        revision: 1,
+        updatedAt: 1710003600000,
+      },
     ];
 
     // Requesting '4h' for '1h' candles should yield 0 candles (no mixup)
@@ -206,9 +234,16 @@ describe('Stage 7: REST History & Chart Data Processing', () => {
       timeframe: '1d',
       startTime: 1710000000000,
       endTime: 1710086400000,
-      open: '5.5', high: '6.0', low: '5.0', close: '5.8',
-      volume: '100', quoteVolume: '580', tradeCount: 10,
-      confirmed: true, revision: 1, updatedAt: 1710086400000
+      open: '5.5',
+      high: '6.0',
+      low: '5.0',
+      close: '5.8',
+      volume: '100',
+      quoteVolume: '580',
+      tradeCount: 10,
+      confirmed: true,
+      revision: 1,
+      updatedAt: 1710086400000,
     };
 
     const starsCandle: GiftCandle = {
@@ -216,9 +251,16 @@ describe('Stage 7: REST History & Chart Data Processing', () => {
       timeframe: '1d',
       startTime: 1710000000000,
       endTime: 1710086400000,
-      open: '500', high: '600', low: '500', close: '580',
-      volume: '100', quoteVolume: '58000', tradeCount: 10,
-      confirmed: true, revision: 1, updatedAt: 1710086400000
+      open: '500',
+      high: '600',
+      low: '500',
+      close: '580',
+      volume: '100',
+      quoteVolume: '58000',
+      tradeCount: 10,
+      confirmed: true,
+      revision: 1,
+      updatedAt: 1710086400000,
     };
 
     const tonRes = processCandlesForChart([tonCandle], '1d');

@@ -6,7 +6,7 @@ import {
   getSocketSubscriptions,
   clearAllSubscriptions,
   resetSequence,
-  parseSubscriptionParams
+  parseSubscriptionParams,
 } from './realtimeManager';
 import { acceptCompletedSale, clearMarketState } from './marketState';
 import { GiftSale } from './chartEngine';
@@ -50,10 +50,10 @@ class MockSocket {
 
   getMarketEvents(type?: string) {
     const marketEvents = this.emittedEvents
-      .filter(e => e.event === 'market_event')
-      .map(e => e.data);
+      .filter((e) => e.event === 'market_event')
+      .map((e) => e.data);
     if (type) {
-      return marketEvents.filter(m => m.type === type);
+      return marketEvents.filter((m) => m.type === type);
     }
     return marketEvents;
   }
@@ -78,7 +78,7 @@ describe('Stage 6: Realtime Socket.io Stream & Subscriptions', () => {
 
       const p2 = parseSubscriptionParams({
         instrumentKey: 'c1:m1:b1:STARS',
-        timeframe: '5m'
+        timeframe: '5m',
       });
       expect(p2.instrumentKey).toBe('c1:m1:b1:STARS');
       expect(p2.timeframes).toEqual(['5m']);
@@ -86,7 +86,7 @@ describe('Stage 6: Realtime Socket.io Stream & Subscriptions', () => {
       const p3 = parseSubscriptionParams({
         collectionId: 'c2',
         currency: 'TON',
-        timeframes: ['1s', '1m', '15m']
+        timeframes: ['1s', '1m', '15m'],
       });
       expect(p3.instrumentKey).toBe('c2:all:all:TON');
       expect(p3.timeframes).toEqual(['1s', '1m', '15m']);
@@ -98,7 +98,7 @@ describe('Stage 6: Realtime Socket.io Stream & Subscriptions', () => {
       const socket = new MockSocket('s1');
       const res = handleSubscribe(socket, {
         instrumentKey: 'durov-cap:all:all:TON',
-        timeframe: '1m'
+        timeframe: '1m',
       });
 
       expect(res.success).toBe(true);
@@ -113,10 +113,10 @@ describe('Stage 6: Realtime Socket.io Stream & Subscriptions', () => {
 
     it('prevents duplicate subscriptions on the same socket', () => {
       const socket = new MockSocket('s1');
-      
+
       const res1 = handleSubscribe(socket, {
         instrumentKey: 'durov-cap:all:all:TON',
-        timeframe: '1m'
+        timeframe: '1m',
       });
       expect(res1.isDuplicate).toBe(false);
 
@@ -124,7 +124,7 @@ describe('Stage 6: Realtime Socket.io Stream & Subscriptions', () => {
 
       const res2 = handleSubscribe(socket, {
         instrumentKey: 'durov-cap:all:all:TON',
-        timeframe: '1m'
+        timeframe: '1m',
       });
       expect(res2.isDuplicate).toBe(true);
 
@@ -138,13 +138,13 @@ describe('Stage 6: Realtime Socket.io Stream & Subscriptions', () => {
       const socket = new MockSocket('s1');
       handleSubscribe(socket, {
         instrumentKey: 'durov-cap:all:all:TON',
-        timeframe: '1m'
+        timeframe: '1m',
       });
       socket.clearEmitted();
 
       const unres = handleUnsubscribe(socket, {
         instrumentKey: 'durov-cap:all:all:TON',
-        timeframe: '1m'
+        timeframe: '1m',
       });
       expect(unres.success).toBe(true);
       expect(unres.removedCount).toBe(1);
@@ -158,7 +158,7 @@ describe('Stage 6: Realtime Socket.io Stream & Subscriptions', () => {
         currency: 'TON',
         eventTime: 1710000000000,
         createdAt: 1710000000000,
-        status: 'completed'
+        status: 'completed',
       };
       acceptCompletedSale(sale);
 
@@ -168,7 +168,7 @@ describe('Stage 6: Realtime Socket.io Stream & Subscriptions', () => {
     it('cleans up resources completely on disconnect', () => {
       const socket = new MockSocket('s1');
       handleSubscribe(socket, { instrumentKey: 'durov-cap:all:all:TON' });
-      
+
       expect(getSocketSubscriptions('s1').length).toBe(1);
 
       handleDisconnect(socket);
@@ -185,11 +185,31 @@ describe('Stage 6: Realtime Socket.io Stream & Subscriptions', () => {
       const socketTimeframe1m = new MockSocket('s1m');
       const socketTimeframe5m = new MockSocket('s5m');
 
-      handleSubscribe(socketCollectionA, { collectionId: 'colA', currency: 'TON', timeframe: '1m' });
-      handleSubscribe(socketCollectionB, { collectionId: 'colB', currency: 'TON', timeframe: '1m' });
-      handleSubscribe(socketCurrencyStars, { collectionId: 'colA', currency: 'STARS', timeframe: '1m' });
-      handleSubscribe(socketTimeframe1m, { collectionId: 'colA', currency: 'TON', timeframe: '1m' });
-      handleSubscribe(socketTimeframe5m, { collectionId: 'colA', currency: 'TON', timeframe: '5m' });
+      handleSubscribe(socketCollectionA, {
+        collectionId: 'colA',
+        currency: 'TON',
+        timeframe: '1m',
+      });
+      handleSubscribe(socketCollectionB, {
+        collectionId: 'colB',
+        currency: 'TON',
+        timeframe: '1m',
+      });
+      handleSubscribe(socketCurrencyStars, {
+        collectionId: 'colA',
+        currency: 'STARS',
+        timeframe: '1m',
+      });
+      handleSubscribe(socketTimeframe1m, {
+        collectionId: 'colA',
+        currency: 'TON',
+        timeframe: '1m',
+      });
+      handleSubscribe(socketTimeframe5m, {
+        collectionId: 'colA',
+        currency: 'TON',
+        timeframe: '5m',
+      });
 
       socketCollectionA.clearEmitted();
       socketCollectionB.clearEmitted();
@@ -206,7 +226,7 @@ describe('Stage 6: Realtime Socket.io Stream & Subscriptions', () => {
         currency: 'TON',
         eventTime: 1710000000000,
         createdAt: 1710000000000,
-        status: 'completed'
+        status: 'completed',
       };
       acceptCompletedSale(sale);
 
@@ -218,15 +238,15 @@ describe('Stage 6: Realtime Socket.io Stream & Subscriptions', () => {
 
       // 1m socket receives sale and 1m candle update
       const events1m = socketTimeframe1m.getMarketEvents();
-      expect(events1m.some(e => e.type === 'sale')).toBe(true);
-      expect(events1m.some(e => e.type === 'candle_update' && e.timeframe === '1m')).toBe(true);
-      expect(events1m.some(e => e.timeframe === '5m')).toBe(false); // No 5m event for 1m subscriber!
+      expect(events1m.some((e) => e.type === 'sale')).toBe(true);
+      expect(events1m.some((e) => e.type === 'candle_update' && e.timeframe === '1m')).toBe(true);
+      expect(events1m.some((e) => e.timeframe === '5m')).toBe(false); // No 5m event for 1m subscriber!
 
       // 5m socket receives sale and 5m candle update
       const events5m = socketTimeframe5m.getMarketEvents();
-      expect(events5m.some(e => e.type === 'sale')).toBe(true);
-      expect(events5m.some(e => e.type === 'candle_update' && e.timeframe === '5m')).toBe(true);
-      expect(events5m.some(e => e.timeframe === '1m')).toBe(false); // No 1m event for 5m subscriber!
+      expect(events5m.some((e) => e.type === 'sale')).toBe(true);
+      expect(events5m.some((e) => e.type === 'candle_update' && e.timeframe === '5m')).toBe(true);
+      expect(events5m.some((e) => e.timeframe === '1m')).toBe(false); // No 1m event for 5m subscriber!
     });
   });
 
@@ -249,7 +269,7 @@ describe('Stage 6: Realtime Socket.io Stream & Subscriptions', () => {
         currency: 'TON',
         eventTime: 1710000000000,
         createdAt: 1710000000000,
-        status: 'completed'
+        status: 'completed',
       };
       acceptCompletedSale(sale);
 
@@ -278,7 +298,7 @@ describe('Stage 6: Realtime Socket.io Stream & Subscriptions', () => {
         currency: 'TON',
         eventTime: 1710000000000, // 00:00:00
         createdAt: 1710000000000,
-        status: 'completed'
+        status: 'completed',
       };
       acceptCompletedSale(sale1);
       socket.clearEmitted();
@@ -292,13 +312,13 @@ describe('Stage 6: Realtime Socket.io Stream & Subscriptions', () => {
         currency: 'TON',
         eventTime: 1710000061000, // 00:01:01
         createdAt: 1710000061000,
-        status: 'completed'
+        status: 'completed',
       };
       acceptCompletedSale(sale2);
 
       const events = socket.getMarketEvents();
-      const closedEvents = events.filter(e => e.type === 'candle_closed' && e.timeframe === '1m');
-      const updateEvents = events.filter(e => e.type === 'candle_update' && e.timeframe === '1m');
+      const closedEvents = events.filter((e) => e.type === 'candle_closed' && e.timeframe === '1m');
+      const updateEvents = events.filter((e) => e.type === 'candle_update' && e.timeframe === '1m');
 
       expect(closedEvents.length).toBe(1);
       expect(closedEvents[0].candle.confirmed).toBe(true);
@@ -322,7 +342,7 @@ describe('Stage 6: Realtime Socket.io Stream & Subscriptions', () => {
         currency: 'TON',
         eventTime: 1710000000000,
         createdAt: 1710000000000,
-        status: 'completed'
+        status: 'completed',
       });
 
       // Sale 2 at 00:01:05 (closes 00:00 candle)
@@ -334,7 +354,7 @@ describe('Stage 6: Realtime Socket.io Stream & Subscriptions', () => {
         currency: 'TON',
         eventTime: 1710000065000,
         createdAt: 1710000065000,
-        status: 'completed'
+        status: 'completed',
       });
 
       socket.clearEmitted();
@@ -348,11 +368,14 @@ describe('Stage 6: Realtime Socket.io Stream & Subscriptions', () => {
         currency: 'TON',
         eventTime: 1710000030000,
         createdAt: 1710000030000,
-        status: 'completed'
+        status: 'completed',
       });
 
       const events = socket.getMarketEvents();
-      const lateCandleUpdate = events.find(e => e.type === 'candle_update' && e.candle.startTime === 1710000000000 && e.timeframe === '1m');
+      const lateCandleUpdate = events.find(
+        (e) =>
+          e.type === 'candle_update' && e.candle.startTime === 1710000000000 && e.timeframe === '1m'
+      );
 
       expect(lateCandleUpdate).toBeDefined();
       expect(lateCandleUpdate.candle.high).toBe('120');
@@ -371,7 +394,7 @@ describe('Stage 6: Realtime Socket.io Stream & Subscriptions', () => {
         currency: 'TON',
         eventTime: 1710000000000,
         createdAt: 1710000000000,
-        status: 'completed'
+        status: 'completed',
       };
 
       acceptCompletedSale(sale);

@@ -2,9 +2,13 @@ const https = require('https');
 
 const searchTonApi = async (query) => {
   return new Promise((resolve) => {
-    https.get(`https://tonapi.io/v2/nfts/search?collection=${encodeURIComponent(query)}&limit=1`, (res) => { // This endpoint doesn't exist
-      resolve(null);
-    })
+    https.get(
+      `https://tonapi.io/v2/nfts/search?collection=${encodeURIComponent(query)}&limit=1`,
+      (res) => {
+        // This endpoint doesn't exist
+        resolve(null);
+      }
+    );
   });
 };
 

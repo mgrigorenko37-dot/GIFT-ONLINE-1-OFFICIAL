@@ -4,7 +4,6 @@ import { formatGX } from '../../data/gifts';
 import { useGifts } from '../../context/GiftsContext';
 import { useLanguage } from '../../context/LanguageContext';
 
-
 const mockOrders = [
   {
     id: 1,
@@ -115,7 +114,9 @@ const TransactionsScreen: React.FC = () => {
             <span>{t('nav.activity', 'Activity')}</span>
           </button>
         </nav>
-        <div className='gx-workspace-label gx-workspace-label-space'>{t('nav.account', 'Account')}</div>
+        <div className='gx-workspace-label gx-workspace-label-space'>
+          {t('nav.account', 'Account')}
+        </div>
         <nav className='gx-nav' aria-label='Account navigation'>
           <button className='gx-nav-item' type='button' onClick={() => navigate('/profile')}>
             <i className='material-icons'>person_outline</i>
@@ -143,7 +144,8 @@ const TransactionsScreen: React.FC = () => {
             <span className='gx-status-dot' /> {t('nav.operational', 'All systems operational')}
           </div>
           <button className='gx-help-button' type='button'>
-            <i className='material-icons'>help_outline</i> {t('nav.help', 'Help center')} <span>↗</span>
+            <i className='material-icons'>help_outline</i> {t('nav.help', 'Help center')}{' '}
+            <span>↗</span>
           </button>
 
           <div className='gx-user-mini'>

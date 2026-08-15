@@ -131,7 +131,7 @@ const newChartCode = `  // 1. Initialize Chart (run once)
 if (code.includes(oldChartCodeStart)) {
   code = code.replace(oldChartCode, newChartCode);
   fs.writeFileSync('src/screens/GXTerminal/GXTerminalScreen.tsx', code);
-  console.log("Success");
+  console.log('Success');
 } else {
-  console.log("Failed to find old code block.");
+  console.log('Failed to find old code block.');
 }

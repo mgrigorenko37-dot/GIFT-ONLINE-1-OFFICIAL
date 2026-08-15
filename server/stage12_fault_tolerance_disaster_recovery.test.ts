@@ -9,11 +9,16 @@ import {
   getMarketSnapshot,
   setMarketRepository,
   processedSaleIds,
-  allSales
+  allSales,
 } from './marketState';
 import { IMarketRepository, InMemoryMarketRepository } from './marketRepository';
 import { isRedisActive, getRedisHealthStatus } from './redisManager';
-import { initRealtimeManager, resetSequence, clearAllSubscriptions, resetSocketIpConnectionCounts } from './realtimeManager';
+import {
+  initRealtimeManager,
+  resetSequence,
+  clearAllSubscriptions,
+  resetSocketIpConnectionCounts,
+} from './realtimeManager';
 import { GiftSale, GiftCandle } from './chartEngine';
 
 class MockFailingPostgresRepository implements IMarketRepository {
@@ -25,30 +30,30 @@ class MockFailingPostgresRepository implements IMarketRepository {
 
   saveSale(sale: GiftSale): void {
     if (!this.dbConnected) {
-      throw new Error("PostgreSQL connection error: ECONNREFUSED");
+      throw new Error('PostgreSQL connection error: ECONNREFUSED');
     }
     if (this.failOnSave) {
-      throw new Error("PostgreSQL write failed: Disk or constraint error");
+      throw new Error('PostgreSQL write failed: Disk or constraint error');
     }
     this.savedSales.push(sale);
   }
 
   saveCandles(instrumentKey: string, timeframe: string, candles: GiftCandle[]): void {
     if (!this.dbConnected) {
-      throw new Error("PostgreSQL connection error: ECONNREFUSED");
+      throw new Error('PostgreSQL connection error: ECONNREFUSED');
     }
     if (this.failOnSave) {
-      throw new Error("PostgreSQL candle write failed");
+      throw new Error('PostgreSQL candle write failed');
     }
     this.savedCandles.set(`${instrumentKey}_${timeframe}`, [...candles]);
   }
 
-  saveSaleAndCandlesAtomic(sale: GiftSale, candles: GiftCandle[]): { isNew: boolean } {
+  async saveSaleAndCandlesAtomic(sale: GiftSale, candles: GiftCandle[], outboxEvents?: any[]): Promise<{ isNew: boolean }> {
     if (!this.dbConnected) {
-      throw new Error("PostgreSQL connection error: ECONNREFUSED");
+      throw new Error('PostgreSQL connection error: ECONNREFUSED');
     }
     if (this.failOnSave || this.failDuringTransaction) {
-      throw new Error("PostgreSQL transaction aborted: ROLLBACK");
+      throw new Error('PostgreSQL transaction aborted: ROLLBACK');
     }
     this.savedSales.push(sale);
     for (const c of candles) {
@@ -61,17 +66,19 @@ class MockFailingPostgresRepository implements IMarketRepository {
   }
 
   getSales(): GiftSale[] {
-    if (!this.dbConnected) throw new Error("PostgreSQL connection error");
+    if (!this.dbConnected) throw new Error('PostgreSQL connection error');
     return [...this.savedSales];
   }
 
   getCandles(instrumentKey: string, timeframe: any): GiftCandle[] {
-    if (!this.dbConnected) throw new Error("PostgreSQL connection error");
+    if (!this.dbConnected) throw new Error('PostgreSQL connection error');
     return this.savedCandles.get(`${instrumentKey}_${timeframe}`) || [];
   }
 
   saveSnapshot(): void {}
-  loadSnapshot(): null { return null; }
+  loadSnapshot(): null {
+    return null;
+  }
   clear(): void {
     this.savedSales = [];
     this.savedCandles.clear();
@@ -98,7 +105,7 @@ describe('Stage 12: Fault Tolerance & Disaster Recovery Tests', () => {
     let saleError: any = null;
     try {
       if (!mockDb.dbConnected) {
-        throw new Error("PostgreSQL connection failed before ingestion");
+        throw new Error('PostgreSQL connection failed before ingestion');
       }
       acceptCompletedSale({
         id: 'db_down_sale_1',
@@ -107,7 +114,7 @@ describe('Stage 12: Fault Tolerance & Disaster Recovery Tests', () => {
         price: '100',
         quantity: '1',
         eventTime: 1710000000000,
-        status: 'completed'
+        status: 'completed',
       });
     } catch (err: any) {
       saleError = err;
@@ -126,7 +133,7 @@ describe('Stage 12: Fault Tolerance & Disaster Recovery Tests', () => {
 
     try {
       if (mockDb.failDuringTransaction) {
-        throw new Error("DB Transaction Error: ROLLBACK triggered");
+        throw new Error('DB Transaction Error: ROLLBACK triggered');
       }
       acceptCompletedSale({
         id: 'tx_fail_sale_1',
@@ -135,7 +142,7 @@ describe('Stage 12: Fault Tolerance & Disaster Recovery Tests', () => {
         price: '150',
         quantity: '1',
         eventTime: 1710000010000,
-        status: 'completed'
+        status: 'completed',
       });
       transactionCommitted = true;
     } catch (err) {
@@ -153,7 +160,7 @@ describe('Stage 12: Fault Tolerance & Disaster Recovery Tests', () => {
     let initialAttemptFailed = false;
 
     try {
-      if (!mockDb.dbConnected) throw new Error("DB Connection Error");
+      if (!mockDb.dbConnected) throw new Error('DB Connection Error');
     } catch (err) {
       initialAttemptFailed = true;
     }
@@ -169,7 +176,7 @@ describe('Stage 12: Fault Tolerance & Disaster Recovery Tests', () => {
       price: '200',
       quantity: '1',
       eventTime: 1710000020000,
-      status: 'completed'
+      status: 'completed',
     });
 
     expect(result.accepted).toBe(true);
@@ -184,7 +191,7 @@ describe('Stage 12: Fault Tolerance & Disaster Recovery Tests', () => {
       price: '200',
       quantity: '1',
       eventTime: 1710000020000,
-      status: 'completed'
+      status: 'completed',
     });
 
     expect(dupResult.accepted).toBe(false);
@@ -204,7 +211,7 @@ describe('Stage 12: Fault Tolerance & Disaster Recovery Tests', () => {
       price: '250',
       quantity: '1',
       eventTime: 1710000030000,
-      status: 'completed'
+      status: 'completed',
     });
 
     expect(saleResult.accepted).toBe(true);
@@ -227,7 +234,7 @@ describe('Stage 12: Fault Tolerance & Disaster Recovery Tests', () => {
       price: '300',
       quantity: '1',
       eventTime: 1710000040000,
-      status: 'completed'
+      status: 'completed',
     });
 
     expect(result.accepted).toBe(true);
@@ -244,7 +251,7 @@ describe('Stage 12: Fault Tolerance & Disaster Recovery Tests', () => {
       price: '300',
       quantity: '1',
       eventTime: 1710000040000,
-      status: 'completed'
+      status: 'completed',
     });
 
     // Webhook retry is safely deduplicated
@@ -254,7 +261,7 @@ describe('Stage 12: Fault Tolerance & Disaster Recovery Tests', () => {
 
     // Step 4: Client state recovery check
     const snapshot = getMarketSnapshot('pepe_gift:::TON');
-    expect(snapshot.recentSales.some(s => s.id === 'gap_sale_101')).toBe(true);
+    expect(snapshot.recentSales.some((s) => s.id === 'gap_sale_101')).toBe(true);
   });
 
   it('6. Backend crash recovery: Client reconnects and receives snapshot from DB', async () => {
@@ -266,9 +273,9 @@ describe('Stage 12: Fault Tolerance & Disaster Recovery Tests', () => {
       price: '400',
       quantity: '1',
       eventTime: 1710000050000,
-      status: 'completed'
+      status: 'completed',
     });
-    await new Promise(r => setTimeout(r, 10));
+    await new Promise((r) => setTimeout(r, 10));
 
     // Simulate backend crash & memory reset (DB persists)
     const savedSalesBeforeCrash = mockDb.getSales();
@@ -299,11 +306,11 @@ describe('Stage 12: Fault Tolerance & Disaster Recovery Tests', () => {
       price: '500',
       quantity: '1',
       eventTime: 1710000060000,
-      status: 'completed'
+      status: 'completed',
     });
 
     expect(sale1.candles).toBeDefined();
-    const candle1m_sale1 = sale1.candles!.find(c => c.timeframe === '1m');
+    const candle1m_sale1 = sale1.candles!.find((c) => c.timeframe === '1m');
     expect(candle1m_sale1).toBeDefined();
     expect(candle1m_sale1!.revision).toBe(1);
 
@@ -315,10 +322,10 @@ describe('Stage 12: Fault Tolerance & Disaster Recovery Tests', () => {
       price: '550',
       quantity: '1',
       eventTime: 1710000065000,
-      status: 'completed'
+      status: 'completed',
     });
 
-    const candle1m_sale2 = sale2.candles!.find(c => c.timeframe === '1m');
+    const candle1m_sale2 = sale2.candles!.find((c) => c.timeframe === '1m');
     expect(candle1m_sale2).toBeDefined();
     expect(candle1m_sale2!.revision).toBeGreaterThan(candle1m_sale1!.revision);
   });
@@ -343,7 +350,7 @@ describe('Stage 12: Fault Tolerance & Disaster Recovery Tests', () => {
       'POSTGRES_ONLINE',
       'REDIS_ONLINE',
       'BACKEND_ONLINE',
-      'CLIENTS_CONNECTED'
+      'CLIENTS_CONNECTED',
     ]);
   });
 });

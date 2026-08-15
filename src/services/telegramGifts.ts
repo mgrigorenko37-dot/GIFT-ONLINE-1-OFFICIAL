@@ -4,15 +4,17 @@ export const fetchTelegramGifts = async (): Promise<Gift[]> => {
   try {
     const res = await fetch('/api/gifts');
     if (res.ok) {
-      const data = await res.json();
-      if (data && data.length > 0) {
-        return data;
+      const contentType = res.headers.get('content-type');
+      if (contentType && contentType.includes('application/json')) {
+        const data = await res.json();
+        if (Array.isArray(data) && data.length > 0) {
+          return data;
+        }
       }
     }
-    console.warn('API returned empty or failed, using fallback mock gifts');
     return fallbackGifts;
   } catch (error) {
-    console.error('Failed to fetch telegram gifts from API, using fallback', error);
+    console.warn('Failed to fetch telegram gifts from API, using fallback', error);
     return fallbackGifts;
   }
 };

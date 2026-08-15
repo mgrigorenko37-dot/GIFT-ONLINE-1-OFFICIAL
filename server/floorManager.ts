@@ -1,6 +1,10 @@
 import Decimal from 'decimal.js';
 import { ListingStatus, Currency, GiftListing } from '../src/types/market';
-import { normalizeInstrumentKey, parseInstrumentKey, buildInstrumentKey } from '../src/types/market';
+import {
+  normalizeInstrumentKey,
+  parseInstrumentKey,
+  buildInstrumentKey,
+} from '../src/types/market';
 
 export interface ListingInput {
   listingId?: string;
@@ -97,9 +101,17 @@ export function normalizeListingInput(input: ListingInput): {
   }
 
   let instrumentKey = '';
-  if (input.instrumentKey && typeof input.instrumentKey === 'string' && input.instrumentKey.trim() !== '') {
+  if (
+    input.instrumentKey &&
+    typeof input.instrumentKey === 'string' &&
+    input.instrumentKey.trim() !== ''
+  ) {
     instrumentKey = normalizeInstrumentKey(input.instrumentKey, currency);
-  } else if (input.collectionId && typeof input.collectionId === 'string' && input.collectionId.trim() !== '') {
+  } else if (
+    input.collectionId &&
+    typeof input.collectionId === 'string' &&
+    input.collectionId.trim() !== ''
+  ) {
     instrumentKey = buildInstrumentKey({
       collectionId: input.collectionId,
       modelId: input.modelId,
@@ -124,8 +136,14 @@ export function normalizeListingInput(input: ListingInput): {
   }
 
   const now = Date.now();
-  const createdAt = typeof input.createdAt === 'number' && !isNaN(input.createdAt) && input.createdAt > 0 ? input.createdAt : now;
-  const updatedAt = typeof input.updatedAt === 'number' && !isNaN(input.updatedAt) && input.updatedAt > 0 ? input.updatedAt : now;
+  const createdAt =
+    typeof input.createdAt === 'number' && !isNaN(input.createdAt) && input.createdAt > 0
+      ? input.createdAt
+      : now;
+  const updatedAt =
+    typeof input.updatedAt === 'number' && !isNaN(input.updatedAt) && input.updatedAt > 0
+      ? input.updatedAt
+      : now;
 
   const listing: StoredListing = {
     listingId: id,
@@ -145,7 +163,10 @@ export function normalizeListingInput(input: ListingInput): {
   return { valid: true, listing };
 }
 
-export function calculateFloor(instrumentKeyOrCol: string, defaultCurrency: Currency = 'TON'): FloorResult {
+export function calculateFloor(
+  instrumentKeyOrCol: string,
+  defaultCurrency: Currency = 'TON'
+): FloorResult {
   const normKey = normalizeInstrumentKey(instrumentKeyOrCol, defaultCurrency);
   const parsed = parseInstrumentKey(normKey);
 
@@ -187,7 +208,10 @@ export function calculateFloor(instrumentKeyOrCol: string, defaultCurrency: Curr
   };
 }
 
-export function getFloorPrice(instrumentKeyOrCol: string, defaultCurrency: Currency = 'TON'): FloorResult {
+export function getFloorPrice(
+  instrumentKeyOrCol: string,
+  defaultCurrency: Currency = 'TON'
+): FloorResult {
   return calculateFloor(instrumentKeyOrCol, defaultCurrency);
 }
 
@@ -253,7 +277,12 @@ export function updateListingStatus(
     return { success: false, error: 'Listing not found' };
   }
 
-  if (newStatus !== 'active' && newStatus !== 'sold' && newStatus !== 'cancelled' && newStatus !== 'expired') {
+  if (
+    newStatus !== 'active' &&
+    newStatus !== 'sold' &&
+    newStatus !== 'cancelled' &&
+    newStatus !== 'expired'
+  ) {
     return { success: false, error: 'Invalid status' };
   }
 
@@ -266,20 +295,29 @@ export function updateListingStatus(
   return { success: true, listing, floor };
 }
 
-export function cancelListing(
-  listingId: string
-): { success: boolean; listing?: StoredListing; floor?: FloorResult; error?: string } {
+export function cancelListing(listingId: string): {
+  success: boolean;
+  listing?: StoredListing;
+  floor?: FloorResult;
+  error?: string;
+} {
   return updateListingStatus(listingId, 'cancelled');
 }
 
-export function expireListing(
-  listingId: string
-): { success: boolean; listing?: StoredListing; floor?: FloorResult; error?: string } {
+export function expireListing(listingId: string): {
+  success: boolean;
+  listing?: StoredListing;
+  floor?: FloorResult;
+  error?: string;
+} {
   return updateListingStatus(listingId, 'expired');
 }
 
-export function sellListing(
-  listingId: string
-): { success: boolean; listing?: StoredListing; floor?: FloorResult; error?: string } {
+export function sellListing(listingId: string): {
+  success: boolean;
+  listing?: StoredListing;
+  floor?: FloorResult;
+  error?: string;
+} {
   return updateListingStatus(listingId, 'sold');
 }

@@ -66,7 +66,7 @@ export const LanguageModal: React.FC = () => {
             </h3>
           </div>
           <button
-            type="button"
+            type='button'
             onClick={closeLangModal}
             style={{
               background: 'none',
@@ -102,13 +102,13 @@ export const LanguageModal: React.FC = () => {
             }}
           >
             <i
-              className="material-icons"
+              className='material-icons'
               style={{ color: '#8b76ff', fontSize: '20px', marginRight: '8px' }}
             >
               search
             </i>
             <input
-              type="text"
+              type='text'
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               placeholder={t('profile.search_placeholder', 'Поиск языка...')}
@@ -125,7 +125,7 @@ export const LanguageModal: React.FC = () => {
             />
             {searchTerm && (
               <button
-                type="button"
+                type='button'
                 onClick={() => setSearchTerm('')}
                 style={{
                   background: 'transparent',
@@ -158,7 +158,7 @@ export const LanguageModal: React.FC = () => {
               return (
                 <button
                   key={lang.code}
-                  type="button"
+                  type='button'
                   onClick={() => {
                     setLanguage(lang.code);
                     closeLangModal();
@@ -248,7 +248,7 @@ export const LanguageModal: React.FC = () => {
             {filteredLanguages.length} {t('profile.languages_count', 'языков')}
           </span>
           <button
-            type="button"
+            type='button'
             onClick={closeLangModal}
             style={{
               padding: '8px 16px',

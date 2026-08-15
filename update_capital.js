@@ -7,8 +7,8 @@ code = code.replace(
 );
 
 code = code.replace(
-  "const CapitalScreen: React.FC = () => {",
-  "const CapitalScreen: React.FC = () => {\n  const { gifts, loading } = useGifts();"
+  'const CapitalScreen: React.FC = () => {',
+  'const CapitalScreen: React.FC = () => {\n  const { gifts, loading } = useGifts();'
 );
 
 fs.writeFileSync('src/screens/Capital/CapitalScreen.tsx', code);

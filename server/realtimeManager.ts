@@ -1,5 +1,11 @@
 import { Server, Socket } from 'socket.io';
-import { normalizeInstrumentKey, parseInstrumentKey, buildInstrumentKey, Timeframe, Currency } from '../src/types/market';
+import {
+  normalizeInstrumentKey,
+  parseInstrumentKey,
+  buildInstrumentKey,
+  Timeframe,
+  Currency,
+} from '../src/types/market';
 import { onSaleAccepted, AcceptSaleResult, getMarketSnapshot } from './marketState';
 import { onFloorUpdated, getFloorPrice, FloorResult } from './floorManager';
 import { getInstrumentKey } from './chartEngine';
@@ -9,23 +15,31 @@ import {
   getNextGlobalSequence,
   publishMarketEventToRedis,
   onRedisMarketEvent,
-  resetLocalSequence
+  resetLocalSequence,
 } from './redisManager';
 
 export const VALID_TIMEFRAMES = new Set<Timeframe>([
-  "1s", "1m", "5m", "15m", "1h", "4h", "1d", "1w", "1M"
+  '1s',
+  '1m',
+  '5m',
+  '15m',
+  '1h',
+  '4h',
+  '1d',
+  '1w',
+  '1M',
 ]);
 
 export const TIMEFRAME_ORDER: Record<Timeframe, number> = {
-  "1s": 1,
-  "1m": 2,
-  "5m": 3,
-  "15m": 4,
-  "1h": 5,
-  "4h": 6,
-  "1d": 7,
-  "1w": 8,
-  "1M": 9
+  '1s': 1,
+  '1m': 2,
+  '5m': 3,
+  '15m': 4,
+  '1h': 5,
+  '4h': 6,
+  '1d': 7,
+  '1w': 8,
+  '1M': 9,
 };
 
 export interface SubscriptionInfo {
@@ -50,9 +64,12 @@ export function resetSequence(value: number = 0) {
 // Map: socketId -> (subKey -> SubscriptionInfo)
 const socketSubscriptions = new Map<string, Map<string, SubscriptionInfo>>();
 
-export function parseSubscriptionParams(data: any): { instrumentKey: string; timeframes: Timeframe[] | null } {
+export function parseSubscriptionParams(data: any): {
+  instrumentKey: string;
+  timeframes: Timeframe[] | null;
+} {
   if (!data) {
-    throw new Error("Subscription data is required");
+    throw new Error('Subscription data is required');
   }
 
   let rawKey = '';
@@ -83,18 +100,22 @@ export function parseSubscriptionParams(data: any): { instrumentKey: string; tim
       collectionId: rawCol,
       modelId: rawModel,
       backdropId: rawBackdrop,
-      currency: (rawCurr as Currency) || 'TON'
+      currency: (rawCurr as Currency) || 'TON',
     });
   } else {
-    throw new Error("instrumentKey or collectionId is required");
+    throw new Error('instrumentKey or collectionId is required');
   }
 
   let timeframes: Timeframe[] | null = null;
 
   if (Array.isArray(rawTfs)) {
-    const valid = rawTfs.map(t => String(t).trim()).filter(t => VALID_TIMEFRAMES.has(t as Timeframe)) as Timeframe[];
+    const valid = rawTfs
+      .map((t) => String(t).trim())
+      .filter((t) => VALID_TIMEFRAMES.has(t as Timeframe)) as Timeframe[];
     if (valid.length > 0) {
-      timeframes = Array.from(new Set(valid)).sort((a, b) => TIMEFRAME_ORDER[a] - TIMEFRAME_ORDER[b]);
+      timeframes = Array.from(new Set(valid)).sort(
+        (a, b) => TIMEFRAME_ORDER[a] - TIMEFRAME_ORDER[b]
+      );
     }
   } else if (rawTf) {
     if (rawTf !== 'all' && rawTf !== '*') {
@@ -139,7 +160,10 @@ export function clearSocketSubscriptions(): void {
   socketSubscriptions.clear();
 }
 
-export function handleSubscribe(socket: any, data: any): { success: boolean; isDuplicate: boolean; subKey?: string; error?: string } {
+export function handleSubscribe(
+  socket: any,
+  data: any
+): { success: boolean; isDuplicate: boolean; subKey?: string; error?: string } {
   try {
     const { instrumentKey, timeframes } = parseSubscriptionParams(data);
     const timeframesPart = timeframes ? timeframes.join(',') : 'ALL';
@@ -173,7 +197,7 @@ export function handleSubscribe(socket: any, data: any): { success: boolean; isD
       subKey,
       instrumentKey,
       timeframes,
-      socket
+      socket,
     };
 
     subsMap.set(subKey, subInfo);
@@ -186,11 +210,14 @@ export function handleSubscribe(socket: any, data: any): { success: boolean; isD
 
     return { success: true, isDuplicate: false, subKey };
   } catch (err: any) {
-    return { success: false, isDuplicate: false, error: err.message || "Failed to subscribe" };
+    return { success: false, isDuplicate: false, error: err.message || 'Failed to subscribe' };
   }
 }
 
-export function handleUnsubscribe(socket: any, data: any): { success: boolean; removedCount: number } {
+export function handleUnsubscribe(
+  socket: any,
+  data: any
+): { success: boolean; removedCount: number } {
   const socketId = socket.id || 'mock_socket';
   const subsMap = socketSubscriptions.get(socketId);
   if (!subsMap || subsMap.size === 0) {
@@ -262,7 +289,7 @@ function emitSnapshot(socket: any, instrumentKey: string, timeframes: Timeframe[
       recentSales: snapshotData.recentSales,
       floorPrice: floorData.floorPrice,
       listedCount: floorData.listedCount,
-      serverTime: snapshotData.serverTime
+      serverTime: snapshotData.serverTime,
     };
 
     if (typeof socket.emit === 'function') {
@@ -272,13 +299,17 @@ function emitSnapshot(socket: any, instrumentKey: string, timeframes: Timeframe[
   };
 
   if (isRedisActive()) {
-    getNextGlobalSequence().then(seq => sendSnapshotPayload(seq));
+    getNextGlobalSequence().then((seq) => sendSnapshotPayload(seq));
   } else {
     sendSnapshotPayload(getNextSequence());
   }
 }
 
-export function broadcastLocalSaleResult(result: AcceptSaleResult, saleSeq?: number, candleSeqs?: number[]) {
+export function broadcastLocalSaleResult(
+  result: AcceptSaleResult,
+  saleSeq?: number,
+  candleSeqs?: number[]
+) {
   if (!result.accepted || !result.sale) return;
 
   const sale = result.sale;
@@ -290,7 +321,7 @@ export function broadcastLocalSaleResult(result: AcceptSaleResult, saleSeq?: num
     type: 'sale',
     sequence: saleSequence,
     instrumentKey,
-    sale
+    sale,
   };
 
   for (const [, subsMap] of socketSubscriptions) {
@@ -308,13 +339,14 @@ export function broadcastLocalSaleResult(result: AcceptSaleResult, saleSeq?: num
         let cIdx = 0;
         for (const ce of candleEvents) {
           if (sub.timeframes === null || sub.timeframes.includes(ce.timeframe)) {
-            const candleSequence = candleSeqs && candleSeqs[cIdx] !== undefined ? candleSeqs[cIdx] : getNextSequence();
+            const candleSequence =
+              candleSeqs && candleSeqs[cIdx] !== undefined ? candleSeqs[cIdx] : getNextSequence();
             const candleEvent = {
               type: ce.type,
               sequence: candleSequence,
               instrumentKey,
               timeframe: ce.timeframe,
-              candle: ce.candle
+              candle: ce.candle,
             };
 
             if (typeof sub.socket.emit === 'function') {
@@ -333,11 +365,14 @@ import { getOutboxWorker } from './outboxWorker';
 export async function broadcastSaleResult(result: AcceptSaleResult) {
   if (!result.accepted || !result.sale) return;
 
-  const requireRedis = process.env.REQUIRE_REDIS === 'true' || process.env.NODE_ENV === 'production';
+  const requireRedis =
+    process.env.REQUIRE_REDIS === 'true' || process.env.NODE_ENV === 'production';
 
   if (requireRedis) {
     if (!isRedisActive()) {
-      throw new Error("Redis is required for cluster realtime synchronization, but Redis is inactive.");
+      throw new Error(
+        'Redis is required for cluster realtime synchronization, but Redis is inactive.'
+      );
     }
     const saleSeq = await getNextGlobalSequence();
     const candleSeqs: number[] = [];
@@ -350,12 +385,12 @@ export async function broadcastSaleResult(result: AcceptSaleResult) {
       kind: 'sale_result',
       result,
       saleSeq,
-      candleSeqs
+      candleSeqs,
     };
 
     const published = await publishMarketEventToRedis(payload);
     if (!published) {
-      throw new Error("Failed to publish sale event to Redis cluster.");
+      throw new Error('Failed to publish sale event to Redis cluster.');
     }
   } else {
     if (isRedisActive()) {
@@ -370,7 +405,7 @@ export async function broadcastSaleResult(result: AcceptSaleResult) {
         kind: 'sale_result',
         result,
         saleSeq,
-        candleSeqs
+        candleSeqs,
       };
 
       const published = await publishMarketEventToRedis(payload);
@@ -410,22 +445,25 @@ export function broadcastLocalFloorResult(floorResult: FloorResult, seq?: number
 }
 
 export async function broadcastFloorResult(floorResult: FloorResult) {
-  const requireRedis = process.env.REQUIRE_REDIS === 'true' || process.env.NODE_ENV === 'production';
+  const requireRedis =
+    process.env.REQUIRE_REDIS === 'true' || process.env.NODE_ENV === 'production';
 
   if (requireRedis) {
     if (!isRedisActive()) {
-      throw new Error("Redis is required for cluster realtime synchronization, but Redis is inactive.");
+      throw new Error(
+        'Redis is required for cluster realtime synchronization, but Redis is inactive.'
+      );
     }
     const sequence = await getNextGlobalSequence();
     const payload = {
       kind: 'floor_result',
       floorResult,
-      sequence
+      sequence,
     };
 
     const published = await publishMarketEventToRedis(payload);
     if (!published) {
-      throw new Error("Failed to publish floor update to Redis cluster.");
+      throw new Error('Failed to publish floor update to Redis cluster.');
     }
   } else {
     if (isRedisActive()) {
@@ -433,7 +471,7 @@ export async function broadcastFloorResult(floorResult: FloorResult) {
       const payload = {
         kind: 'floor_result',
         floorResult,
-        sequence
+        sequence,
       };
 
       const published = await publishMarketEventToRedis(payload);
@@ -492,10 +530,9 @@ export function initRealtimeManager(io: Server) {
   initRedisManager(io);
 
   io.use((socket: Socket, next: (err?: Error) => void) => {
-    const clientIp =
-      socket.handshake.headers['x-forwarded-for']
-        ? String(socket.handshake.headers['x-forwarded-for']).split(',')[0].trim()
-        : socket.handshake.address || 'unknown_ip';
+    const clientIp = socket.handshake.headers['x-forwarded-for']
+      ? String(socket.handshake.headers['x-forwarded-for']).split(',')[0].trim()
+      : socket.handshake.address || 'unknown_ip';
 
     if (!checkSocketIpConnection(clientIp)) {
       console.warn(`[SocketSecurity] Connection limit exceeded for IP ${clientIp}`);
@@ -517,4 +554,3 @@ export function initRealtimeManager(io: Server) {
     });
   });
 }
-

@@ -1,6 +1,7 @@
 import { acceptCompletedSale, AcceptSaleResult } from './marketState';
 
-export type TelegramEventStatus = 'completed' | 'pending' | 'cancelled' | 'failed' | 'reverted' | 'unknown';
+export type TelegramEventStatus =
+  'completed' | 'pending' | 'cancelled' | 'failed' | 'reverted' | 'unknown';
 export type TelegramEventSource = 'real' | 'simulation' | 'test' | 'replay';
 
 export interface RawTelegramMarketEvent {
@@ -53,7 +54,13 @@ export function processTelegramMarketEvent(rawPayload: unknown): IngestionRespon
 
   // 1. Extract and normalize status
   const rawStatus = (p.status || 'completed').toString().toLowerCase().trim();
-  const status: TelegramEventStatus = ['completed', 'pending', 'cancelled', 'failed', 'reverted'].includes(rawStatus)
+  const status: TelegramEventStatus = [
+    'completed',
+    'pending',
+    'cancelled',
+    'failed',
+    'reverted',
+  ].includes(rawStatus)
     ? (rawStatus as TelegramEventStatus)
     : 'unknown';
 
@@ -82,13 +89,21 @@ export function processTelegramMarketEvent(rawPayload: unknown): IngestionRespon
   // 2. Collection ID
   const collectionId = (p.collectionId || p.collection_id || '').toString().trim();
   if (!collectionId) {
-    return { success: false, processed: false, reason: 'validation_error: collectionId is required' };
+    return {
+      success: false,
+      processed: false,
+      reason: 'validation_error: collectionId is required',
+    };
   }
 
   // 3. Currency
   const currencyStr = (p.currency || 'TON').toString().toUpperCase().trim();
   if (currencyStr !== 'TON' && currencyStr !== 'STARS') {
-    return { success: false, processed: false, reason: `validation_error: invalid currency "${currencyStr}"` };
+    return {
+      success: false,
+      processed: false,
+      reason: `validation_error: invalid currency "${currencyStr}"`,
+    };
   }
 
   // 4. Price & Quantity
@@ -98,13 +113,21 @@ export function processTelegramMarketEvent(rawPayload: unknown): IngestionRespon
   }
   const priceNum = Number(priceRaw);
   if (isNaN(priceNum) || !isFinite(priceNum) || priceNum <= 0) {
-    return { success: false, processed: false, reason: 'validation_error: price must be a positive number' };
+    return {
+      success: false,
+      processed: false,
+      reason: 'validation_error: price must be a positive number',
+    };
   }
 
   const qtyRaw = p.quantity !== undefined && p.quantity !== null ? p.quantity : 1;
   const qtyNum = Number(qtyRaw);
   if (isNaN(qtyNum) || !isFinite(qtyNum) || qtyNum <= 0) {
-    return { success: false, processed: false, reason: 'validation_error: quantity must be a positive number' };
+    return {
+      success: false,
+      processed: false,
+      reason: 'validation_error: quantity must be a positive number',
+    };
   }
 
   // 5. Event Time
@@ -138,8 +161,10 @@ export function processTelegramMarketEvent(rawPayload: unknown): IngestionRespon
   }
 
   // 7. Source & Simulation flag
-  const isSimulation = Boolean(p.isMock || p.is_mock || p.isSimulation || p.is_simulation || p.source === 'simulation');
-  const source: TelegramEventSource = isSimulation ? 'simulation' : ((p.source as any) || 'real');
+  const isSimulation = Boolean(
+    p.isMock || p.is_mock || p.isSimulation || p.is_simulation || p.source === 'simulation'
+  );
+  const source: TelegramEventSource = isSimulation ? 'simulation' : (p.source as any) || 'real';
 
   // Construct normalized sale
   const normalizedSale = {

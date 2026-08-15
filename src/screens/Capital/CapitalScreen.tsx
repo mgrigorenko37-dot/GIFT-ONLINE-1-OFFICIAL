@@ -8,11 +8,31 @@ type SortKey = 'floor' | 'change' | 'volume';
 
 const rarityOptions = ['All', 'Common', 'Rare', 'Epic', 'Limited', 'Legendary'];
 
-const GiftArtwork: React.FC<{ className: string; large?: boolean; emoji?: string }> = ({ className, large, emoji }) => {
+const GiftArtwork: React.FC<{ className: string; large?: boolean; emoji?: string }> = ({
+  className,
+  large,
+  emoji,
+}) => {
   if (emoji) {
     return (
-      <div className={`gift-art ${className} ${large ? 'gift-art-large' : ''}`} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: large ? '48px' : '24px' }}>
-        <img src={`https://emojik.vercel.app/s/${emoji}`} alt="emoji" style={{ width: large ? '48px' : '24px', height: large ? '48px' : '24px' }} onError={(e) => { e.currentTarget.style.display = 'none'; e.currentTarget.parentElement!.innerHTML = emoji; }} />
+      <div
+        className={`gift-art ${className} ${large ? 'gift-art-large' : ''}`}
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          fontSize: large ? '48px' : '24px',
+        }}
+      >
+        <img
+          src={`https://emojik.vercel.app/s/${emoji}`}
+          alt='emoji'
+          style={{ width: large ? '48px' : '24px', height: large ? '48px' : '24px' }}
+          onError={(e) => {
+            e.currentTarget.style.display = 'none';
+            e.currentTarget.parentElement!.innerHTML = emoji;
+          }}
+        />
       </div>
     );
   }
@@ -34,7 +54,6 @@ const CapitalScreen: React.FC = () => {
   const [search, setSearch] = useState('');
   const [rarity, setRarity] = useState('All');
   const [sort, setSort] = useState<SortKey>('volume');
-
 
   const visibleGifts = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -81,7 +100,9 @@ const CapitalScreen: React.FC = () => {
             <span>{t('nav.activity', 'Activity')}</span>
           </button>
         </nav>
-        <div className='gx-workspace-label gx-workspace-label-space'>{t('nav.account', 'Account')}</div>
+        <div className='gx-workspace-label gx-workspace-label-space'>
+          {t('nav.account', 'Account')}
+        </div>
         <nav className='gx-nav' aria-label='Account navigation'>
           <button className='gx-nav-item' type='button' onClick={() => navigate('/profile')}>
             <i className='material-icons'>person_outline</i>
@@ -109,7 +130,8 @@ const CapitalScreen: React.FC = () => {
             <span className='gx-status-dot' /> {t('nav.operational', 'All systems operational')}
           </div>
           <button className='gx-help-button' type='button'>
-            <i className='material-icons'>help_outline</i> {t('nav.help', 'Help center')} <span>↗</span>
+            <i className='material-icons'>help_outline</i> {t('nav.help', 'Help center')}{' '}
+            <span>↗</span>
           </button>
         </div>
       </aside>

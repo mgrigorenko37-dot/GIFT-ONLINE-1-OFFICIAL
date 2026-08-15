@@ -1,61 +1,119 @@
 {
   "orders": [
     [
-      "15nm084sf",
+      "n45y30yfv",
       {
-        "userId": "user1",
+        "userId": "user2",
         "instrumentKey": "TEST:all:all:TON",
-        "side": "Buy",
+        "side": "Sell",
         "orderType": "Market",
         "qty": 10,
         "price": 100,
         "reduceOnly": false,
-        "orderId": "15nm084sf",
+        "orderId": "n45y30yfv",
         "status": "Filled",
         "executedQty": 10,
         "remainingQty": 0,
         "avgFillPrice": 100,
-        "fee": 0,
-        "createdAt": 1786293666843,
-        "updatedAt": 1786293666843
+        "fee": 2.5,
+        "settlementCurrency": "TON",
+        "feeCurrency": "TON",
+        "pnlCurrency": "TON",
+        "collateralCurrency": "TON",
+        "createdAt": 1786771438419,
+        "updatedAt": 1786771438420,
+        "positionEffect": "Open"
+      }
+    ],
+    [
+      "fk0orgo51",
+      {
+        "userId": "user2",
+        "instrumentKey": "TEST:all:all:TON",
+        "side": "Buy",
+        "orderType": "Market",
+        "qty": 10,
+        "price": 50,
+        "reduceOnly": true,
+        "orderId": "fk0orgo51",
+        "status": "Filled",
+        "executedQty": 10,
+        "remainingQty": 0,
+        "avgFillPrice": 50,
+        "fee": 1.25,
+        "settlementCurrency": "TON",
+        "feeCurrency": "TON",
+        "pnlCurrency": "TON",
+        "collateralCurrency": "TON",
+        "createdAt": 1786771438420,
+        "updatedAt": 1786771438420,
+        "realizedPnl": 500,
+        "positionEffect": "Close"
       }
     ]
   ],
   "positions": [
     [
-      "user1:TEST:all:all:TON",
+      "user2:TEST:all:all:TON",
       {
-        "positionId": "cuzc9gw2h",
-        "userId": "user1",
+        "positionId": "x1z28r1o9",
+        "userId": "user2",
         "instrumentKey": "TEST:all:all:TON",
-        "side": "Long",
-        "qty": 10,
+        "side": "Short",
+        "qty": 0,
         "avgEntryPrice": 100,
         "markPrice": 100,
         "unrealizedPnl": 0,
-        "realizedPnl": 0,
-        "status": "Open",
-        "openedAt": 1786293666843,
-        "updatedAt": 1786293666843
+        "realizedPnl": 500,
+        "status": "Closed",
+        "settlementCurrency": "TON",
+        "pnlCurrency": "TON",
+        "collateralCurrency": "TON",
+        "openedAt": 1786771438420,
+        "updatedAt": 1786771438420
       }
     ]
   ],
   "balances": [
     [
-      "user1",
-      11480.5
+      "user2:TON",
+      12976.75
+    ],
+    [
+      "user2",
+      12976.75
     ]
   ],
   "trades": [
     {
-      "tradeId": "k8n5nfkgt",
-      "orderId": "15nm084sf",
-      "userId": "user1",
+      "tradeId": "bauvin6nr",
+      "orderId": "n45y30yfv",
+      "userId": "user2",
+      "instrumentKey": "TEST:all:all:TON",
+      "side": "Sell",
+      "qty": 10,
+      "price": 100,
+      "timestamp": 1786771438420,
+      "fee": 2.5,
+      "feeCurrency": "TON",
+      "pnlCurrency": "TON",
+      "settlementCurrency": "TON",
+      "realizedPnl": 0
+    },
+    {
+      "tradeId": "jd8p1n5j8",
+      "orderId": "fk0orgo51",
+      "userId": "user2",
       "instrumentKey": "TEST:all:all:TON",
       "side": "Buy",
       "qty": 10,
-      "price": 100,
-      "timestamp": 1786293666843
+      "price": 50,
+      "timestamp": 1786771438420,
+      "fee": 1.25,
+      "feeCurrency": "TON",
+      "pnlCurrency": "TON",
+      "settlementCurrency": "TON",
+      "realizedPnl": 500
     }
   ]
 }

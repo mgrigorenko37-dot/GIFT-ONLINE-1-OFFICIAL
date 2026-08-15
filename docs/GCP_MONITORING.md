@@ -5,6 +5,7 @@
 ## Отслеживаемые метрики
 
 ### 1. Cloud SQL (PostgreSQL)
+
 - **CPU & RAM**: Использование процессора (`database/cpu/utilization`) и памяти (`database/memory/utilization`).
 - **Storage**: Использование дискового пространства (`database/disk/utilization`).
 - **IOPS**: Операции чтения/записи диска (`database/disk/read_ops_count`, `database/disk/write_ops_count`).
@@ -15,10 +16,12 @@
 - **Database Errors**: Ошибки на уровне СУБД (логи Cloud SQL).
 
 ### 2. Приложение (Cloud Run)
+
 - **Transaction Latency (App level)**: Время обработки HTTP-запросов (`run.googleapis.com/request_latencies`).
 - **CPU & RAM**: Потребление ресурсов контейнером.
 
 ### 3. Outbox Pattern (Custom Metrics)
+
 - **Outbox Backlog**: Количество необработанных событий в таблице Outbox. (Необходимо экспортировать custom-метрику или использовать Log-based метрику по логам).
 - **Failed Outbox Events**: Количество ошибок при попытке обработать outbox-события.
 
@@ -32,6 +35,7 @@
 
 Файл с конфигурацией находится в: `terraform/monitoring.tf`.
 В нем уже заложены политики:
+
 1. **Слишком большое количество соединений** (Cloud SQL: High Connection Count)
 2. **Заполнение диска** (Cloud SQL: Disk Almost Full, порог 85%)
 3. **Failed backups** (Ошибки резервного копирования в Audit Logs)
@@ -42,6 +46,7 @@
 8. **Failed outbox events** (Custom metric > 0 rate)
 
 **Шаги для применения:**
+
 ```bash
 cd terraform
 # Инициализация terraform
@@ -74,16 +79,21 @@ terraform apply -var="project_id=YOUR_PROJECT_ID" -var='notification_channels=["
 Чтобы метрики `Outbox Backlog` и `Failed Outbox Events` работали, в приложении должен быть настроен экспорт метрик. Самый простой способ в среде Cloud Run — структурированное логирование (Structured Logging).
 
 Пример логирования в TypeScript:
+
 ```typescript
 // В фоновом воркере обработки outbox
-console.log(JSON.stringify({
-  severity: "INFO",
-  message: "Outbox stats",
-  outbox_pending_count: pendingCount,
-  outbox_failed_events: failedCount
-}));
+console.log(
+  JSON.stringify({
+    severity: 'INFO',
+    message: 'Outbox stats',
+    outbox_pending_count: pendingCount,
+    outbox_failed_events: failedCount,
+  })
+);
 ```
+
 Затем в Cloud Logging перейдите в **Log-based Metrics** и создайте:
+
 1. `outbox_pending_events` (тип: Distribution/Gauge, поле: `jsonPayload.outbox_pending_count`).
 2. `outbox_failed_events_count` (тип: Counter, поле: `jsonPayload.outbox_failed_events`).
 

@@ -1,5 +1,11 @@
 import Decimal from 'decimal.js';
-import { GiftCandle, Timeframe, Currency, normalizeInstrumentKey, parseInstrumentKey } from '../src/types/market';
+import {
+  GiftCandle,
+  Timeframe,
+  Currency,
+  normalizeInstrumentKey,
+  parseInstrumentKey,
+} from '../src/types/market';
 import { getHistory, getActiveCandle } from './marketState';
 import { getFloorPrice } from './floorManager';
 
@@ -40,7 +46,12 @@ export interface IndicatorResult {
   updatedAt: number;
 }
 
-function extractPrice(candle: GiftCandle, source: IndicatorSource, instrumentKey: string, currency: Currency): Decimal | null {
+function extractPrice(
+  candle: GiftCandle,
+  source: IndicatorSource,
+  instrumentKey: string,
+  currency: Currency
+): Decimal | null {
   if (source === 'close') {
     if (!candle.close) return null;
     try {
@@ -277,8 +288,14 @@ export function calculateRSI(
       const gain = diff.gt(0) ? diff : new Decimal(0);
       const loss = diff.lt(0) ? diff.abs() : new Decimal(0);
 
-      avgGain = avgGain.mul(period - 1).plus(gain).div(period);
-      avgLoss = avgLoss.mul(period - 1).plus(loss).div(period);
+      avgGain = avgGain
+        .mul(period - 1)
+        .plus(gain)
+        .div(period);
+      avgLoss = avgLoss
+        .mul(period - 1)
+        .plus(loss)
+        .div(period);
     }
 
     let rsiVal: Decimal;

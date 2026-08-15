@@ -1,10 +1,5 @@
 import Decimal from 'decimal.js';
-import {
-  Timeframe,
-  GiftSale,
-  GiftCandle,
-  buildInstrumentKey,
-} from '../src/types/market';
+import { Timeframe, GiftSale, GiftCandle, buildInstrumentKey } from '../src/types/market';
 
 export type { Timeframe, GiftSale, GiftCandle };
 
@@ -30,7 +25,12 @@ export function parsePositiveDecimal(val: any): Decimal | null {
   }
 }
 
-export function isEarlierSale(timeA: number, idA: string, timeB: number | undefined, idB: string | undefined): boolean {
+export function isEarlierSale(
+  timeA: number,
+  idA: string,
+  timeB: number | undefined,
+  idB: string | undefined
+): boolean {
   if (timeB === undefined || idB === undefined) return true;
   if (timeA !== timeB) {
     return timeA < timeB;
@@ -38,7 +38,12 @@ export function isEarlierSale(timeA: number, idA: string, timeB: number | undefi
   return idA < idB;
 }
 
-export function isLaterSale(timeA: number, idA: string, timeB: number | undefined, idB: string | undefined): boolean {
+export function isLaterSale(
+  timeA: number,
+  idA: string,
+  timeB: number | undefined,
+  idB: string | undefined
+): boolean {
   if (timeB === undefined || idB === undefined) return true;
   if (timeA !== timeB) {
     return timeA > timeB;
@@ -48,20 +53,27 @@ export function isLaterSale(timeA: number, idA: string, timeB: number | undefine
 
 export function getInstrumentKey(sale: Partial<GiftSale>): string {
   return buildInstrumentKey({
-    collectionId: sale.collectionId || "unknown",
+    collectionId: sale.collectionId || 'unknown',
     modelId: sale.modelId,
     backdropId: sale.backdropId,
-    currency: sale.currency || "TON",
+    currency: sale.currency || 'TON',
   });
 }
 
-export function getCandleRange(timestamp: number, timeframe: Timeframe): { startTime: number, endTime: number } {
+export function getCandleRange(
+  timestamp: number,
+  timeframe: Timeframe
+): { startTime: number; endTime: number } {
   if (typeof timestamp !== 'number') {
-    throw new Error(`Invalid timestamp type: ${typeof timestamp} (${timestamp}). Expected number in Unix milliseconds.`);
+    throw new Error(
+      `Invalid timestamp type: ${typeof timestamp} (${timestamp}). Expected number in Unix milliseconds.`
+    );
   }
 
   if (isNaN(timestamp) || !isFinite(timestamp)) {
-    throw new Error(`Invalid timestamp value: ${timestamp}. Expected a finite number in Unix milliseconds.`);
+    throw new Error(
+      `Invalid timestamp value: ${timestamp}. Expected a finite number in Unix milliseconds.`
+    );
   }
 
   if (timestamp < 0) {
@@ -69,10 +81,12 @@ export function getCandleRange(timestamp: number, timeframe: Timeframe): { start
   }
 
   if (timestamp > 0 && timestamp < 100000000000) {
-    throw new Error(`Invalid timestamp: ${timestamp}. Expected Unix timestamp in milliseconds, not seconds.`);
+    throw new Error(
+      `Invalid timestamp: ${timestamp}. Expected Unix timestamp in milliseconds, not seconds.`
+    );
   }
 
-  const VALID_TIMEFRAMES: Timeframe[] = ["1s", "1m", "5m", "15m", "1h", "4h", "1d", "1w", "1M"];
+  const VALID_TIMEFRAMES: Timeframe[] = ['1s', '1m', '5m', '15m', '1h', '4h', '1d', '1w', '1M'];
   if (!VALID_TIMEFRAMES.includes(timeframe)) {
     throw new Error(`Invalid timeframe: ${timeframe}`);
   }
@@ -135,7 +149,7 @@ export function getCandleRange(timestamp: number, timeframe: Timeframe): { start
       endTime = nextMonth.getTime();
       break;
   }
-  
+
   return { startTime, endTime };
 }
 
@@ -173,7 +187,7 @@ export function createCandleFromSale(sale: GiftSale, timeframe: Timeframe): Gift
     lastSaleTime: sale.eventTime,
     confirmed: false,
     revision: 1,
-    updatedAt: Date.now()
+    updatedAt: Date.now(),
   };
 }
 
@@ -238,4 +252,3 @@ export function getAveragePrice(candle: GiftCandle): string {
   if (sumQuantity.isZero()) return '0';
   return sumQuote.div(sumQuantity).toString();
 }
-

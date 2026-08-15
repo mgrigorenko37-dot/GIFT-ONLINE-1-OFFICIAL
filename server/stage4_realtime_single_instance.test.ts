@@ -3,7 +3,12 @@ import http from 'http';
 import express from 'express';
 import { Server as SocketIOServer } from 'socket.io';
 import { io as socketClient, Socket as ClientSocket } from 'socket.io-client';
-import { attachSocketListeners, clearAllSubscriptions, getSocketSubscriptions, resetSequence } from './realtimeManager';
+import {
+  attachSocketListeners,
+  clearAllSubscriptions,
+  getSocketSubscriptions,
+  resetSequence,
+} from './realtimeManager';
 import { clearMarketState, acceptCompletedSale } from './marketState';
 import { CandleStore, SequenceTracker } from '../src/lib/realtimeStream';
 import { handleGetCandles } from './candlesHandler';
@@ -19,7 +24,7 @@ beforeAll(async () => {
 
   server = http.createServer(app);
   ioServer = new SocketIOServer(server, {
-    cors: { origin: '*' }
+    cors: { origin: '*' },
   });
 
   ioServer.on('connection', (socket) => {
@@ -232,7 +237,9 @@ describe('Stage 4: Single-Instance Realtime Backend Tests with Real Socket.io-Cl
       status: 'completed',
     });
 
-    const res = await fetch(`${serverUrl}/api/market/candles?instrumentKey=${encodeURIComponent(instA)}&timeframe=1m`);
+    const res = await fetch(
+      `${serverUrl}/api/market/candles?instrumentKey=${encodeURIComponent(instA)}&timeframe=1m`
+    );
     expect(res.status).toBe(200);
 
     const json = await res.json();
@@ -249,9 +256,16 @@ describe('Stage 4: Single-Instance Realtime Backend Tests with Real Socket.io-Cl
       timeframe: '1m' as const,
       startTime: 1710000000000,
       endTime: 1710000060000,
-      open: '10', high: '12', low: '9', close: '11',
-      volume: '5', quoteVolume: '50', tradeCount: 3,
-      confirmed: false, revision: 1, updatedAt: 1710000030000,
+      open: '10',
+      high: '12',
+      low: '9',
+      close: '11',
+      volume: '5',
+      quoteVolume: '50',
+      tradeCount: 3,
+      confirmed: false,
+      revision: 1,
+      updatedAt: 1710000030000,
     };
 
     // First apply
@@ -278,9 +292,16 @@ describe('Stage 4: Single-Instance Realtime Backend Tests with Real Socket.io-Cl
       timeframe: '1m' as const,
       startTime: 1710000000000,
       endTime: 1710000060000,
-      open: '10', high: '15', low: '9', close: '15',
-      volume: '10', quoteVolume: '100', tradeCount: 5,
-      confirmed: false, revision: 2, updatedAt: 1710000040000,
+      open: '10',
+      high: '15',
+      low: '9',
+      close: '15',
+      volume: '10',
+      quoteVolume: '100',
+      tradeCount: 5,
+      confirmed: false,
+      revision: 2,
+      updatedAt: 1710000040000,
     };
 
     const rev1 = {
@@ -288,9 +309,16 @@ describe('Stage 4: Single-Instance Realtime Backend Tests with Real Socket.io-Cl
       timeframe: '1m' as const,
       startTime: 1710000000000,
       endTime: 1710000060000,
-      open: '10', high: '10', low: '10', close: '10',
-      volume: '1', quoteVolume: '10', tradeCount: 1,
-      confirmed: false, revision: 1, updatedAt: 1710000010000,
+      open: '10',
+      high: '10',
+      low: '10',
+      close: '10',
+      volume: '1',
+      quoteVolume: '10',
+      tradeCount: 1,
+      confirmed: false,
+      revision: 1,
+      updatedAt: 1710000010000,
     };
 
     store.applyCandle(rev2);

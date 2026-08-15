@@ -7,11 +7,31 @@ import { useLanguage } from '../../context/LanguageContext';
 import Chart from 'react-apexcharts';
 import type { ApexOptions } from 'apexcharts';
 
-const GiftArtwork: React.FC<{ className: string; large?: boolean; emoji?: string }> = ({ className, large, emoji }) => {
+const GiftArtwork: React.FC<{ className: string; large?: boolean; emoji?: string }> = ({
+  className,
+  large,
+  emoji,
+}) => {
   if (emoji) {
     return (
-      <div className={`gift-art ${className} ${large ? 'gift-art-large' : ''}`} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: large ? '48px' : '24px' }}>
-        <img src={`https://emojik.vercel.app/s/${emoji}`} alt="emoji" style={{ width: large ? '48px' : '24px', height: large ? '48px' : '24px' }} onError={(e) => { e.currentTarget.style.display = 'none'; e.currentTarget.parentElement!.innerHTML = emoji; }} />
+      <div
+        className={`gift-art ${className} ${large ? 'gift-art-large' : ''}`}
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          fontSize: large ? '48px' : '24px',
+        }}
+      >
+        <img
+          src={`https://emojik.vercel.app/s/${emoji}`}
+          alt='emoji'
+          style={{ width: large ? '48px' : '24px', height: large ? '48px' : '24px' }}
+          onError={(e) => {
+            e.currentTarget.style.display = 'none';
+            e.currentTarget.parentElement!.innerHTML = emoji;
+          }}
+        />
       </div>
     );
   }
@@ -32,7 +52,7 @@ const PortfolioScreen: React.FC = () => {
     { ...gifts[3], shares: 750, avgBuy: 51.2, pnl: +15.0 },
     { ...gifts[1], shares: 120, avgBuy: 90.0, pnl: -4.2 },
     { ...gifts[5], shares: 50, avgBuy: 610.0, pnl: +4.9 },
-  ].filter(g => g.id);
+  ].filter((g) => g.id);
   const navigate = useNavigate();
 
   const { isTelegram, user } = useTelegramWebApp();
@@ -115,7 +135,9 @@ const PortfolioScreen: React.FC = () => {
           </button>
         </nav>
 
-        <div className='gx-workspace-label gx-workspace-label-space'>{t('nav.account', 'Account')}</div>
+        <div className='gx-workspace-label gx-workspace-label-space'>
+          {t('nav.account', 'Account')}
+        </div>
         <nav className='gx-nav' aria-label='Account navigation'>
           <button className='gx-nav-item' type='button' onClick={() => navigate('/profile')}>
             <i className='material-icons'>person_outline</i>
@@ -144,7 +166,8 @@ const PortfolioScreen: React.FC = () => {
             <span className='gx-status-dot' /> {t('nav.operational', 'All systems operational')}
           </div>
           <button className='gx-help-button' type='button'>
-            <i className='material-icons'>help_outline</i> {t('nav.help', 'Help center')} <span>↗</span>
+            <i className='material-icons'>help_outline</i> {t('nav.help', 'Help center')}{' '}
+            <span>↗</span>
           </button>
 
           <div className='gx-user-mini'>

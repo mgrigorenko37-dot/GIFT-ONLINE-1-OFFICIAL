@@ -3,11 +3,7 @@ import express from 'express';
 import { createServer, Server as HttpServer } from 'http';
 import { Server as SocketIOServer } from 'socket.io';
 import { io as SocketIOClient, Socket as ClientSocket } from 'socket.io-client';
-import {
-  restApiRateLimiter,
-  resetRateLimiters,
-  requestTimeoutMiddleware,
-} from './rateLimiter';
+import { restApiRateLimiter, resetRateLimiters, requestTimeoutMiddleware } from './rateLimiter';
 import {
   initRealtimeManager,
   resetSequence,
@@ -15,7 +11,12 @@ import {
   resetSocketIpConnectionCounts,
 } from './realtimeManager';
 import { processTelegramMarketEvent } from './telegramAdapter';
-import { clearMarketState, setMarketRepository, getMarketSnapshot, acceptCompletedSale } from './marketState';
+import {
+  clearMarketState,
+  setMarketRepository,
+  getMarketSnapshot,
+  acceptCompletedSale,
+} from './marketState';
 import { InMemoryMarketRepository } from './marketRepository';
 
 interface LoadMetrics {
@@ -30,13 +31,18 @@ interface LoadMetrics {
   durationMs: number;
 }
 
-function calculateMetrics(latencies: number[], durationMs: number, totalRequests: number, successCount: number): LoadMetrics {
+function calculateMetrics(
+  latencies: number[],
+  durationMs: number,
+  totalRequests: number,
+  successCount: number
+): LoadMetrics {
   const sorted = [...latencies].sort((a, b) => a - b);
   const failedRequests = totalRequests - successCount;
   const p50Ms = sorted.length ? sorted[Math.floor(sorted.length * 0.5)] : 0;
   const p95Ms = sorted.length ? sorted[Math.floor(sorted.length * 0.95)] : 0;
   const p99Ms = sorted.length ? sorted[Math.floor(sorted.length * 0.99)] : 0;
-  const rps = durationMs > 0 ? (totalRequests / (durationMs / 1000)) : 0;
+  const rps = durationMs > 0 ? totalRequests / (durationMs / 1000) : 0;
 
   return {
     totalRequests,
@@ -96,7 +102,7 @@ describe('Stage 10: Production Load & Stress Testing Harness', () => {
     server = createServer(app);
     io = new SocketIOServer(server, {
       transports: ['websocket'],
-      cors: { origin: '*' }
+      cors: { origin: '*' },
     });
 
     initRealtimeManager(io);
@@ -158,7 +164,9 @@ describe('Stage 10: Production Load & Stress Testing Harness', () => {
 
     const metrics = calculateMetrics(latencies, durationMs, totalRequests, successCount);
 
-    console.log(`[LOAD METRICS - Ingestion 500 reqs] RPS: ${metrics.rps}, p50: ${metrics.p50Ms}ms, p95: ${metrics.p95Ms}ms, p99: ${metrics.p99Ms}ms, success: ${metrics.successfulRequests}/${metrics.totalRequests}`);
+    console.log(
+      `[LOAD METRICS - Ingestion 500 reqs] RPS: ${metrics.rps}, p50: ${metrics.p50Ms}ms, p95: ${metrics.p95Ms}ms, p99: ${metrics.p99Ms}ms, success: ${metrics.successfulRequests}/${metrics.totalRequests}`
+    );
 
     expect(metrics.successfulRequests).toBe(totalRequests);
     expect(metrics.rps).toBeGreaterThan(50);
@@ -203,7 +211,9 @@ describe('Stage 10: Production Load & Stress Testing Harness', () => {
     await Promise.all(requestPromises);
     const durationMs = Date.now() - startTime;
 
-    console.log(`[LOAD METRICS - Duplicate Burst 200 reqs] Duration: ${durationMs}ms, Processed: ${processedTrueCount}, Rejected Duplicates: ${duplicateCount}`);
+    console.log(
+      `[LOAD METRICS - Duplicate Burst 200 reqs] Duration: ${durationMs}ms, Processed: ${processedTrueCount}, Rejected Duplicates: ${duplicateCount}`
+    );
 
     expect(processedTrueCount).toBe(1);
     expect(duplicateCount).toBe(totalRequests - 1);
@@ -252,7 +262,9 @@ describe('Stage 10: Production Load & Stress Testing Harness', () => {
     await Promise.all(connectPromises);
     const durationMs = Date.now() - startTime;
 
-    console.log(`[LOAD METRICS - 50 WS Clients] Connected: ${connectedCount}, Snapshots Received: ${snapshotReceivedCount}, Duration: ${durationMs}ms`);
+    console.log(
+      `[LOAD METRICS - 50 WS Clients] Connected: ${connectedCount}, Snapshots Received: ${snapshotReceivedCount}, Duration: ${durationMs}ms`
+    );
 
     expect(connectedCount).toBe(clientCount);
     expect(snapshotReceivedCount).toBe(clientCount);
@@ -314,7 +326,9 @@ describe('Stage 10: Production Load & Stress Testing Harness', () => {
     await new Promise((r) => setTimeout(r, 100));
     const durationMs = Date.now() - startTime;
 
-    console.log(`[LOAD METRICS - 30 Clients Broadcast] Total Broadcast Events Received: ${updateEventsReceived}, Duration: ${durationMs}ms`);
+    console.log(
+      `[LOAD METRICS - 30 Clients Broadcast] Total Broadcast Events Received: ${updateEventsReceived}, Duration: ${durationMs}ms`
+    );
 
     expect(updateEventsReceived).toBe(clientCount * 10);
     clients.forEach((c) => c.disconnect());
@@ -368,7 +382,9 @@ describe('Stage 10: Production Load & Stress Testing Harness', () => {
     await Promise.all(reconnectPromises);
     const reconnectDurationMs = Date.now() - reconnectStartTime;
 
-    console.log(`[LOAD METRICS - Reconnect Storm 30 Clients] Reconnected: ${reconnectCount}/${clientCount}, Duration: ${reconnectDurationMs}ms`);
+    console.log(
+      `[LOAD METRICS - Reconnect Storm 30 Clients] Reconnected: ${reconnectCount}/${clientCount}, Duration: ${reconnectDurationMs}ms`
+    );
 
     expect(reconnectCount).toBe(clientCount);
     clients.forEach((c) => c.disconnect());

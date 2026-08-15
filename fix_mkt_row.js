@@ -13,4 +13,4 @@ const newRow = `<div className="left" style={{flexDirection: 'row', alignItems: 
 code = code.replace(oldRow, newRow);
 
 fs.writeFileSync('src/screens/GXTerminal/GXTerminalScreen.tsx', code);
-console.log("Fixed mkt-row");
+console.log('Fixed mkt-row');

@@ -3,6 +3,10 @@ import fs from 'fs';
 import path from 'path';
 import { Pool, PoolConfig } from 'pg';
 
+declare global {
+  var _postgresPool: Pool | undefined;
+}
+
 export interface MarketSnapshot {
   version: number;
   timestamp: number;
@@ -38,15 +42,31 @@ export interface IMarketRepository {
   loadSnapshot(): Promise<MarketSnapshot | null> | MarketSnapshot | null;
   saveSale(sale: GiftSale): Promise<void> | void;
   getSales(): Promise<GiftSale[]> | GiftSale[];
-  saveCandles(instrumentKey: string, timeframe: Timeframe, candles: GiftCandle[]): Promise<void> | void;
-  getCandles(instrumentKey: string, timeframe: Timeframe, options?: { from?: number; to?: number; limit?: number }): Promise<GiftCandle[]> | GiftCandle[];
+  saveCandles(
+    instrumentKey: string,
+    timeframe: Timeframe,
+    candles: GiftCandle[]
+  ): Promise<void> | void;
+  getCandles(
+    instrumentKey: string,
+    timeframe: Timeframe,
+    options?: { from?: number; to?: number; limit?: number }
+  ): Promise<GiftCandle[]> | GiftCandle[];
   clear(): Promise<void> | void;
-  saveSaleAndCandlesAtomic?(sale: GiftSale, candles: GiftCandle[], outboxEvents?: OutboxEvent[]): Promise<{ isNew: boolean }>;
+  saveSaleAndCandlesAtomic?(
+    sale: GiftSale,
+    candles: GiftCandle[],
+    outboxEvents?: OutboxEvent[]
+  ): Promise<{ isNew: boolean }>;
 
   saveOutboxEvent?(event: OutboxEvent): Promise<void>;
   fetchPendingOutboxEvents?(limit?: number, lockLeaseMs?: number): Promise<OutboxEvent[]>;
   markOutboxEventPublished?(eventId: string, publishedAt?: number): Promise<void>;
-  markOutboxEventFailed?(eventId: string, errorMsg: string, nextAvailableAt?: number): Promise<void>;
+  markOutboxEventFailed?(
+    eventId: string,
+    errorMsg: string,
+    nextAvailableAt?: number
+  ): Promise<void>;
   getOutboxEventById?(eventId: string): Promise<OutboxEvent | null>;
 }
 
@@ -90,10 +110,10 @@ export class InMemoryMarketRepository implements IMarketRepository {
     let list = this.candles.get(key) ? [...this.candles.get(key)!] : [];
     if (options) {
       if (typeof options.from === 'number') {
-        list = list.filter(c => c.startTime >= options.from!);
+        list = list.filter((c) => c.startTime >= options.from!);
       }
       if (typeof options.to === 'number') {
-        list = list.filter(c => c.startTime < options.to!);
+        list = list.filter((c) => c.startTime < options.to!);
       }
       if (typeof options.limit === 'number' && options.limit > 0) {
         list = list.slice(-options.limit);
@@ -102,8 +122,12 @@ export class InMemoryMarketRepository implements IMarketRepository {
     return list;
   }
 
-  public async saveSaleAndCandlesAtomic(sale: GiftSale, candles: GiftCandle[], outboxEvents?: OutboxEvent[]): Promise<{ isNew: boolean }> {
-    const exists = this.sales.some(s => s.id === sale.id);
+  public async saveSaleAndCandlesAtomic(
+    sale: GiftSale,
+    candles: GiftCandle[],
+    outboxEvents?: OutboxEvent[]
+  ): Promise<{ isNew: boolean }> {
+    const exists = this.sales.some((s) => s.id === sale.id);
     if (exists) {
       return { isNew: false };
     }
@@ -111,7 +135,7 @@ export class InMemoryMarketRepository implements IMarketRepository {
     for (const c of candles) {
       const key = `${c.instrumentKey}:${c.timeframe}`;
       let existingList = this.candles.get(key) || [];
-      const idx = existingList.findIndex(item => item.startTime === c.startTime);
+      const idx = existingList.findIndex((item) => item.startTime === c.startTime);
       if (idx !== -1) {
         if ((c.revision ?? 0) >= (existingList[idx].revision ?? 0)) {
           existingList[idx] = { ...c };
@@ -130,7 +154,7 @@ export class InMemoryMarketRepository implements IMarketRepository {
   }
 
   public async saveOutboxEvent(event: OutboxEvent): Promise<void> {
-    const idx = this.outboxEvents.findIndex(e => e.eventId === event.eventId);
+    const idx = this.outboxEvents.findIndex((e) => e.eventId === event.eventId);
     if (idx !== -1) {
       this.outboxEvents[idx] = JSON.parse(JSON.stringify(event));
     } else {
@@ -138,13 +162,19 @@ export class InMemoryMarketRepository implements IMarketRepository {
     }
   }
 
-  public async fetchPendingOutboxEvents(limit: number = 20, lockLeaseMs: number = 30000): Promise<OutboxEvent[]> {
+  public async fetchPendingOutboxEvents(
+    limit: number = 20,
+    lockLeaseMs: number = 30000
+  ): Promise<OutboxEvent[]> {
     const now = Date.now();
     const staleThreshold = now - lockLeaseMs;
-    const pending = this.outboxEvents.filter(e =>
-      (e.status === 'pending' && e.availableAt <= now) ||
-      (e.status === 'processing' && (e.lockedAt === undefined || e.lockedAt < staleThreshold))
-    ).slice(0, limit);
+    const pending = this.outboxEvents
+      .filter(
+        (e) =>
+          (e.status === 'pending' && e.availableAt <= now) ||
+          (e.status === 'processing' && (e.lockedAt === undefined || e.lockedAt < staleThreshold))
+      )
+      .slice(0, limit);
 
     for (const p of pending) {
       p.status = 'processing';
@@ -152,11 +182,14 @@ export class InMemoryMarketRepository implements IMarketRepository {
       p.attempts += 1;
       p.updatedAt = now;
     }
-    return pending.map(p => JSON.parse(JSON.stringify(p)));
+    return pending.map((p) => JSON.parse(JSON.stringify(p)));
   }
 
-  public async markOutboxEventPublished(eventId: string, publishedAt: number = Date.now()): Promise<void> {
-    const item = this.outboxEvents.find(e => e.eventId === eventId);
+  public async markOutboxEventPublished(
+    eventId: string,
+    publishedAt: number = Date.now()
+  ): Promise<void> {
+    const item = this.outboxEvents.find((e) => e.eventId === eventId);
     if (item) {
       item.status = 'published';
       item.publishedAt = publishedAt;
@@ -164,11 +197,15 @@ export class InMemoryMarketRepository implements IMarketRepository {
     }
   }
 
-  public async markOutboxEventFailed(eventId: string, errorMsg: string, nextAvailableAt?: number): Promise<void> {
-    const item = this.outboxEvents.find(e => e.eventId === eventId);
+  public async markOutboxEventFailed(
+    eventId: string,
+    errorMsg: string,
+    nextAvailableAt?: number
+  ): Promise<void> {
+    const item = this.outboxEvents.find((e) => e.eventId === eventId);
     if (item) {
       item.lastError = errorMsg;
-      item.availableAt = nextAvailableAt || (Date.now() + 5000);
+      item.availableAt = nextAvailableAt || Date.now() + 5000;
       item.lockedAt = undefined;
       item.updatedAt = Date.now();
       if (item.attempts >= 10) {
@@ -180,7 +217,7 @@ export class InMemoryMarketRepository implements IMarketRepository {
   }
 
   public async getOutboxEventById(eventId: string): Promise<OutboxEvent | null> {
-    const item = this.outboxEvents.find(e => e.eventId === eventId);
+    const item = this.outboxEvents.find((e) => e.eventId === eventId);
     return item ? JSON.parse(JSON.stringify(item)) : null;
   }
 
@@ -215,7 +252,7 @@ export class FilePersistentMarketRepository implements IMarketRepository {
         if (next) next();
       };
     }
-    return new Promise(resolve => {
+    return new Promise((resolve) => {
       this.writeQueue.push(() => {
         this.isWriting = true;
         resolve(() => {
@@ -258,14 +295,19 @@ export class FilePersistentMarketRepository implements IMarketRepository {
         return JSON.parse(data);
       }
     } catch (err) {
-      console.error('FilePersistentMarketRepository primary file read/parse error, trying backup:', err);
+      console.error(
+        'FilePersistentMarketRepository primary file read/parse error, trying backup:',
+        err
+      );
     }
 
     try {
       if (fs.existsSync(this.backupPath)) {
         const backupData = fs.readFileSync(this.backupPath, 'utf-8');
         const restored = JSON.parse(backupData);
-        console.log('FilePersistentMarketRepository: Successfully recovered snapshot from backup file.');
+        console.log(
+          'FilePersistentMarketRepository: Successfully recovered snapshot from backup file.'
+        );
         return restored;
       }
     } catch (backupErr) {
@@ -282,7 +324,7 @@ export class FilePersistentMarketRepository implements IMarketRepository {
       allSales: [],
       processedSaleIds: [],
       activeCandles: {},
-      closedCandles: {}
+      closedCandles: {},
     };
     snap.allSales.push(sale);
     if (!snap.processedSaleIds.includes(sale.id)) {
@@ -296,14 +338,18 @@ export class FilePersistentMarketRepository implements IMarketRepository {
     return snap ? snap.allSales : [];
   }
 
-  public async saveCandles(instrumentKey: string, timeframe: Timeframe, candles: GiftCandle[]): Promise<void> {
+  public async saveCandles(
+    instrumentKey: string,
+    timeframe: Timeframe,
+    candles: GiftCandle[]
+  ): Promise<void> {
     const snap = this.loadSnapshot() || {
       version: 1,
       timestamp: Date.now(),
       allSales: [],
       processedSaleIds: [],
       activeCandles: {},
-      closedCandles: {}
+      closedCandles: {},
     };
     if (!snap.closedCandles[instrumentKey]) {
       snap.closedCandles[instrumentKey] = {};
@@ -321,10 +367,10 @@ export class FilePersistentMarketRepository implements IMarketRepository {
     let list = snap?.closedCandles?.[instrumentKey]?.[timeframe] || [];
     if (options) {
       if (typeof options.from === 'number') {
-        list = list.filter(c => c.startTime >= options.from!);
+        list = list.filter((c) => c.startTime >= options.from!);
       }
       if (typeof options.to === 'number') {
-        list = list.filter(c => c.startTime < options.to!);
+        list = list.filter((c) => c.startTime < options.to!);
       }
       if (typeof options.limit === 'number' && options.limit > 0) {
         list = list.slice(-options.limit);
@@ -346,6 +392,33 @@ export class FilePersistentMarketRepository implements IMarketRepository {
 /**
  * Enterprise Production PostgreSQL Repository for atomic multi-instance persistence.
  */
+export function getPgPool(): Pool {
+  if (global._postgresPool) {
+    return global._postgresPool;
+  }
+  const isProduction = process.env.NODE_ENV === 'production';
+  const hasDatabaseUrl = Boolean(process.env.DATABASE_URL || process.env.SQL_HOST);
+
+  if (process.env.SQL_HOST) {
+    global._postgresPool = new Pool({
+      host: process.env.SQL_HOST,
+      user: process.env.SQL_USER,
+      password: process.env.SQL_PASSWORD,
+      database: process.env.SQL_DB_NAME,
+      max: 20,
+    });
+
+    // Prevent unhandled pool-level errors from crashing the application
+    global._postgresPool.on('error', (err) => {
+      console.error('Unexpected error on idle SQL pool client:', err);
+    });
+
+    return global._postgresPool;
+  }
+
+  throw new Error('No SQL_HOST configured');
+}
+
 export class PostgresMarketRepository implements IMarketRepository {
   private pool: Pool;
   private initialized = false;
@@ -356,103 +429,144 @@ export class PostgresMarketRepository implements IMarketRepository {
     } else if (connectionStringOrConfig) {
       this.pool = new Pool(connectionStringOrConfig);
     } else {
-      this.pool = new Pool({ connectionString: process.env.DATABASE_URL });
+      this.pool = new Pool({
+        host: process.env.SQL_HOST,
+        user: process.env.SQL_USER,
+        password: process.env.SQL_PASSWORD,
+        database: process.env.SQL_DB_NAME,
+      });
     }
+
+    this.pool.on('error', (err) => {
+      console.error('Unexpected error on idle SQL pool client:', err);
+    });
+
+    this.pool.on('connect', (client) => {
+      client
+        .query('SELECT current_user')
+        .then((userRes) => {
+          const user = userRes?.rows?.[0]?.current_user;
+          if (user) {
+            client.query(`SET search_path TO "${user}", public`).catch(() => {});
+          }
+        })
+        .catch(() => {});
+    });
   }
 
   public async initSchema(): Promise<void> {
     if (this.initialized) return;
-    
-    // Safety check: do not run DDL in production during regular runtime
+
+    // Safety check: do not run DDL in production during regular runtime unless RUN_MIGRATIONS is set
     if (process.env.NODE_ENV === 'production' && process.env.RUN_MIGRATIONS !== 'true') {
-      console.log('PostgresMarketRepository: Skipping initSchema in production. Migrations must be run explicitly.');
+      console.log(
+        'PostgresMarketRepository: Skipping initSchema in production. Migrations must be run explicitly.'
+      );
       this.initialized = true;
       return;
     }
 
     const client = await this.pool.connect();
     try {
-      await client.query('BEGIN');
-      await client.query(`
-        CREATE TABLE IF NOT EXISTS completed_sales (
-          sale_id TEXT PRIMARY KEY,
-          dedupe_key TEXT UNIQUE NOT NULL,
-          collection_id TEXT NOT NULL,
-          gift_id TEXT,
-          model_id TEXT,
-          backdrop_id TEXT,
-          currency TEXT NOT NULL,
-          instrument_key TEXT NOT NULL,
-          price NUMERIC NOT NULL,
-          quantity NUMERIC NOT NULL,
-          event_time BIGINT NOT NULL,
-          created_at BIGINT NOT NULL,
-          status TEXT NOT NULL,
-          transaction_hash TEXT,
-          source TEXT NOT NULL DEFAULT 'real',
-          simulation BOOLEAN NOT NULL DEFAULT false,
-          inserted_at BIGINT NOT NULL
-        );
+      try {
+        const userRes = await client.query('SELECT current_user');
+        const user = userRes?.rows?.[0]?.current_user;
 
-        CREATE TABLE IF NOT EXISTS candles (
-          instrument_key TEXT NOT NULL,
-          timeframe TEXT NOT NULL,
-          start_time BIGINT NOT NULL,
-          end_time BIGINT NOT NULL,
-          open NUMERIC NOT NULL,
-          high NUMERIC NOT NULL,
-          low NUMERIC NOT NULL,
-          close NUMERIC NOT NULL,
-          volume NUMERIC NOT NULL,
-          quote_volume NUMERIC NOT NULL,
-          sum_quote NUMERIC NOT NULL,
-          sum_quantity NUMERIC NOT NULL,
-          item_count NUMERIC NOT NULL,
-          trade_count INTEGER NOT NULL,
-          first_sale_id TEXT NOT NULL,
-          last_sale_id TEXT NOT NULL,
-          confirmed BOOLEAN NOT NULL,
-          revision INTEGER NOT NULL,
-          updated_at BIGINT NOT NULL,
-          PRIMARY KEY (instrument_key, timeframe, start_time)
-        );
+        if (user) {
+          try {
+            await client.query(`CREATE SCHEMA IF NOT EXISTS "${user}" AUTHORIZATION "${user}"`);
+          } catch (schemaErr: any) {}
 
-        CREATE TABLE IF NOT EXISTS market_snapshots (
-          id SERIAL PRIMARY KEY,
-          version INTEGER NOT NULL,
-          timestamp BIGINT NOT NULL,
-          snapshot JSONB NOT NULL,
-          is_simulation BOOLEAN NOT NULL DEFAULT false
-        );
+          await client.query(`SET search_path TO "${user}", public`);
+        }
+      } catch (err: any) {}
 
-        CREATE TABLE IF NOT EXISTS outbox_events (
-          id SERIAL PRIMARY KEY,
-          event_id TEXT UNIQUE NOT NULL,
-          event_type TEXT NOT NULL,
-          aggregate_type TEXT NOT NULL,
-          aggregate_id TEXT NOT NULL,
-          instrument_key TEXT NOT NULL,
-          timeframe TEXT,
-          payload JSONB NOT NULL,
-          sequence BIGINT,
-          status TEXT NOT NULL DEFAULT 'pending',
-          attempts INTEGER NOT NULL DEFAULT 0,
-          available_at BIGINT NOT NULL,
-          locked_at BIGINT,
-          published_at BIGINT,
-          last_error TEXT,
-          created_at BIGINT NOT NULL,
-          updated_at BIGINT NOT NULL
-        );
+      try {
+        await client.query('BEGIN');
 
-        CREATE INDEX IF NOT EXISTS idx_outbox_events_pending ON outbox_events (status, available_at) WHERE status IN ('pending', 'processing');
-      `);
-      await client.query('COMMIT');
+        await client.query(`
+          CREATE TABLE IF NOT EXISTS completed_sales (
+            sale_id TEXT PRIMARY KEY,
+            dedupe_key TEXT UNIQUE NOT NULL,
+            collection_id TEXT NOT NULL,
+            gift_id TEXT,
+            model_id TEXT,
+            backdrop_id TEXT,
+            currency TEXT NOT NULL,
+            instrument_key TEXT NOT NULL,
+            price NUMERIC NOT NULL,
+            quantity NUMERIC NOT NULL,
+            event_time BIGINT NOT NULL,
+            created_at BIGINT NOT NULL,
+            status TEXT NOT NULL,
+            transaction_hash TEXT,
+            source TEXT NOT NULL DEFAULT 'real',
+            simulation BOOLEAN NOT NULL DEFAULT false,
+            inserted_at BIGINT NOT NULL
+          );
+
+          CREATE TABLE IF NOT EXISTS candles (
+            instrument_key TEXT NOT NULL,
+            timeframe TEXT NOT NULL,
+            start_time BIGINT NOT NULL,
+            end_time BIGINT NOT NULL,
+            open NUMERIC NOT NULL,
+            high NUMERIC NOT NULL,
+            low NUMERIC NOT NULL,
+            close NUMERIC NOT NULL,
+            volume NUMERIC NOT NULL,
+            quote_volume NUMERIC NOT NULL,
+            sum_quote NUMERIC NOT NULL,
+            sum_quantity NUMERIC NOT NULL,
+            item_count NUMERIC NOT NULL,
+            trade_count INTEGER NOT NULL,
+            first_sale_id TEXT NOT NULL,
+            last_sale_id TEXT NOT NULL,
+            confirmed BOOLEAN NOT NULL,
+            revision INTEGER NOT NULL,
+            updated_at BIGINT NOT NULL,
+            PRIMARY KEY (instrument_key, timeframe, start_time)
+          );
+
+          CREATE TABLE IF NOT EXISTS market_snapshots (
+            id SERIAL PRIMARY KEY,
+            version INTEGER NOT NULL,
+            timestamp BIGINT NOT NULL,
+            snapshot JSONB NOT NULL,
+            is_simulation BOOLEAN NOT NULL DEFAULT false
+          );
+
+          CREATE TABLE IF NOT EXISTS outbox_events (
+            id SERIAL PRIMARY KEY,
+            event_id TEXT UNIQUE NOT NULL,
+            event_type TEXT NOT NULL,
+            aggregate_type TEXT NOT NULL,
+            aggregate_id TEXT NOT NULL,
+            instrument_key TEXT NOT NULL,
+            timeframe TEXT,
+            payload JSONB NOT NULL,
+            sequence BIGINT,
+            status TEXT NOT NULL DEFAULT 'pending',
+            attempts INTEGER NOT NULL DEFAULT 0,
+            available_at BIGINT NOT NULL,
+            locked_at BIGINT,
+            published_at BIGINT,
+            last_error TEXT,
+            created_at BIGINT NOT NULL,
+            updated_at BIGINT NOT NULL
+          );
+
+          CREATE INDEX IF NOT EXISTS idx_outbox_events_pending ON outbox_events (status, available_at) WHERE status IN ('pending', 'processing');
+        `);
+        await client.query('COMMIT');
+      } catch (ddlErr: any) {
+        await client.query('ROLLBACK').catch(() => {});
+        console.warn('PostgresMarketRepository initSchema DDL notice:', ddlErr?.message);
+      }
       this.initialized = true;
-    } catch (err) {
-      await client.query('ROLLBACK');
-      console.error('PostgresMarketRepository initSchema error:', err);
-      throw err;
+    } catch (err: any) {
+      console.warn('PostgresMarketRepository initSchema connection notice:', err?.message || err);
+      this.initialized = true;
     } finally {
       client.release();
     }
@@ -462,7 +576,12 @@ export class PostgresMarketRepository implements IMarketRepository {
     await this.initSchema();
     await this.pool.query(
       `INSERT INTO market_snapshots (version, timestamp, snapshot, is_simulation) VALUES ($1, $2, $3, $4)`,
-      [snapshot.version, snapshot.timestamp, JSON.stringify(snapshot), Boolean(snapshot.isSimulation)]
+      [
+        snapshot.version,
+        snapshot.timestamp,
+        JSON.stringify(snapshot),
+        Boolean(snapshot.isSimulation),
+      ]
     );
   }
 
@@ -485,16 +604,32 @@ export class PostgresMarketRepository implements IMarketRepository {
       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
       ON CONFLICT (dedupe_key) DO NOTHING`,
       [
-        sale.id, sale.id, sale.collectionId, sale.giftId || null, sale.modelId || null,
-        sale.backdropId || null, sale.currency, sale.instrumentKey || `${sale.collectionId}:TON`,
-        sale.price, sale.quantity, sale.eventTime, sale.createdAt || sale.eventTime,
-        sale.status || 'completed', sale.transactionHash || null, sale.isMock ? 'simulation' : 'real',
-        Boolean(sale.isMock), Date.now()
+        sale.id,
+        sale.id,
+        sale.collectionId,
+        sale.giftId || null,
+        sale.modelId || null,
+        sale.backdropId || null,
+        sale.currency,
+        sale.instrumentKey || `${sale.collectionId}:all:all:${sale.currency}`,
+        sale.price,
+        sale.quantity,
+        sale.eventTime,
+        sale.createdAt || sale.eventTime,
+        sale.status || 'completed',
+        sale.transactionHash || null,
+        sale.isMock ? 'simulation' : 'real',
+        Boolean(sale.isMock),
+        Date.now(),
       ]
     );
   }
 
-  public async saveSaleAndCandlesAtomic(sale: GiftSale, candles: GiftCandle[], outboxEvents?: OutboxEvent[]): Promise<{ isNew: boolean }> {
+  public async saveSaleAndCandlesAtomic(
+    sale: GiftSale,
+    candles: GiftCandle[],
+    outboxEvents?: OutboxEvent[]
+  ): Promise<{ isNew: boolean }> {
     await this.initSchema();
     const client = await this.pool.connect();
     try {
@@ -508,11 +643,23 @@ export class PostgresMarketRepository implements IMarketRepository {
         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
         ON CONFLICT (dedupe_key) DO NOTHING`,
         [
-          sale.id, sale.id, sale.collectionId, sale.giftId || null, sale.modelId || null,
-          sale.backdropId || null, sale.currency, sale.instrumentKey || `${sale.collectionId}:TON`,
-          sale.price, sale.quantity, sale.eventTime, sale.createdAt || sale.eventTime,
-          sale.status || 'completed', sale.transactionHash || null, sale.isMock ? 'simulation' : 'real',
-          Boolean(sale.isMock), Date.now()
+          sale.id,
+          sale.id,
+          sale.collectionId,
+          sale.giftId || null,
+          sale.modelId || null,
+          sale.backdropId || null,
+          sale.currency,
+          sale.instrumentKey || `${sale.collectionId}:all:all:${sale.currency}`,
+          sale.price,
+          sale.quantity,
+          sale.eventTime,
+          sale.createdAt || sale.eventTime,
+          sale.status || 'completed',
+          sale.transactionHash || null,
+          sale.isMock ? 'simulation' : 'real',
+          Boolean(sale.isMock),
+          Date.now(),
         ]
       );
 
@@ -545,10 +692,25 @@ export class PostgresMarketRepository implements IMarketRepository {
             revision = EXCLUDED.revision,
             updated_at = EXCLUDED.updated_at`,
           [
-            c.instrumentKey, c.timeframe, c.startTime, c.endTime, c.open, c.high, c.low, c.close,
-            c.volume, c.quoteVolume, c.sumQuote || c.quoteVolume, c.sumQuantity || c.volume,
-            c.itemCount || c.volume, c.tradeCount, c.firstSaleId, c.lastSaleId, c.confirmed,
-            c.revision, c.updatedAt
+            c.instrumentKey,
+            c.timeframe,
+            c.startTime,
+            c.endTime,
+            c.open,
+            c.high,
+            c.low,
+            c.close,
+            c.volume,
+            c.quoteVolume,
+            c.sumQuote || c.quoteVolume,
+            c.sumQuantity || c.volume,
+            c.itemCount || c.volume,
+            c.tradeCount,
+            c.firstSaleId,
+            c.lastSaleId,
+            c.confirmed,
+            c.revision,
+            c.updatedAt,
           ]
         );
       }
@@ -563,11 +725,22 @@ export class PostgresMarketRepository implements IMarketRepository {
             ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
             ON CONFLICT (event_id) DO NOTHING`,
             [
-              evt.eventId, evt.eventType, evt.aggregateType, evt.aggregateId, evt.instrumentKey,
-              evt.timeframe || null, JSON.stringify(evt.payload), evt.sequence || null,
-              evt.status || 'pending', evt.attempts || 0, evt.availableAt || Date.now(),
-              evt.lockedAt || null, evt.publishedAt || null, evt.lastError || null,
-              evt.createdAt || Date.now(), evt.updatedAt || Date.now()
+              evt.eventId,
+              evt.eventType,
+              evt.aggregateType,
+              evt.aggregateId,
+              evt.instrumentKey,
+              evt.timeframe || null,
+              JSON.stringify(evt.payload),
+              evt.sequence || null,
+              evt.status || 'pending',
+              evt.attempts || 0,
+              evt.availableAt || Date.now(),
+              evt.lockedAt || null,
+              evt.publishedAt || null,
+              evt.lastError || null,
+              evt.createdAt || Date.now(),
+              evt.updatedAt || Date.now(),
             ]
           );
         }
@@ -594,16 +767,30 @@ export class PostgresMarketRepository implements IMarketRepository {
       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
       ON CONFLICT (event_id) DO NOTHING`,
       [
-        event.eventId, event.eventType, event.aggregateType, event.aggregateId, event.instrumentKey,
-        event.timeframe || null, JSON.stringify(event.payload), event.sequence || null,
-        event.status || 'pending', event.attempts || 0, event.availableAt || Date.now(),
-        event.lockedAt || null, event.publishedAt || null, event.lastError || null,
-        event.createdAt || Date.now(), event.updatedAt || Date.now()
+        event.eventId,
+        event.eventType,
+        event.aggregateType,
+        event.aggregateId,
+        event.instrumentKey,
+        event.timeframe || null,
+        JSON.stringify(event.payload),
+        event.sequence || null,
+        event.status || 'pending',
+        event.attempts || 0,
+        event.availableAt || Date.now(),
+        event.lockedAt || null,
+        event.publishedAt || null,
+        event.lastError || null,
+        event.createdAt || Date.now(),
+        event.updatedAt || Date.now(),
       ]
     );
   }
 
-  public async fetchPendingOutboxEvents(limit: number = 20, lockLeaseMs: number = 30000): Promise<OutboxEvent[]> {
+  public async fetchPendingOutboxEvents(
+    limit: number = 20,
+    lockLeaseMs: number = 30000
+  ): Promise<OutboxEvent[]> {
     await this.initSchema();
     const client = await this.pool.connect();
     try {
@@ -631,7 +818,7 @@ export class PostgresMarketRepository implements IMarketRepository {
         return [];
       }
 
-      const eventIds = selectRes.rows.map(r => r.eventId);
+      const eventIds = selectRes.rows.map((r) => r.eventId);
       await client.query(
         `UPDATE outbox_events
          SET status = 'processing',
@@ -644,7 +831,7 @@ export class PostgresMarketRepository implements IMarketRepository {
 
       await client.query('COMMIT');
 
-      return selectRes.rows.map(r => ({
+      return selectRes.rows.map((r) => ({
         ...r,
         id: Number(r.id),
         attempts: Number(r.attempts) + 1,
@@ -653,7 +840,7 @@ export class PostgresMarketRepository implements IMarketRepository {
         publishedAt: r.publishedAt ? Number(r.publishedAt) : undefined,
         createdAt: Number(r.createdAt),
         updatedAt: now,
-        sequence: r.sequence ? Number(r.sequence) : undefined
+        sequence: r.sequence ? Number(r.sequence) : undefined,
       }));
     } catch (err) {
       await client.query('ROLLBACK');
@@ -664,7 +851,10 @@ export class PostgresMarketRepository implements IMarketRepository {
     }
   }
 
-  public async markOutboxEventPublished(eventId: string, publishedAt: number = Date.now()): Promise<void> {
+  public async markOutboxEventPublished(
+    eventId: string,
+    publishedAt: number = Date.now()
+  ): Promise<void> {
     await this.initSchema();
     await this.pool.query(
       `UPDATE outbox_events
@@ -676,10 +866,14 @@ export class PostgresMarketRepository implements IMarketRepository {
     );
   }
 
-  public async markOutboxEventFailed(eventId: string, errorMsg: string, nextAvailableAt?: number): Promise<void> {
+  public async markOutboxEventFailed(
+    eventId: string,
+    errorMsg: string,
+    nextAvailableAt?: number
+  ): Promise<void> {
     await this.initSchema();
     const now = Date.now();
-    const availAt = nextAvailableAt || (now + 5000);
+    const availAt = nextAvailableAt || now + 5000;
     await this.pool.query(
       `UPDATE outbox_events
        SET status = CASE WHEN attempts >= 10 THEN 'failed' ELSE 'pending' END,
@@ -714,7 +908,7 @@ export class PostgresMarketRepository implements IMarketRepository {
       publishedAt: r.publishedAt ? Number(r.publishedAt) : undefined,
       createdAt: Number(r.createdAt),
       updatedAt: Number(r.updatedAt),
-      sequence: r.sequence ? Number(r.sequence) : undefined
+      sequence: r.sequence ? Number(r.sequence) : undefined,
     };
   }
 
@@ -727,10 +921,18 @@ export class PostgresMarketRepository implements IMarketRepository {
               transaction_hash as "transactionHash", simulation as "isMock"
        FROM completed_sales ORDER BY event_time ASC`
     );
-    return res.rows.map(r => ({ ...r, eventTime: Number(r.eventTime), createdAt: Number(r.createdAt) }));
+    return res.rows.map((r) => ({
+      ...r,
+      eventTime: Number(r.eventTime),
+      createdAt: Number(r.createdAt),
+    }));
   }
 
-  public async saveCandles(instrumentKey: string, timeframe: Timeframe, candles: GiftCandle[]): Promise<void> {
+  public async saveCandles(
+    instrumentKey: string,
+    timeframe: Timeframe,
+    candles: GiftCandle[]
+  ): Promise<void> {
     await this.initSchema();
     const client = await this.pool.connect();
     try {
@@ -759,10 +961,25 @@ export class PostgresMarketRepository implements IMarketRepository {
             revision = EXCLUDED.revision,
             updated_at = EXCLUDED.updated_at`,
           [
-            instrumentKey, timeframe, c.startTime, c.endTime, c.open, c.high, c.low, c.close,
-            c.volume, c.quoteVolume, c.sumQuote || c.quoteVolume, c.sumQuantity || c.volume,
-            c.itemCount || c.volume, c.tradeCount, c.firstSaleId, c.lastSaleId, c.confirmed,
-            c.revision, c.updatedAt
+            instrumentKey,
+            timeframe,
+            c.startTime,
+            c.endTime,
+            c.open,
+            c.high,
+            c.low,
+            c.close,
+            c.volume,
+            c.quoteVolume,
+            c.sumQuote || c.quoteVolume,
+            c.sumQuantity || c.volume,
+            c.itemCount || c.volume,
+            c.tradeCount,
+            c.firstSaleId,
+            c.lastSaleId,
+            c.confirmed,
+            c.revision,
+            c.updatedAt,
           ]
         );
       }
@@ -807,13 +1024,13 @@ export class PostgresMarketRepository implements IMarketRepository {
     }
 
     const res = await this.pool.query(query, params);
-    return res.rows.map(r => ({
+    return res.rows.map((r) => ({
       ...r,
       startTime: Number(r.startTime),
       endTime: Number(r.endTime),
       tradeCount: Number(r.tradeCount),
       revision: Number(r.revision),
-      updatedAt: Number(r.updatedAt)
+      updatedAt: Number(r.updatedAt),
     }));
   }
 
@@ -832,16 +1049,19 @@ export class PostgresMarketRepository implements IMarketRepository {
  */
 export function resolveMarketRepository(): IMarketRepository {
   const isProduction = process.env.NODE_ENV === 'production';
-  const hasDatabaseUrl = Boolean(process.env.DATABASE_URL);
+  const hasDatabaseUrl = Boolean(process.env.DATABASE_URL || process.env.SQL_HOST);
   const storageMode = process.env.STORAGE_MODE;
   const allowFileInProd = process.env.ALLOW_FILE_STORAGE_IN_PRODUCTION === 'true';
 
   if (isProduction) {
     if (allowFileInProd) {
-      console.warn('CRITICAL WARNING: ALLOW_FILE_STORAGE_IN_PRODUCTION=true is set but IGNORED in production mode. File storage is strictly forbidden in production.');
+      console.warn(
+        'CRITICAL WARNING: ALLOW_FILE_STORAGE_IN_PRODUCTION=true is set but IGNORED in production mode. File storage is strictly forbidden in production.'
+      );
     }
     if (!hasDatabaseUrl) {
-      const errMsg = 'CRITICAL CONFIGURATION ERROR: Production mode requires DATABASE_URL for Postgres persistence. File storage is STRICTLY BANNED in production environment.';
+      const errMsg =
+        'CRITICAL CONFIGURATION ERROR: Production mode requires DATABASE_URL for Postgres persistence. File storage is STRICTLY BANNED in production environment.';
       console.error(errMsg);
       throw new Error(errMsg);
     }
@@ -863,4 +1083,3 @@ export function resolveMarketRepository(): IMarketRepository {
 
   return new FilePersistentMarketRepository();
 }
-

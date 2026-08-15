@@ -70,6 +70,7 @@ describe('Production Persistence & Safety Tests', () => {
     try {
       process.env.NODE_ENV = 'production';
       delete process.env.DATABASE_URL;
+      delete process.env.SQL_HOST;
       delete process.env.ALLOW_FILE_STORAGE_IN_PRODUCTION;
 
       expect(() => resolveMarketRepository()).toThrow(
@@ -91,6 +92,7 @@ describe('Production Persistence & Safety Tests', () => {
     try {
       process.env.NODE_ENV = 'production';
       delete process.env.DATABASE_URL;
+      delete process.env.SQL_HOST;
       process.env.STORAGE_MODE = 'file';
       process.env.ALLOW_FILE_STORAGE_IN_PRODUCTION = 'true';
 

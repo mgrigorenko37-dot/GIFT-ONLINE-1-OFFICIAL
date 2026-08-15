@@ -2,11 +2,14 @@ const fs = require('fs');
 let code = fs.readFileSync('src/screens/GXTerminal/GXTerminalScreen.tsx', 'utf8');
 
 // Add missing state
-code = code.replace(/const \[activeGiftId, setActiveGiftId\] = useState<string>\(initialGiftId\);/, "const [activeGiftId, setActiveGiftId] = useState<string>(initialGiftId);\n  const [mktPanelOpen, setMktPanelOpen] = useState(false);\n  const [searchQuery, setSearchQuery] = useState('');\n  const filteredGifts = gifts.filter(g => g.name.toLowerCase().includes(searchQuery.toLowerCase()));");
+code = code.replace(
+  /const \[activeGiftId, setActiveGiftId\] = useState<string>\(initialGiftId\);/,
+  "const [activeGiftId, setActiveGiftId] = useState<string>(initialGiftId);\n  const [mktPanelOpen, setMktPanelOpen] = useState(false);\n  const [searchQuery, setSearchQuery] = useState('');\n  const filteredGifts = gifts.filter(g => g.name.toLowerCase().includes(searchQuery.toLowerCase()));"
+);
 
 // Find start and end of main
 const mainStart = code.indexOf("<main className='gx-main'>");
-const mainEnd = code.indexOf("</main>") + 7;
+const mainEnd = code.indexOf('</main>') + 7;
 
 if (mainStart === -1 || mainEnd === -1) {
   console.log('Could not find main tag');

@@ -9,14 +9,13 @@ import {
 } from 'lightweight-charts';
 import { io } from 'socket.io-client';
 import { useTelegramWebApp } from '../../hooks/useTelegramWebApp';
-import { formatGX} from '../../data/gifts';
+import { formatGX } from '../../data/gifts';
 import { useGifts } from '../../context/GiftsContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { Timeframe, Currency, buildInstrumentKey, msToSeconds } from '../../types/market';
 import { fetchMarketCandles } from '../../lib/marketApi';
 import { processCandlesForChart } from '../../lib/chartHistory';
 import { useMarketSocket } from '../../hooks/useMarketSocket';
-
 
 type OpenOrder = {
   id: string;
@@ -41,11 +40,37 @@ type Trade = {
 
 const balance = 12480.5;
 
-function GiftArtwork({ className, small, emoji }: { className: string; small?: boolean; emoji?: string }) {
+function GiftArtwork({
+  className,
+  small,
+  emoji,
+}: {
+  className: string;
+  small?: boolean;
+  emoji?: string;
+}) {
   if (emoji) {
     return (
-      <div className={`gx-gift-artwork ${className} ${small ? 'is-small' : ''}`} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: small ? '24px' : '48px', background: 'rgba(0,0,0,0.2)', borderRadius: '12px' }}>
-        <img src={`https://emojik.vercel.app/s/${emoji}`} alt="emoji" style={{ width: small ? '24px' : '48px', height: small ? '24px' : '48px' }} onError={(e) => { e.currentTarget.style.display = 'none'; e.currentTarget.parentElement!.innerHTML = emoji; }} />
+      <div
+        className={`gx-gift-artwork ${className} ${small ? 'is-small' : ''}`}
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          fontSize: small ? '24px' : '48px',
+          background: 'rgba(0,0,0,0.2)',
+          borderRadius: '12px',
+        }}
+      >
+        <img
+          src={`https://emojik.vercel.app/s/${emoji}`}
+          alt='emoji'
+          style={{ width: small ? '24px' : '48px', height: small ? '24px' : '48px' }}
+          onError={(e) => {
+            e.currentTarget.style.display = 'none';
+            e.currentTarget.parentElement!.innerHTML = emoji;
+          }}
+        />
       </div>
     );
   }
@@ -101,15 +126,20 @@ const GXTerminalScreen = () => {
     timeframe,
     enabled: true,
   });
-  const filteredGifts = gifts.filter(g => g.name.toLowerCase().includes(searchQuery.toLowerCase()));
+  const filteredGifts = gifts.filter((g) =>
+    g.name.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
   useEffect(() => {
     if (expandedGiftId) {
       setVariantLoading(true);
       fetch(`/api/variants/${expandedGiftId}`)
-        .then(res => res.json())
-        .then(data => {
-          setVariants(data);
+        .then((res) => {
+          if (!res.ok || !res.headers.get('content-type')?.includes('application/json')) return [];
+          return res.json();
+        })
+        .then((data) => {
+          setVariants(Array.isArray(data) ? data : []);
           setVariantLoading(false);
         })
         .catch(() => setVariantLoading(false));
@@ -124,12 +154,24 @@ const GXTerminalScreen = () => {
   const [price, setPrice] = useState((activeGift?.floor || 0).toFixed(2));
   const [toast, setToast] = useState('');
 
-  const [activityTab, setActivityTab] = useState<'open' | 'history' | 'trades'>('open');
+  const [activityTab, setActivityTab] = useState<'positions' | 'open' | 'history'>('positions');
 
   const [orderBook, setOrderBook] = useState<{ bids: any[]; asks: any[] }>({ bids: [], asks: [] });
   const [recentTrades, setRecentTrades] = useState<Trade[]>([]);
+  const curPrice = recentTrades[0]?.price || activeGift?.floor || 0;
   const [userOrders, setUserOrders] = useState<OpenOrder[]>([]);
   const [balance, setBalance] = useState(12480.5);
+  const [positions, setPositions] = useState<any[]>([]);
+  const [tradeHistory, setTradeHistory] = useState<any[]>([]);
+  const [confirmClose, setConfirmClose] = useState<{
+    show: boolean;
+    side: 'buy' | 'sell';
+    qty: number;
+    price: number;
+    isMarket: boolean;
+    reduceOnly: boolean;
+  } | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const socketRef = useRef<any>(null);
 
@@ -146,15 +188,76 @@ const GXTerminalScreen = () => {
     socket.on('recentTrades', (trades: any) => setRecentTrades(trades));
     socket.on('userOrders', (orders: any) => setUserOrders(orders));
     socket.on('balance', (bal: number) => setBalance(bal));
+    socket.on('balanceUpdated', (bal: number) => setBalance(bal));
+    socket.on('positions', (pos: any[]) => setPositions(pos));
+    socket.on('orderUpdated', (engineOrder: any) => {
+      setUserOrders((prev) => {
+        const existing = prev.find((o) => o.id === engineOrder.orderId);
+        const mapped = {
+          id: engineOrder.orderId,
+          side: engineOrder.side === 'Buy' ? 'buy' : 'sell',
+          type: engineOrder.orderType,
+          giftName: engineOrder.instrumentKey,
+          amount: engineOrder.qty,
+          filled: engineOrder.executedQty,
+          price: engineOrder.price,
+          status: engineOrder.status.toLowerCase(),
+          time: engineOrder.createdAt,
+          reduceOnly: engineOrder.reduceOnly,
+          positionEffect: engineOrder.positionEffect,
+          remainingQty: engineOrder.remainingQty,
+          avgFillPrice: engineOrder.avgFillPrice,
+          realizedPnl: engineOrder.realizedPnl,
+        } as any;
+
+        if (
+          mapped.status === 'filled' ||
+          mapped.status === 'cancelled' ||
+          mapped.status === 'rejected'
+        ) {
+          return prev.filter((o) => o.id !== mapped.id);
+        }
+        if (existing) {
+          return prev.map((o) => (o.id === mapped.id ? mapped : o));
+        }
+        return [mapped, ...prev];
+      });
+    });
+    socket.on('positionUpdated', (position: any) => {
+      setPositions((prev) => {
+        if (position.status === 'Closed') {
+          return prev.filter((p) => p.positionId !== position.positionId);
+        }
+        const idx = prev.findIndex((p) => p.positionId === position.positionId);
+        if (idx >= 0) {
+          const newPos = [...prev];
+          newPos[idx] = position;
+          return newPos;
+        }
+        return [...prev, position];
+      });
+    });
+    socket.on('tradeHistory', (trades: any[]) => {
+      setTradeHistory(trades.reverse()); // latest first
+    });
+    socket.on('historyUpdated', (trade: any) => {
+      setTradeHistory((prev) => {
+        if (prev.some((t) => t.tradeId === trade.tradeId)) return prev;
+        return [trade, ...prev];
+      });
+    });
     socket.on('trade', (trade: Trade) => {
       setRecentTrades((prev) => [trade, ...prev].slice(0, 50));
     });
 
-    socket.emit('subscribe', (activeGift?.id || ''));
+    socket.emit('subscribe', activeGift?.id || '');
     socket.emit('market_subscribe', { channel: 'gift_market', instrumentKey: activeInstrumentKey });
 
     return () => {
-      socket.emit('market_unsubscribe', { channel: 'gift_market', instrumentKey: activeInstrumentKey });
+      socket.emit('market_unsubscribe', {
+        channel: 'gift_market',
+        instrumentKey: activeInstrumentKey,
+      });
       socket.disconnect();
     };
   }, [activeGift?.id, activeInstrumentKey]);
@@ -286,7 +389,26 @@ const GXTerminalScreen = () => {
     }
   }, [socketRecentSales, activeGift]);
 
-  const submitOrder = () => {
+  // Margin calculations
+  const usedMargin = positions
+    .filter((p) => p.status === 'Open')
+    .reduce((acc, p) => acc + p.qty * p.avgEntryPrice, 0);
+  const totalUnrealizedPnl = positions
+    .filter((p) => p.status === 'Open')
+    .reduce((acc, p) => {
+      const mark = p.instrumentKey === activeGift?.id ? curPrice : p.markPrice || p.avgEntryPrice;
+      const pnlMultiplier = p.side === 'Long' ? 1 : -1;
+      return acc + (mark - p.avgEntryPrice) * p.qty * pnlMultiplier;
+    }, 0);
+  const equity = balance + totalUnrealizedPnl;
+  const availableBalance = equity - usedMargin;
+
+  const activePosition = positions.find(
+    (p) => p.instrumentKey === (activeGift?.id || '') && p.status === 'Open'
+  );
+
+  const submitOrder = (isClose: boolean = false) => {
+    if (isSubmitting) return;
     const numericAmount = Number(amount);
     const numericPrice = orderType === 'Market' ? 0 : Number(price);
 
@@ -302,17 +424,54 @@ const GXTerminalScreen = () => {
       return;
     }
 
+    // Determine the actual side and reduceOnly
+    let actualSide = side;
+    let reduceOnly = false;
+
+    if (activePosition) {
+      if (isClose) {
+        actualSide = activePosition.side === 'Long' ? 'sell' : 'buy';
+        reduceOnly = true;
+      } else {
+        // Increasing position
+        actualSide = activePosition.side === 'Long' ? 'buy' : 'sell';
+      }
+    } else {
+      // Opening position
+      actualSide = side;
+    }
+
+    if (isClose && !confirmClose) {
+      setConfirmClose({
+        show: true,
+        side: actualSide,
+        qty: numericAmount,
+        price: numericPrice,
+        isMarket: orderType === 'Market',
+        reduceOnly,
+      });
+      return;
+    }
+
+    setIsSubmitting(true);
     if (socketRef.current) {
       socketRef.current.emit('placeOrder', {
-        giftName: (activeGift?.id || ''),
-        side,
+        giftName: activeGift?.id || '',
+        side: confirmClose ? confirmClose.side : actualSide,
         type: orderType.toLowerCase(),
-        price: numericPrice,
-        amount: numericAmount,
+        price: confirmClose ? confirmClose.price : numericPrice,
+        amount: confirmClose ? confirmClose.qty : numericAmount,
+        reduceOnly: confirmClose ? confirmClose.reduceOnly : reduceOnly,
       });
-      setToast(`${side.toUpperCase()} ${orderType} order sent`);
-      window.setTimeout(() => setToast(''), 2800);
+      setToast('Order sent');
+      window.setTimeout(() => {
+        setToast('');
+        setIsSubmitting(false);
+      }, 1500);
       setAmount('');
+      setConfirmClose(null);
+    } else {
+      setIsSubmitting(false);
     }
   };
 
@@ -358,7 +517,9 @@ const GXTerminalScreen = () => {
             <span>{t('nav.activity', 'Activity')}</span>
           </button>
         </nav>
-        <div className='gx-workspace-label gx-workspace-label-space'>{t('nav.account', 'Account')}</div>
+        <div className='gx-workspace-label gx-workspace-label-space'>
+          {t('nav.account', 'Account')}
+        </div>
         <nav className='gx-nav' aria-label='Account navigation'>
           <button className='gx-nav-item' type='button' onClick={() => navigate('/profile')}>
             <i className='material-icons'>person_outline</i>
@@ -397,7 +558,6 @@ const GXTerminalScreen = () => {
         </div>
       </aside>
 
-      
       <main className='gx-main trade-wrapper'>
         <style>{`
           .trade-wrapper {
@@ -633,13 +793,19 @@ const GXTerminalScreen = () => {
           }
         `}</style>
 
-        <div className="topbar">
-          <div className="brand" onClick={() => navigate('/market')}>
-            <div className="crumbs">{t('terminal.markets', 'Markets')} <span>›</span> <b>{(activeGift?.name || '').toUpperCase().replace(/[^A-Z0-9]/g, '_')} {selectedVariant ? ` / ${selectedVariant.model_name.toUpperCase()}` : ''}</b></div>
+        <div className='topbar'>
+          <div className='brand' onClick={() => navigate('/market')}>
+            <div className='crumbs'>
+              {t('terminal.markets', 'Markets')} <span>›</span>{' '}
+              <b>
+                {(activeGift?.name || '').toUpperCase().replace(/[^A-Z0-9]/g, '_')}{' '}
+                {selectedVariant ? ` / ${selectedVariant.model_name.toUpperCase()}` : ''}
+              </b>
+            </div>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <button
-              type="button"
+              type='button'
               onClick={openLangModal}
               style={{
                 display: 'flex',
@@ -657,141 +823,204 @@ const GXTerminalScreen = () => {
             >
               <span>{currentLang.flag}</span>
               <span>{currentLang.code.toUpperCase()}</span>
-              <i className="material-icons" style={{ fontSize: '14px', color: '#8b76ff' }}>arrow_drop_down</i>
+              <i className='material-icons' style={{ fontSize: '14px', color: '#8b76ff' }}>
+                arrow_drop_down
+              </i>
             </button>
-            <div className="live-pill"><span className="dot"></span> {t('terminal.live', 'Live')}</div>
+            <div className='live-pill'>
+              <span className='dot'></span> {t('terminal.live', 'Live')}
+            </div>
           </div>
         </div>
 
-
-        <div className={`mkt-strip ${mktPanelOpen ? 'open' : ''}`} id="mktStrip">
-          <div className="mkt-current" onClick={() => setMktPanelOpen(!mktPanelOpen)}>
-            <span className="pn">{(activeGift?.name || '').toUpperCase().replace(/[^A-Z0-9]/g, '_')}_GIFT</span>
-            <span className="pp mono">{recentTrades.length > 0 ? formatGX(recentTrades[0].price) : formatGX((activeGift?.floor || 0))}</span>
-            <span className={`pc ${(activeGift?.change || 0) >= 0 ? 'chg-up' : 'chg-down'}`}>
-              {(activeGift?.change || 0) >= 0 ? '+' : ''}{(activeGift?.change || 0)}%
+        <div className={`mkt-strip ${mktPanelOpen ? 'open' : ''}`} id='mktStrip'>
+          <div className='mkt-current' onClick={() => setMktPanelOpen(!mktPanelOpen)}>
+            <span className='pn'>
+              {(activeGift?.name || '').toUpperCase().replace(/[^A-Z0-9]/g, '_')}_GIFT
             </span>
-            <span className="chev">▾</span>
+            <span className='pp mono'>
+              {recentTrades.length > 0
+                ? formatGX(recentTrades[0].price)
+                : formatGX(activeGift?.floor || 0)}
+            </span>
+            <span className={`pc ${(activeGift?.change || 0) >= 0 ? 'chg-up' : 'chg-down'}`}>
+              {(activeGift?.change || 0) >= 0 ? '+' : ''}
+              {activeGift?.change || 0}%
+            </span>
+            <span className='chev'>▾</span>
           </div>
 
-          <div className="mkt-overlay" onClick={() => setMktPanelOpen(false)}></div>
+          <div className='mkt-overlay' onClick={() => setMktPanelOpen(false)}></div>
 
-          <div className="mkt-panel">
-            <div className="mkt-search">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <circle cx="11" cy="11" r="7"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+          <div className='mkt-panel'>
+            <div className='mkt-search'>
+              <svg
+                width='14'
+                height='14'
+                viewBox='0 0 24 24'
+                fill='none'
+                stroke='currentColor'
+                strokeWidth='2'
+              >
+                <circle cx='11' cy='11' r='7'></circle>
+                <line x1='21' y1='21' x2='16.65' y2='16.65'></line>
               </svg>
               <input
-                type="text"
-                placeholder="Поиск по названию…"
-                autoComplete="off"
+                type='text'
+                placeholder='Поиск по названию…'
+                autoComplete='off'
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 onClick={(e) => e.stopPropagation()}
               />
             </div>
-            <div className="mkt-list">
-              {filteredGifts.length > 0 ? filteredGifts.map((gift) => (
-                <Fragment key={gift.id}>
-                  <div
-                    className={`mkt-row ${gift.id === (activeGift?.id || '') ? 'active' : ''}`}
-                    onClick={() => {
-                      if (expandedGiftId === gift.id) {
-                        setExpandedGiftId(null);
-                      } else {
-                        setExpandedGiftId(gift.id);
-                        setGiftId(gift.id);
-                        setSearchParams({ gift: gift.id });
-                        setSelectedVariant(null);
-                      }
-                    }}
-                  >
-                    <div className="left" style={{flexDirection: 'row', alignItems: 'center', gap: '8px'}}>
-  <GiftArtwork className={gift.className || ''} small emoji={gift.emoji} />
-  <div style={{display: 'flex', flexDirection: 'column'}}>
-    <span className="n">{gift.name.toUpperCase().replace(/[^A-Z0-9]/g, '_')}_GIFT</span>
-    <span className="vol">Vol {gift.volume}</span>
-  </div>
-</div>
-                    <div className="right">
-                      <span className="p">{formatGX(gift.floor)}</span>
-                      <span className={`c ${gift.change >= 0 ? 'up' : 'down'}`}>{gift.change >= 0 ? '+' : ''}{gift.change}%</span>
+            <div className='mkt-list'>
+              {filteredGifts.length > 0 ? (
+                filteredGifts.map((gift) => (
+                  <Fragment key={gift.id}>
+                    <div
+                      className={`mkt-row ${gift.id === (activeGift?.id || '') ? 'active' : ''}`}
+                      onClick={() => {
+                        if (expandedGiftId === gift.id) {
+                          setExpandedGiftId(null);
+                        } else {
+                          setExpandedGiftId(gift.id);
+                          setGiftId(gift.id);
+                          setSearchParams({ gift: gift.id });
+                          setSelectedVariant(null);
+                        }
+                      }}
+                    >
+                      <div
+                        className='left'
+                        style={{ flexDirection: 'row', alignItems: 'center', gap: '8px' }}
+                      >
+                        <GiftArtwork className={gift.className || ''} small emoji={gift.emoji} />
+                        <div style={{ display: 'flex', flexDirection: 'column' }}>
+                          <span className='n'>
+                            {gift.name.toUpperCase().replace(/[^A-Z0-9]/g, '_')}_GIFT
+                          </span>
+                          <span className='vol'>Vol {gift.volume}</span>
+                        </div>
+                      </div>
+                      <div className='right'>
+                        <span className='p'>{formatGX(gift.floor)}</span>
+                        <span className={`c ${gift.change >= 0 ? 'up' : 'down'}`}>
+                          {gift.change >= 0 ? '+' : ''}
+                          {gift.change}%
+                        </span>
+                      </div>
                     </div>
-                  </div>
-                  {expandedGiftId === gift.id && (
-                    <div className="variants-list">
-                      {variantLoading ? (
-                        <div style={{fontSize: 10, color: 'var(--muted)', padding: 4}}>Загрузка дизайнов...</div>
-                      ) : variants.length > 0 ? (
-                        variants.map(v => (
-                          <div 
-                            key={v.id} 
-                            className={`variant-card ${selectedVariant?.id === v.id ? 'active' : ''}`}
-                            onClick={() => {
-                              setSelectedVariant(v);
-                              // We could update the chart or terminal to trade this specific variant
-                              setGiftId(v.id);
-                              setSearchParams({ gift: v.id });
-                              setMktPanelOpen(false);
-                            }}
-                          >
-                            <div className="variant-left">
-                              {v.image_url ? (
-                                <img src={v.image_url} alt="" className="variant-img" />
-                              ) : (
-                                <div className="variant-img" style={{background: v.backdrop_color}} />
-                              )}
-                              <div className="variant-info">
-                                <span className="variant-name">{v.model_name} {v.symbol_name !== 'None' ? `+ ${v.symbol_name}` : ''}</span>
-                                <span className="variant-rarity">{v.rarity_percentage}% Rarity</span>
+                    {expandedGiftId === gift.id && (
+                      <div className='variants-list'>
+                        {variantLoading ? (
+                          <div style={{ fontSize: 10, color: 'var(--muted)', padding: 4 }}>
+                            Загрузка дизайнов...
+                          </div>
+                        ) : variants.length > 0 ? (
+                          variants.map((v) => (
+                            <div
+                              key={v.id}
+                              className={`variant-card ${selectedVariant?.id === v.id ? 'active' : ''}`}
+                              onClick={() => {
+                                setSelectedVariant(v);
+                                // We could update the chart or terminal to trade this specific variant
+                                setGiftId(v.id);
+                                setSearchParams({ gift: v.id });
+                                setMktPanelOpen(false);
+                              }}
+                            >
+                              <div className='variant-left'>
+                                {v.image_url ? (
+                                  <img src={v.image_url} alt='' className='variant-img' />
+                                ) : (
+                                  <div
+                                    className='variant-img'
+                                    style={{ background: v.backdrop_color }}
+                                  />
+                                )}
+                                <div className='variant-info'>
+                                  <span className='variant-name'>
+                                    {v.model_name}{' '}
+                                    {v.symbol_name !== 'None' ? `+ ${v.symbol_name}` : ''}
+                                  </span>
+                                  <span className='variant-rarity'>
+                                    {v.rarity_percentage}% Rarity
+                                  </span>
+                                </div>
+                              </div>
+                              <div className='variant-right'>
+                                <span className='variant-price'>
+                                  {formatGX(v.current_price_gx)}
+                                </span>
                               </div>
                             </div>
-                            <div className="variant-right">
-                              <span className="variant-price">{formatGX(v.current_price_gx)}</span>
-                            </div>
+                          ))
+                        ) : (
+                          <div style={{ fontSize: 10, color: 'var(--muted)', padding: 4 }}>
+                            Нет уникальных дизайнов
                           </div>
-                        ))
-                      ) : (
-                        <div style={{fontSize: 10, color: 'var(--muted)', padding: 4}}>Нет уникальных дизайнов</div>
-                      )}
-                    </div>
-                  )}
-                </Fragment>
-              )) : (
-                <div className="mkt-empty">Ничего не найдено</div>
+                        )}
+                      </div>
+                    )}
+                  </Fragment>
+                ))
+              ) : (
+                <div className='mkt-empty'>Ничего не найдено</div>
               )}
             </div>
           </div>
         </div>
 
-        <div className="layout">
-          <div className="col">
-            <div className="price-head">
-              <div className="asset-price mono">{recentTrades.length > 0 ? formatGX(recentTrades[0].price) : formatGX((selectedVariant ? selectedVariant.current_price_gx : (activeGift?.floor || 0)))}</div>
-              <span className={`chg-tag ${(activeGift?.change || 0) >= 0 ? 'chg-up' : 'chg-down'}`}>{(activeGift?.change || 0) >= 0 ? '+' : ''}{(activeGift?.change || 0)}%</span>
-              <div className="stats-inline">
-                <span className="stat-i">Макс<b>{((activeGift?.floor || 0) * 1.05).toFixed(2)}</b></span>
-                <span className="stat-i">Мин<b>{((activeGift?.floor || 0) * 0.95).toFixed(2)}</b></span>
-                <span className="stat-i">Vol<b>{(activeGift?.volume || '')}</b></span>
+        <div className='layout'>
+          <div className='col'>
+            <div className='price-head'>
+              <div className='asset-price mono'>
+                {recentTrades.length > 0
+                  ? formatGX(recentTrades[0].price)
+                  : formatGX(
+                      selectedVariant ? selectedVariant.current_price_gx : activeGift?.floor || 0
+                    )}
+              </div>
+              <span className={`chg-tag ${(activeGift?.change || 0) >= 0 ? 'chg-up' : 'chg-down'}`}>
+                {(activeGift?.change || 0) >= 0 ? '+' : ''}
+                {activeGift?.change || 0}%
+              </span>
+              <div className='stats-inline'>
+                <span className='stat-i'>
+                  Макс<b>{((activeGift?.floor || 0) * 1.05).toFixed(2)}</b>
+                </span>
+                <span className='stat-i'>
+                  Мин<b>{((activeGift?.floor || 0) * 0.95).toFixed(2)}</b>
+                </span>
+                <span className='stat-i'>
+                  Vol<b>{activeGift?.volume || ''}</b>
+                </span>
               </div>
             </div>
 
-            <div className="chart-toolbar" id="tfRow" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div
+              className='chart-toolbar'
+              id='tfRow'
+              style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+            >
               <div style={{ display: 'flex', gap: '3px' }}>
-                {(['1s', '1m', '5m', '15m', '1h', '4h', '1d', '1w', '1M'] as Timeframe[]).map((tf) => (
-                  <button
-                    key={tf}
-                    type="button"
-                    className={`tf-btn ${timeframe === tf ? 'active' : ''}`}
-                    onClick={() => setTimeframe(tf)}
-                  >
-                    {tf}
-                  </button>
-                ))}
+                {(['1s', '1m', '5m', '15m', '1h', '4h', '1d', '1w', '1M'] as Timeframe[]).map(
+                  (tf) => (
+                    <button
+                      key={tf}
+                      type='button'
+                      className={`tf-btn ${timeframe === tf ? 'active' : ''}`}
+                      onClick={() => setTimeframe(tf)}
+                    >
+                      {tf}
+                    </button>
+                  )
+                )}
               </div>
               <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
                 <button
-                  type="button"
+                  type='button'
                   className={`tf-btn ${selectedCurrency === 'TON' ? 'active' : ''}`}
                   onClick={() => setSelectedCurrency('TON')}
                   style={{ padding: '2px 8px', fontSize: '11px', fontWeight: 600 }}
@@ -799,7 +1028,7 @@ const GXTerminalScreen = () => {
                   TON
                 </button>
                 <button
-                  type="button"
+                  type='button'
                   className={`tf-btn ${selectedCurrency === 'STARS' ? 'active' : ''}`}
                   onClick={() => setSelectedCurrency('STARS')}
                   style={{ padding: '2px 8px', fontSize: '11px', fontWeight: 600 }}
@@ -834,7 +1063,7 @@ const GXTerminalScreen = () => {
               </div>
             </div>
 
-            <div className="chart-wrap">
+            <div className='chart-wrap'>
               <div
                 className='gx-chart'
                 ref={chartContainerRef}
@@ -842,53 +1071,59 @@ const GXTerminalScreen = () => {
               ></div>
 
               {chartLoading && (
-                <div style={{
-                  position: 'absolute',
-                  inset: 0,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  background: 'rgba(11, 13, 18, 0.75)',
-                  backdropFilter: 'blur(2px)',
-                  color: '#E9ECF1',
-                  fontSize: '13px',
-                  zIndex: 10,
-                }}>
+                <div
+                  style={{
+                    position: 'absolute',
+                    inset: 0,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    background: 'rgba(11, 13, 18, 0.75)',
+                    backdropFilter: 'blur(2px)',
+                    color: '#E9ECF1',
+                    fontSize: '13px',
+                    zIndex: 10,
+                  }}
+                >
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <span style={{
-                      display: 'inline-block',
-                      width: '14px',
-                      height: '14px',
-                      border: '2px solid rgba(255,255,255,0.2)',
-                      borderTopColor: '#F2B84B',
-                      borderRadius: '50%',
-                      animation: 'spin 0.8s linear infinite'
-                    }} />
+                    <span
+                      style={{
+                        display: 'inline-block',
+                        width: '14px',
+                        height: '14px',
+                        border: '2px solid rgba(255,255,255,0.2)',
+                        borderTopColor: '#F2B84B',
+                        borderRadius: '50%',
+                        animation: 'spin 0.8s linear infinite',
+                      }}
+                    />
                     <span>Загрузка истории свечей ({timeframe})...</span>
                   </div>
                 </div>
               )}
 
               {!chartLoading && chartError && (
-                <div style={{
-                  position: 'absolute',
-                  inset: 0,
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  background: 'rgba(11, 13, 18, 0.85)',
-                  color: '#FF5C7A',
-                  fontSize: '13px',
-                  gap: '8px',
-                  zIndex: 10,
-                  padding: '16px',
-                  textAlign: 'center'
-                }}>
+                <div
+                  style={{
+                    position: 'absolute',
+                    inset: 0,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    background: 'rgba(11, 13, 18, 0.85)',
+                    color: '#FF5C7A',
+                    fontSize: '13px',
+                    gap: '8px',
+                    zIndex: 10,
+                    padding: '16px',
+                    textAlign: 'center',
+                  }}
+                >
                   <span>Ошибка загрузки графика: {chartError}</span>
                   <button
-                    type="button"
-                    onClick={() => setRetryCount(r => r + 1)}
+                    type='button'
+                    onClick={() => setRetryCount((r) => r + 1)}
                     style={{
                       background: 'rgba(255,92,122,0.15)',
                       border: '1px solid #FF5C7A',
@@ -896,7 +1131,7 @@ const GXTerminalScreen = () => {
                       padding: '4px 12px',
                       borderRadius: '4px',
                       cursor: 'pointer',
-                      fontSize: '12px'
+                      fontSize: '12px',
                     }}
                   >
                     Повторить
@@ -905,72 +1140,249 @@ const GXTerminalScreen = () => {
               )}
 
               {!chartLoading && !chartError && isChartEmpty && (
-                <div style={{
-                  position: 'absolute',
-                  inset: 0,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  background: 'rgba(11, 13, 18, 0.4)',
-                  color: '#7A8194',
-                  fontSize: '13px',
-                  zIndex: 5,
-                  pointerEvents: 'none',
-                }}>
+                <div
+                  style={{
+                    position: 'absolute',
+                    inset: 0,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    background: 'rgba(11, 13, 18, 0.4)',
+                    color: '#7A8194',
+                    fontSize: '13px',
+                    zIndex: 5,
+                    pointerEvents: 'none',
+                  }}
+                >
                   <span>Нет сделок за выбранный период ({timeframe})</span>
                 </div>
               )}
             </div>
 
-            <div className="orders-tabs">
-              <div className={`ot ${activityTab === 'open' ? 'active' : ''}`} onClick={() => setActivityTab('open')}>Открытые ордера ({userOrders.length})</div>
-              <div className={`ot ${activityTab === 'history' ? 'active' : ''}`} onClick={() => setActivityTab('history')}>История</div>
+            <div className='orders-tabs'>
+              <div
+                className={`ot ${activityTab === 'positions' ? 'active' : ''}`}
+                onClick={() => setActivityTab('positions')}
+              >
+                Позиции ({positions.filter((p) => p.status === 'Open').length})
+              </div>
+              <div
+                className={`ot ${activityTab === 'open' ? 'active' : ''}`}
+                onClick={() => setActivityTab('open')}
+              >
+                Открытые ордера ({userOrders.length})
+              </div>
+              <div
+                className={`ot ${activityTab === 'history' ? 'active' : ''}`}
+                onClick={() => setActivityTab('history')}
+              >
+                История
+              </div>
             </div>
-            <div className="orders-empty">
-              {activityTab === 'history' ? 'История пуста' : userOrders.length === 0 ? 'Нет открытых ордеров' : userOrders.map(o => (
-                <div key={o.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', borderBottom: '1px solid #1E222C', alignItems: 'center' }}>
-                  <span>{o.side === 'buy' ? 'Покупка' : 'Продажа'} {o.amount} {o.giftName}</span>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    <span>{o.price} TON</span>
-                    {o.status === 'open' && (
-                      <button onClick={() => cancelOrder(o.id)} style={{ background: '#2C313C', border: 'none', color: '#FFF', padding: '2px 8px', borderRadius: '4px', cursor: 'pointer', fontSize: '11px' }}>
-                        Отменить
-                      </button>
-                    )}
+            <div className='orders-empty'>
+              {activityTab === 'positions' ? (
+                positions.filter((p) => p.status === 'Open').length === 0 ? (
+                  'Нет открытых позиций'
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    {positions
+                      .filter((p) => p.status === 'Open')
+                      .map((p) => {
+                        const mark =
+                          p.instrumentKey === activeGift?.id
+                            ? curPrice
+                            : p.markPrice || p.avgEntryPrice;
+                        const pnlMultiplier = p.side === 'Long' ? 1 : -1;
+                        const upnl = (mark - p.avgEntryPrice) * p.qty * pnlMultiplier;
+                        return (
+                          <div
+                            key={p.positionId}
+                            style={{
+                              display: 'flex',
+                              justifyContent: 'space-between',
+                              padding: '8px',
+                              background: 'rgba(255,255,255,0.03)',
+                              borderRadius: '6px',
+                              alignItems: 'center',
+                            }}
+                          >
+                            <div>
+                              <span
+                                style={{
+                                  color: p.side === 'Long' ? '#10b981' : '#f43f5e',
+                                  fontWeight: 'bold',
+                                }}
+                              >
+                                {p.side}
+                              </span>
+                              <span style={{ marginLeft: '8px' }}>
+                                {p.qty} {p.instrumentKey}
+                              </span>
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                              <span style={{ fontSize: '11px', color: '#8b949e' }}>
+                                Вход: {p.avgEntryPrice.toFixed(2)} TON
+                              </span>
+                              <span
+                                style={{
+                                  color: upnl >= 0 ? '#10b981' : '#f43f5e',
+                                  fontSize: '11px',
+                                  fontWeight: 'bold',
+                                }}
+                              >
+                                {upnl > 0 ? '+' : ''}
+                                {upnl.toFixed(2)} TON
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      })}
                   </div>
-                </div>
-              ))}
+                )
+              ) : activityTab === 'history' ? (
+                tradeHistory.length === 0 ? (
+                  'История пуста'
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    {tradeHistory.map((t) => (
+                      <div
+                        key={t.tradeId}
+                        style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          padding: '8px',
+                          background: 'rgba(255,255,255,0.03)',
+                          borderRadius: '6px',
+                          alignItems: 'center',
+                        }}
+                      >
+                        <div>
+                          <span
+                            style={{
+                              color: t.side === 'Buy' ? '#10b981' : '#f43f5e',
+                              fontWeight: 'bold',
+                            }}
+                          >
+                            {t.side}
+                          </span>
+                          <span style={{ marginLeft: '8px' }}>
+                            {t.qty} {t.instrumentKey}
+                          </span>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                          <span>{t.price} TON</span>
+                          {t.realizedPnl !== undefined && (
+                            <span
+                              style={{
+                                color: t.realizedPnl >= 0 ? '#10b981' : '#f43f5e',
+                                fontSize: '11px',
+                                fontWeight: 'bold',
+                              }}
+                            >
+                              {t.realizedPnl > 0 ? '+' : ''}
+                              {t.realizedPnl.toFixed(2)} TON
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )
+              ) : userOrders.length === 0 ? (
+                'Нет открытых ордеров'
+              ) : (
+                userOrders.map((o) => (
+                  <div
+                    key={o.id}
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      padding: '4px 0',
+                      borderBottom: '1px solid #1E222C',
+                      alignItems: 'center',
+                    }}
+                  >
+                    <span>
+                      {o.side === 'buy' ? 'Покупка' : 'Продажа'} {o.amount} {o.giftName}
+                    </span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <span>{o.price} TON</span>
+                      {o.status === 'open' && (
+                        <button
+                          onClick={() => cancelOrder(o.id)}
+                          style={{
+                            background: '#2C313C',
+                            border: 'none',
+                            color: '#FFF',
+                            padding: '2px 8px',
+                            borderRadius: '4px',
+                            cursor: 'pointer',
+                            fontSize: '11px',
+                          }}
+                        >
+                          Отменить
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
           </div>
 
-          <div className="col">
-            <div className="ob-head"><div className="ob-title">Стакан</div><div className="ob-live"><span className="dot"></span>Live</div></div>
-            <div className="ob-cols"><span>Цена</span><span>Кол-во</span></div>
-            <div className="ob-body">
+          <div className='col'>
+            <div className='ob-head'>
+              <div className='ob-title'>Стакан</div>
+              <div className='ob-live'>
+                <span className='dot'></span>Live
+              </div>
+            </div>
+            <div className='ob-cols'>
+              <span>Цена</span>
+              <span>Кол-во</span>
+            </div>
+            <div className='ob-body'>
               <div style={{ display: 'flex', flexDirection: 'column-reverse' }}>
                 {orderBook.asks.slice(0, 15).map((ask) => {
                   const depthPercent = (Number(ask.amount) / maxAskAmount) * 100;
                   return (
-                    <div className="ob-row ask" key={ask.price} onClick={() => setPrice(ask.price.toString())}>
-                      <div className="depth" style={{ width: `${depthPercent}%` }}></div>
-                      <span className="p ask">{ask.price}</span>
-                      <span className="amt">{ask.amount}</span>
+                    <div
+                      className='ob-row ask'
+                      key={ask.price}
+                      onClick={() => setPrice(ask.price.toString())}
+                    >
+                      <div className='depth' style={{ width: `${depthPercent}%` }}></div>
+                      <span className='p ask'>{ask.price}</span>
+                      <span className='amt'>{ask.amount}</span>
                     </div>
                   );
                 })}
               </div>
-              <div className="ob-mid">
-                <span className="p">{recentTrades.length > 0 ? formatGX(recentTrades[0].price) : formatGX((activeGift?.floor || 0))}</span>
-                <span className="s">Спред {orderBook.asks.length && orderBook.bids.length ? (Number(orderBook.asks[0].price) - Number(orderBook.bids[0].price)).toFixed(2) : '-'}</span>
+              <div className='ob-mid'>
+                <span className='p'>
+                  {recentTrades.length > 0
+                    ? formatGX(recentTrades[0].price)
+                    : formatGX(activeGift?.floor || 0)}
+                </span>
+                <span className='s'>
+                  Спред{' '}
+                  {orderBook.asks.length && orderBook.bids.length
+                    ? (Number(orderBook.asks[0].price) - Number(orderBook.bids[0].price)).toFixed(2)
+                    : '-'}
+                </span>
               </div>
               <div>
                 {orderBook.bids.slice(0, 15).map((bid) => {
                   const depthPercent = (Number(bid.amount) / maxBidAmount) * 100;
                   return (
-                    <div className="ob-row bid" key={bid.price} onClick={() => setPrice(bid.price.toString())}>
-                      <div className="depth" style={{ width: `${depthPercent}%` }}></div>
-                      <span className="p bid">{bid.price}</span>
-                      <span className="amt">{bid.amount}</span>
+                    <div
+                      className='ob-row bid'
+                      key={bid.price}
+                      onClick={() => setPrice(bid.price.toString())}
+                    >
+                      <div className='depth' style={{ width: `${depthPercent}%` }}></div>
+                      <span className='p bid'>{bid.price}</span>
+                      <span className='amt'>{bid.amount}</span>
                     </div>
                   );
                 })}
@@ -978,83 +1390,354 @@ const GXTerminalScreen = () => {
             </div>
           </div>
 
-          <div className="col">
-            <div className="panel-inner">
-              <div className="side-tabs">
-                <div className={`side-tab buy ${side === 'buy' ? 'active' : ''}`} onClick={() => setSide('buy')}>Купить</div>
-                <div className={`side-tab sell ${side === 'sell' ? 'active' : ''}`} onClick={() => setSide('sell')}>Продать</div>
-              </div>
+          <div className='col'>
+            <div className='panel-inner'>
+              {(() => {
+                const activePosition = positions.find(
+                  (p) => p.instrumentKey === (activeGift?.id || '') && p.status === 'Open'
+                );
+                const curPrice = recentTrades[0]?.price || activeGift?.floor || 0;
+                const markPrice = activePosition ? activePosition.markPrice || curPrice : curPrice;
 
-              <div className="type-row">
-                <div className={`type-item ${orderType === 'Limit' ? 'active' : ''}`} onClick={() => setOrderType('Limit')}>Лимит</div>
-                <div className={`type-item ${orderType === 'Market' ? 'active' : ''}`} onClick={() => setOrderType('Market')}>Рынок</div>
-              </div>
+                if (confirmClose) {
+                  const expectedPnl =
+                    confirmClose.side === 'sell'
+                      ? (confirmClose.isMarket ? curPrice : confirmClose.price) -
+                        (activePosition?.avgEntryPrice || 0)
+                      : (activePosition?.avgEntryPrice || 0) -
+                        (confirmClose.isMarket ? curPrice : confirmClose.price);
+                  const totalPnl = expectedPnl * confirmClose.qty;
 
-              <div className="field" style={{ opacity: orderType === 'Market' ? 0.4 : 1, pointerEvents: orderType === 'Market' ? 'none' : 'auto' }}>
-                <span className="fl">Цена</span>
-                <input type="text" value={price} onChange={(e) => setPrice(e.target.value)} disabled={orderType === 'Market'} inputMode="decimal" />
-                <span className="unit">{selectedCurrency}</span>
-              </div>
-              <div className="field">
-                <span className="fl">Кол-во</span>
-                <input type="text" value={amount} onChange={(e) => setAmount(e.target.value)} inputMode="decimal" />
-                <span className="unit">GIFT</span>
-              </div>
+                  return (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                      <h3 style={{ margin: 0, fontSize: '16px', color: '#FFF' }}>
+                        Подтверждение закрытия
+                      </h3>
+                      <div className='summary' style={{ marginTop: 0 }}>
+                        <div className='sum-row'>
+                          <span>Направление</span>
+                          <b
+                            style={{ color: confirmClose.side === 'sell' ? '#f43f5e' : '#10b981' }}
+                          >
+                            {activePosition?.side}
+                          </b>
+                        </div>
+                        <div className='sum-row'>
+                          <span>Количество</span>
+                          <b>{confirmClose.qty}</b>
+                        </div>
+                        <div className='sum-row'>
+                          <span>Цена входа</span>
+                          <b>{activePosition?.avgEntryPrice?.toFixed(2)} TON</b>
+                        </div>
+                        <div className='sum-row'>
+                          <span>Текущая цена</span>
+                          <b>{curPrice.toFixed(2)} TON</b>
+                        </div>
+                        <div className='sum-row'>
+                          <span>Ожидаемый PnL</span>
+                          <b style={{ color: totalPnl >= 0 ? '#10b981' : '#f43f5e' }}>
+                            {totalPnl > 0 ? '+' : ''}
+                            {totalPnl.toFixed(2)} TON
+                          </b>
+                        </div>
+                        <div className='sum-row'>
+                          <span>Комиссия</span>
+                          <b>0.25%</b>
+                        </div>
+                      </div>
+                      {confirmClose.isMarket && (
+                        <div
+                          style={{
+                            color: '#FFB020',
+                            fontSize: '12px',
+                            background: 'rgba(255,176,32,0.1)',
+                            padding: '8px',
+                            borderRadius: '4px',
+                          }}
+                        >
+                          Внимание: Рыночный ордер может исполниться по цене, отличающейся от
+                          текущей!
+                        </div>
+                      )}
+                      <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
+                        <button
+                          className='cta'
+                          style={{ background: '#2C313C', flex: 1 }}
+                          onClick={() => setConfirmClose(null)}
+                          disabled={isSubmitting}
+                        >
+                          Отмена
+                        </button>
+                        <button
+                          className={`cta ${confirmClose.side}`}
+                          style={{ flex: 1 }}
+                          onClick={() => submitOrder(true)}
+                          disabled={isSubmitting}
+                        >
+                          {isSubmitting ? '...' : 'Подтвердить'}
+                        </button>
+                      </div>
+                    </div>
+                  );
+                }
 
-              <div className="slider-row">
-                <input
-                  type="range"
-                  className="pct-slider"
-                  min="0"
-                  max="100"
-                  step="25"
-                  value={amount && price ? Math.min(100, Math.floor((Number(amount) / (side === 'buy' ? balance / (Number(price) || (activeGift?.floor || 0)) : 100)) * 100)) : 0}
-                  onChange={(e) => {
-                    const percent = Number(e.target.value);
-                    if (side === 'buy') {
-                      const curPrice = orderType === 'Limit' ? Number(price) : recentTrades[0]?.price || (activeGift?.floor || 0);
-                      if (curPrice > 0) {
-                        const maxShares = balance / curPrice;
-                        setAmount(Math.floor(maxShares * (percent / 100)).toString());
-                      }
-                    } else {
-                      setAmount(Math.floor(100 * (percent / 100)).toString());
-                    }
-                  }}
-                  style={{ '--val': `${amount && price ? Math.min(100, Math.floor((Number(amount) / (side === 'buy' ? balance / (Number(price) || (activeGift?.floor || 0)) : 100)) * 100)) : 0}%` } as any}
-                />
-                <div className="slider-marks">
-                  {[0, 25, 50, 75, 100].map(p => (
-                    <span key={p} onClick={() => {
-                      const percent = p;
-                      if (side === 'buy') {
-                        const curPrice = orderType === 'Limit' ? Number(price) : recentTrades[0]?.price || (activeGift?.floor || 0);
-                        if (curPrice > 0) {
-                          const maxShares = balance / curPrice;
-                          setAmount(Math.floor(maxShares * (percent / 100)).toString());
+                return (
+                  <>
+                    {!activePosition ? (
+                      <div className='side-tabs'>
+                        <div
+                          className={`side-tab buy ${side === 'buy' ? 'active' : ''}`}
+                          onClick={() => setSide('buy')}
+                        >
+                          Открыть Long
+                        </div>
+                        <div
+                          className={`side-tab sell ${side === 'sell' ? 'active' : ''}`}
+                          onClick={() => setSide('sell')}
+                        >
+                          Открыть Short
+                        </div>
+                      </div>
+                    ) : (
+                      <div
+                        style={{
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: '8px',
+                          marginBottom: '16px',
+                          background: 'rgba(255,255,255,0.03)',
+                          padding: '12px',
+                          borderRadius: '8px',
+                        }}
+                      >
+                        <div
+                          style={{
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                          }}
+                        >
+                          <span style={{ color: '#8b96a8', fontSize: '13px' }}>
+                            Текущая позиция
+                          </span>
+                          <span
+                            style={{
+                              color: activePosition.side === 'Long' ? '#10b981' : '#f43f5e',
+                              fontWeight: 'bold',
+                            }}
+                          >
+                            {activePosition.side}
+                          </span>
+                        </div>
+                        <div
+                          className='summary'
+                          style={{ marginTop: 0, padding: 0, background: 'transparent' }}
+                        >
+                          <div className='sum-row'>
+                            <span>Количество</span>
+                            <b>{activePosition.qty}</b>
+                          </div>
+                          <div className='sum-row'>
+                            <span>Вход</span>
+                            <b>{activePosition.avgEntryPrice?.toFixed(2)} TON</b>
+                          </div>
+                          <div className='sum-row'>
+                            <span>Текущая</span>
+                            <b>{markPrice.toFixed(2)} TON</b>
+                          </div>
+                          {(() => {
+                            const dynamicPnl =
+                              activePosition.side === 'Long'
+                                ? (curPrice - activePosition.avgEntryPrice) * activePosition.qty
+                                : (activePosition.avgEntryPrice - curPrice) * activePosition.qty;
+                            const pnlPct =
+                              (dynamicPnl / (activePosition.avgEntryPrice * activePosition.qty)) *
+                              100;
+                            return (
+                              <div className='sum-row'>
+                                <span>Unrealized PnL</span>
+                                <b style={{ color: dynamicPnl >= 0 ? '#10b981' : '#f43f5e' }}>
+                                  {dynamicPnl > 0 ? '+' : ''}
+                                  {dynamicPnl.toFixed(2)} TON ({pnlPct.toFixed(2)}%)
+                                </b>
+                              </div>
+                            );
+                          })()}
+                        </div>
+                      </div>
+                    )}
+
+                    <div className='type-row'>
+                      <div
+                        className={`type-item ${orderType === 'Limit' ? 'active' : ''}`}
+                        onClick={() => setOrderType('Limit')}
+                      >
+                        Лимит
+                      </div>
+                      <div
+                        className={`type-item ${orderType === 'Market' ? 'active' : ''}`}
+                        onClick={() => setOrderType('Market')}
+                      >
+                        Рынок
+                      </div>
+                    </div>
+
+                    <div
+                      className='field'
+                      style={{
+                        opacity: orderType === 'Market' ? 0.4 : 1,
+                        pointerEvents: orderType === 'Market' ? 'none' : 'auto',
+                      }}
+                    >
+                      <span className='fl'>Цена</span>
+                      <input
+                        type='text'
+                        value={price}
+                        onChange={(e) => setPrice(e.target.value)}
+                        disabled={orderType === 'Market'}
+                        inputMode='decimal'
+                      />
+                      <span className='unit'>{selectedCurrency}</span>
+                    </div>
+                    <div className='field'>
+                      <span className='fl'>Кол-во</span>
+                      <input
+                        type='text'
+                        value={amount}
+                        onChange={(e) => setAmount(e.target.value)}
+                        inputMode='decimal'
+                      />
+                      <span className='unit'>GIFT</span>
+                    </div>
+
+                    <div className='slider-row'>
+                      <input
+                        type='range'
+                        className='pct-slider'
+                        min='0'
+                        max='100'
+                        step='25'
+                        value={
+                          amount && price
+                            ? Math.min(
+                                100,
+                                Math.floor(
+                                  (Number(amount) /
+                                    (!activePosition
+                                      ? side === 'buy'
+                                        ? balance / (Number(price) || curPrice)
+                                        : 100
+                                      : activePosition.qty)) *
+                                    100
+                                )
+                              )
+                            : 0
                         }
-                      } else {
-                        setAmount(Math.floor(100 * (percent / 100)).toString());
-                      }
-                    }}>{p === 0 ? '0' : `${p}%`}</span>
-                  ))}
-                </div>
-              </div>
+                        onChange={(e) => {
+                          const percent = Number(e.target.value);
+                          if (!activePosition) {
+                            if (side === 'buy') {
+                              const curP = orderType === 'Limit' ? Number(price) : curPrice;
+                              if (curP > 0) {
+                                const maxShares = balance / curP;
+                                setAmount(Math.floor(maxShares * (percent / 100)).toString());
+                              }
+                            } else {
+                              setAmount(Math.floor(100 * (percent / 100)).toString()); // Arbitrary for shorting
+                            }
+                          } else {
+                            setAmount(Math.floor(activePosition.qty * (percent / 100)).toString());
+                          }
+                        }}
+                      />
+                      <div className='slider-marks'>
+                        {[0, 25, 50, 75, 100].map((p) => (
+                          <span
+                            key={p}
+                            onClick={() => {
+                              const percent = p;
+                              if (!activePosition) {
+                                if (side === 'buy') {
+                                  const curP = orderType === 'Limit' ? Number(price) : curPrice;
+                                  if (curP > 0) {
+                                    const maxShares = balance / curP;
+                                    setAmount(Math.floor(maxShares * (percent / 100)).toString());
+                                  }
+                                } else {
+                                  setAmount(Math.floor(100 * (percent / 100)).toString());
+                                }
+                              } else {
+                                setAmount(
+                                  Math.floor(activePosition.qty * (percent / 100)).toString()
+                                );
+                              }
+                            }}
+                          >
+                            {p === 0 ? '0' : `${p}%`}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
 
-              <div className="summary">
-                <div className="sum-row"><span>Доступно</span><b>{formatGX(balance)} TON</b></div>
-                <div className="sum-row"><span>Комиссия</span><b>0.25%</b></div>
-                <div className="sum-row"><span>Итого</span><b>{formatGX((Number(price) || (activeGift?.floor || 0)) * (Number(amount) || 0))} TON</b></div>
-              </div>
+                    <div className='summary'>
+                      <div className='sum-row'>
+                        <span>Баланс</span>
+                        <b>{formatGX(balance)} TON</b>
+                      </div>
+                      <div className='sum-row'>
+                        <span>Доступно</span>
+                        <b>
+                          {!activePosition
+                            ? formatGX(availableBalance) + ' TON'
+                            : activePosition.qty + ' GIFT'}
+                        </b>
+                      </div>
+                      <div className='sum-row'>
+                        <span>Комиссия</span>
+                        <b>0.25%</b>
+                      </div>
+                      <div className='sum-row'>
+                        <span>Итого</span>
+                        <b>{formatGX((Number(price) || curPrice) * (Number(amount) || 0))} TON</b>
+                      </div>
+                    </div>
 
-              <button className={`cta ${side}`} onClick={() => submitOrder()}>
-                {side === 'buy' ? 'Купить' : 'Продать'} {(activeGift?.name || '').toUpperCase().replace(/[^A-Z0-9]/g, '_')}
-              </button>
+                    {!activePosition ? (
+                      <button
+                        className={`cta ${side}`}
+                        onClick={() => submitOrder(false)}
+                        disabled={isSubmitting}
+                      >
+                        {side === 'buy' ? 'Открыть Long' : 'Открыть Short'}
+                      </button>
+                    ) : (
+                      <div style={{ display: 'flex', gap: '8px' }}>
+                        <button
+                          className={`cta ${activePosition.side === 'Long' ? 'buy' : 'sell'}`}
+                          style={{ flex: 1, opacity: 0.8 }}
+                          onClick={() => submitOrder(false)}
+                          disabled={isSubmitting}
+                        >
+                          {activePosition.side === 'Long' ? 'Увеличить Long' : 'Увеличить Short'}
+                        </button>
+                        <button
+                          className={`cta ${activePosition.side === 'Long' ? 'sell' : 'buy'}`}
+                          style={{ flex: 1 }}
+                          onClick={() => submitOrder(true)}
+                          disabled={isSubmitting}
+                        >
+                          {activePosition.side === 'Long' ? 'Закрыть Long' : 'Выкупить Short'}
+                        </button>
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
             </div>
           </div>
         </div>
       </main>
-
 
       {toast && (
         <div className='gx-toast'>

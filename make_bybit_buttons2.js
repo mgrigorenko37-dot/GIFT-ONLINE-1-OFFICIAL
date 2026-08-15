@@ -67,7 +67,8 @@ const newSubmit = `const submitOrder = (overrideSide?: 'buy' | 'sell') => {
 tsx = tsx.replace(oldSubmit, newSubmit);
 
 // 2. Rewrite the buttons at the bottom of the right column
-const oldButtonsRegex = /<button\s*type='button'\s*className=\{`gx-submit \$\{side === 'sell' \? 'gx-submit-sell' : ''\}`\}\s*onClick=\{submitOrder\}\s*style=\{\{ height: 48, fontSize: 14 \}\}\s*>\s*\{side === 'buy' \? 'Open Long' : 'Open Short'\}\s*<\/button>/;
+const oldButtonsRegex =
+  /<button\s*type='button'\s*className=\{`gx-submit \$\{side === 'sell' \? 'gx-submit-sell' : ''\}`\}\s*onClick=\{submitOrder\}\s*style=\{\{ height: 48, fontSize: 14 \}\}\s*>\s*\{side === 'buy' \? 'Open Long' : 'Open Short'\}\s*<\/button>/;
 
 const newButtons = `<div style={{ display: 'flex', gap: 12, marginTop: 16 }}>
                 <button
@@ -91,15 +92,30 @@ const newButtons = `<div style={{ display: 'flex', gap: 12, marginTop: 16 }}>
 tsx = tsx.replace(oldButtonsRegex, newButtons);
 
 // Make sure the Open / Close tabs and Limit / Market tabs use Cyrillic
-tsx = tsx.replace(/>Open<\/button>/, ">Открытые</button>");
-tsx = tsx.replace(/>Close<\/button>/, ">Закрытые</button>");
+tsx = tsx.replace(/>Open<\/button>/, '>Открытые</button>');
+tsx = tsx.replace(/>Close<\/button>/, '>Закрытые</button>');
 
-tsx = tsx.replace(/>\s*\{type\}\s*<\/button>/g, "> {type === 'Limit' ? 'Лимитный' : 'Рыночный'} </button>");
+tsx = tsx.replace(
+  />\s*\{type\}\s*<\/button>/g,
+  "> {type === 'Limit' ? 'Лимитный' : 'Рыночный'} </button>"
+);
 
 // Also inputs:
-tsx = tsx.replace(/<span className='gx-input-prefix'>Order Price<\/span>/, "<span className='gx-input-prefix'>Цена следования</span>");
-tsx = tsx.replace(/<span className='gx-input-prefix'>Qty<\/span>/, "<span className='gx-input-prefix'>К-во</span>");
-tsx = tsx.replace(/<span className='gx-input-suffix'>Gift<\/span>/, "<span className='gx-input-suffix'>BTC</span>"); // From screenshot
-tsx = tsx.replace(/<span className='gx-input-suffix'>GX<\/span>/g, "<span className='gx-input-suffix'>USDT</span>");
+tsx = tsx.replace(
+  /<span className='gx-input-prefix'>Order Price<\/span>/,
+  "<span className='gx-input-prefix'>Цена следования</span>"
+);
+tsx = tsx.replace(
+  /<span className='gx-input-prefix'>Qty<\/span>/,
+  "<span className='gx-input-prefix'>К-во</span>"
+);
+tsx = tsx.replace(
+  /<span className='gx-input-suffix'>Gift<\/span>/,
+  "<span className='gx-input-suffix'>BTC</span>"
+); // From screenshot
+tsx = tsx.replace(
+  /<span className='gx-input-suffix'>GX<\/span>/g,
+  "<span className='gx-input-suffix'>USDT</span>"
+);
 
 fs.writeFileSync('src/screens/GXTerminal/GXTerminalScreen.tsx', tsx);

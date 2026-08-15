@@ -70,7 +70,9 @@ describe('Stage 8: Security, Rate Limiting & Webhook Protection', () => {
     // 413 error handler
     app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
       if (err && (err.type === 'entity.too.large' || err.status === 413)) {
-        return res.status(413).json({ error: 'Payload Too Large: Maximum JSON payload size is 100kb.' });
+        return res
+          .status(413)
+          .json({ error: 'Payload Too Large: Maximum JSON payload size is 100kb.' });
       }
       next(err);
     });
@@ -146,9 +148,21 @@ describe('Stage 8: Security, Rate Limiting & Webhook Protection', () => {
     const testPort = (testServer.address() as any).port;
 
     // Exhaust webhook limit (2 reqs)
-    await fetch(`http://127.0.0.1:${testPort}/webhook`, { method: 'POST', body: '{}', headers: { 'Content-Type': 'application/json' } });
-    await fetch(`http://127.0.0.1:${testPort}/webhook`, { method: 'POST', body: '{}', headers: { 'Content-Type': 'application/json' } });
-    const blockedWebhook = await fetch(`http://127.0.0.1:${testPort}/webhook`, { method: 'POST', body: '{}', headers: { 'Content-Type': 'application/json' } });
+    await fetch(`http://127.0.0.1:${testPort}/webhook`, {
+      method: 'POST',
+      body: '{}',
+      headers: { 'Content-Type': 'application/json' },
+    });
+    await fetch(`http://127.0.0.1:${testPort}/webhook`, {
+      method: 'POST',
+      body: '{}',
+      headers: { 'Content-Type': 'application/json' },
+    });
+    const blockedWebhook = await fetch(`http://127.0.0.1:${testPort}/webhook`, {
+      method: 'POST',
+      body: '{}',
+      headers: { 'Content-Type': 'application/json' },
+    });
     expect(blockedWebhook.status).toBe(429);
 
     // REST endpoint should STILL work fine!

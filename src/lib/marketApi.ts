@@ -19,7 +19,7 @@ export async function fetchMarketCandles(
   url.searchParams.append('limit', limit.toString());
 
   const res = await fetch(url.toString(), { signal });
-  if (!res.ok) throw new Error("Failed to fetch market candles");
+  if (!res.ok) throw new Error('Failed to fetch market candles');
   const data = await res.json();
   return data.candles || [];
 }

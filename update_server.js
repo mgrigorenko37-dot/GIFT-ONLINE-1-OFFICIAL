@@ -129,11 +129,15 @@ setTimeout(syncTelegramGifts, 1000);
 `;
 
 // Insert after imports
-code = code.replace("// GIFTS API", interfaces + "\n// GIFTS API\n" + 
-`app.get('/api/collections', (req, res) => res.json(dbCollections));
+code = code.replace(
+  '// GIFTS API',
+  interfaces +
+    '\n// GIFTS API\n' +
+    `app.get('/api/collections', (req, res) => res.json(dbCollections));
 app.get('/api/variants/:collection_id', (req, res) => {
   res.json(dbVariants.filter(v => v.collection_id === req.params.collection_id));
 });
-`);
+`
+);
 
 fs.writeFileSync('server.ts', code);

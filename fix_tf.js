@@ -69,23 +69,23 @@ const newGenerate = `    const generateData = () => {
     };`;
 
 if (code.includes(oldGenerate)) {
-    code = code.replace(oldGenerate, newGenerate);
-    console.log("Replaced generateData!");
+  code = code.replace(oldGenerate, newGenerate);
+  console.log('Replaced generateData!');
 } else {
-    console.log("Could not find oldGenerate.");
+  console.log('Could not find oldGenerate.');
 }
 
 const oldDeps = `    };
   }, [activeGift.id, activeGift.floor]);`;
-  
+
 const newDeps = `    };
   }, [activeGift.id, activeGift.floor, timeframe]);`;
 
 if (code.includes(oldDeps)) {
-    code = code.replace(oldDeps, newDeps);
-    console.log("Replaced dependencies!");
+  code = code.replace(oldDeps, newDeps);
+  console.log('Replaced dependencies!');
 } else {
-    console.log("Could not find oldDeps.");
+  console.log('Could not find oldDeps.');
 }
 
 fs.writeFileSync('src/screens/GXTerminal/GXTerminalScreen.tsx', code);

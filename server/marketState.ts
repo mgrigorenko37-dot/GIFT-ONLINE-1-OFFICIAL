@@ -1,6 +1,21 @@
-import { GiftSale, GiftCandle, Timeframe, getInstrumentKey, createCandleFromSale, updateCandle, getCandleRange, parsePositiveDecimal } from './chartEngine';
+import {
+  GiftSale,
+  GiftCandle,
+  Timeframe,
+  getInstrumentKey,
+  createCandleFromSale,
+  updateCandle,
+  getCandleRange,
+  parsePositiveDecimal,
+} from './chartEngine';
 import { normalizeInstrumentKey, parseInstrumentKey } from '../src/types/market';
-import { MarketSnapshot, IMarketRepository, InMemoryMarketRepository, resolveMarketRepository, OutboxEvent } from './marketRepository';
+import {
+  MarketSnapshot,
+  IMarketRepository,
+  InMemoryMarketRepository,
+  resolveMarketRepository,
+  OutboxEvent,
+} from './marketRepository';
 
 export const allSales: GiftSale[] = [];
 export const processedSaleIds = new Set<string>();
@@ -22,14 +37,14 @@ export function initMarketStateRepository() {
     const repo = resolveMarketRepository();
     setMarketRepository(repo);
   } catch (err) {
-    console.error("Failed to resolve market repository:", err);
+    console.error('Failed to resolve market repository:', err);
   }
 }
 
-export type SaleAcceptanceReason = "accepted" | "duplicate" | "invalid" | "not_completed";
+export type SaleAcceptanceReason = 'accepted' | 'duplicate' | 'invalid' | 'not_completed';
 
 export interface CandleChangeEvent {
-  type: "candle_update" | "candle_closed";
+  type: 'candle_update' | 'candle_closed';
   timeframe: Timeframe;
   candle: GiftCandle;
 }
@@ -75,7 +90,7 @@ export interface MarketCandlesResponse {
   instrumentKey: string;
   timeframe: Timeframe;
   currency: string;
-  timezone: "UTC";
+  timezone: 'UTC';
   candles: GiftCandle[];
   hasMore: boolean;
   nextCursor: string | null;
@@ -91,8 +106,10 @@ export function getMarketCandlesHistory(
   const parsed = parseInstrumentKey(normKey);
 
   const from = typeof options.from === 'number' && !isNaN(options.from) ? options.from : 0;
-  const to = typeof options.to === 'number' && !isNaN(options.to) ? options.to : Number.MAX_SAFE_INTEGER;
-  const limit = typeof options.limit === 'number' && options.limit > 0 ? Math.min(options.limit, 1000) : 500;
+  const to =
+    typeof options.to === 'number' && !isNaN(options.to) ? options.to : Number.MAX_SAFE_INTEGER;
+  const limit =
+    typeof options.limit === 'number' && options.limit > 0 ? Math.min(options.limit, 1000) : 500;
 
   const closed = closedCandles[normKey]?.[timeframe] || [];
   const active = activeCandles[normKey]?.[timeframe];
@@ -130,27 +147,34 @@ export function getMarketCandlesHistory(
   if (options.cursor) {
     const cursorMs = Number(options.cursor);
     if (!isNaN(cursorMs)) {
-      all = all.filter(c => c.startTime > cursorMs);
+      all = all.filter((c) => c.startTime > cursorMs);
     }
   }
 
   const hasMore = all.length > limit;
   const candles = all.slice(0, limit);
-  const nextCursor = hasMore && candles.length > 0 ? candles[candles.length - 1].startTime.toString() : null;
+  const nextCursor =
+    hasMore && candles.length > 0 ? candles[candles.length - 1].startTime.toString() : null;
 
   return {
     instrumentKey: normKey,
     timeframe,
     currency: parsed.currency,
-    timezone: "UTC",
+    timezone: 'UTC',
     candles,
     hasMore,
     nextCursor,
-    serverTime: Date.now()
+    serverTime: Date.now(),
   };
 }
 
-export function getHistory(instrumentKey: string, timeframe: Timeframe, from: number, to: number, limit: number = 500) {
+export function getHistory(
+  instrumentKey: string,
+  timeframe: Timeframe,
+  from: number,
+  to: number,
+  limit: number = 500
+) {
   const res = getMarketCandlesHistory(instrumentKey, timeframe, { from, to, limit });
   return res.candles;
 }
@@ -162,53 +186,63 @@ export function getActiveCandle(instrumentKey: string, timeframe: Timeframe): Gi
 
 export function acceptCompletedSale(rawSale: any): AcceptSaleResult {
   if (!rawSale || typeof rawSale !== 'object') {
-    return { accepted: false, reason: "invalid" };
+    return { accepted: false, reason: 'invalid' };
   }
 
   // 1. Status Check
-  if (rawSale.status !== "completed") {
-    return { accepted: false, reason: "not_completed" };
+  if (rawSale.status !== 'completed') {
+    return { accepted: false, reason: 'not_completed' };
   }
 
   // 1b. Simulation / Mock Sale Check
   if (rawSale.isMock || rawSale.isSimulation) {
-    const isSimulationActive = process.env.SIMULATION_MODE === 'true' || rawSale.allowSimulation === true;
+    const isSimulationActive =
+      process.env.SIMULATION_MODE === 'true' || rawSale.allowSimulation === true;
     if (!isSimulationActive) {
-      return { accepted: false, reason: "invalid" };
+      return { accepted: false, reason: 'invalid' };
     }
   }
 
   // 2. Collection ID Check
-  if (!rawSale.collectionId || typeof rawSale.collectionId !== 'string' || rawSale.collectionId.trim() === '') {
-    return { accepted: false, reason: "invalid" };
+  if (
+    !rawSale.collectionId ||
+    typeof rawSale.collectionId !== 'string' ||
+    rawSale.collectionId.trim() === ''
+  ) {
+    return { accepted: false, reason: 'invalid' };
   }
 
   // 3. Currency Check
   if (rawSale.currency !== 'TON' && rawSale.currency !== 'STARS') {
-    return { accepted: false, reason: "invalid" };
+    return { accepted: false, reason: 'invalid' };
   }
 
   // 4. Price Check
   const pDec = parsePositiveDecimal(rawSale.price);
   if (!pDec) {
-    return { accepted: false, reason: "invalid" };
+    return { accepted: false, reason: 'invalid' };
   }
 
   // 5. Quantity Check
   const qDec = parsePositiveDecimal(rawSale.quantity);
   if (!qDec) {
-    return { accepted: false, reason: "invalid" };
+    return { accepted: false, reason: 'invalid' };
   }
 
   // 6. Timestamp Check
   const eventTime = Number(rawSale.eventTime);
-  if (typeof rawSale.eventTime !== 'number' || isNaN(eventTime) || !isFinite(eventTime) || eventTime < 0) {
-    return { accepted: false, reason: "invalid" };
+  if (
+    typeof rawSale.eventTime !== 'number' ||
+    isNaN(eventTime) ||
+    !isFinite(eventTime) ||
+    eventTime < 0
+  ) {
+    return { accepted: false, reason: 'invalid' };
   }
 
   // Detect timestamp in seconds instead of milliseconds (e.g. 10-digit timestamp like 1710000000)
   if (eventTime > 0 && eventTime < 100000000000) {
-    return { accepted: false, reason: "invalid" };
+    return { accepted: false, reason: 'invalid' };
   }
 
   // 7. Dedupe Key Formulation
@@ -218,12 +252,12 @@ export function acceptCompletedSale(rawSale: any): AcceptSaleResult {
   } else if (rawSale.transactionHash && rawSale.giftId && typeof rawSale.eventTime === 'number') {
     dedupeKey = `${rawSale.transactionHash}_${rawSale.giftId}_${rawSale.eventTime}`;
   } else {
-    return { accepted: false, reason: "invalid" };
+    return { accepted: false, reason: 'invalid' };
   }
 
   // 8. Deduplication Check
   if (processedSaleIds.has(dedupeKey)) {
-    return { accepted: false, reason: "duplicate", dedupeKey };
+    return { accepted: false, reason: 'duplicate', dedupeKey };
   }
 
   // 9. Normalize & Form GiftSale
@@ -236,11 +270,14 @@ export function acceptCompletedSale(rawSale: any): AcceptSaleResult {
     quantity: qDec.toString(),
     currency: rawSale.currency,
     eventTime,
-    createdAt: typeof rawSale.createdAt === 'number' && !isNaN(rawSale.createdAt) ? rawSale.createdAt : eventTime,
-    status: "completed",
+    createdAt:
+      typeof rawSale.createdAt === 'number' && !isNaN(rawSale.createdAt)
+        ? rawSale.createdAt
+        : eventTime,
+    status: 'completed',
     isMock: Boolean(rawSale.isMock || rawSale.isSimulation),
     transactionHash: rawSale.transactionHash ? String(rawSale.transactionHash) : undefined,
-    giftId: rawSale.giftId ? String(rawSale.giftId) : undefined
+    giftId: rawSale.giftId ? String(rawSale.giftId) : undefined,
   };
 
   // Update market candles internal state
@@ -273,13 +310,13 @@ export function acceptCompletedSale(rawSale: any): AcceptSaleResult {
     payload: {
       sale,
       candles: updatedCandles,
-      candleEvents
+      candleEvents,
     },
     status: 'pending',
     attempts: 0,
     availableAt: Date.now(),
     createdAt: Date.now(),
-    updatedAt: Date.now()
+    updatedAt: Date.now(),
   };
 
   // Persist sale, updated candles, and outbox event atomically to active repository
@@ -287,17 +324,19 @@ export function acceptCompletedSale(rawSale: any): AcceptSaleResult {
     if (activeRepository.saveSaleAndCandlesAtomic) {
       const p = activeRepository.saveSaleAndCandlesAtomic(sale, updatedCandles, [outboxEvent]);
       if (p && typeof (p as any).catch === 'function') {
-        (p as any).catch((err: any) => console.error("Error persisting sale to market repository:", err));
+        (p as any).catch((err: any) =>
+          console.error('Error persisting sale to market repository:', err)
+        );
       }
     } else {
       const p = activeRepository.saveSale(sale);
       if (p && typeof (p as any).catch === 'function') {
-        (p as any).catch((err: any) => console.error("Error persisting sale:", err));
+        (p as any).catch((err: any) => console.error('Error persisting sale:', err));
       }
       if (activeRepository.saveOutboxEvent) {
         const p2 = activeRepository.saveOutboxEvent(outboxEvent);
         if (p2 && typeof (p2 as any).catch === 'function') {
-          (p2 as any).catch((err: any) => console.error("Error persisting outbox event:", err));
+          (p2 as any).catch((err: any) => console.error('Error persisting outbox event:', err));
         }
       }
       const normKey = getInstrumentKey(sale);
@@ -305,21 +344,21 @@ export function acceptCompletedSale(rawSale: any): AcceptSaleResult {
         const closedList = closedCandles[normKey]?.[c.timeframe] || [];
         const p3 = activeRepository.saveCandles(normKey, c.timeframe, closedList);
         if (p3 && typeof (p3 as any).catch === 'function') {
-          (p3 as any).catch((err: any) => console.error("Error persisting candles:", err));
+          (p3 as any).catch((err: any) => console.error('Error persisting candles:', err));
         }
       }
     }
   } catch (err) {
-    console.error("Error persisting sale to market repository:", err);
+    console.error('Error persisting sale to market repository:', err);
   }
 
   const res: AcceptSaleResult = {
     accepted: true,
-    reason: "accepted",
+    reason: 'accepted',
     sale,
     dedupeKey,
     candles: updatedCandles,
-    candleEvents
+    candleEvents,
   };
 
   for (const listener of saleAcceptedListeners) {
@@ -327,11 +366,14 @@ export function acceptCompletedSale(rawSale: any): AcceptSaleResult {
       const p = listener(res) as unknown as Promise<unknown>;
       if (p && typeof p.catch === 'function') {
         (p as any).catch((err: any) => {
-          console.warn("[MarketState] Async saleAcceptedListener rejection caught:", err?.message || err);
+          console.warn(
+            '[MarketState] Async saleAcceptedListener rejection caught:',
+            err?.message || err
+          );
         });
       }
     } catch (err) {
-      console.error("Error in saleAcceptedListener:", err);
+      console.error('Error in saleAcceptedListener:', err);
     }
   }
 
@@ -353,7 +395,7 @@ function processSaleInternal(sale: GiftSale): ProcessSaleInternalResult {
     closedCandles[instrumentKey] = {};
   }
 
-  const timeframes: Timeframe[] = ["1s", "1m", "5m", "15m", "1h", "4h", "1d", "1w", "1M"];
+  const timeframes: Timeframe[] = ['1s', '1m', '5m', '15m', '1h', '4h', '1d', '1w', '1M'];
   const updatedCandles: GiftCandle[] = [];
   const candleEvents: CandleChangeEvent[] = [];
 
@@ -368,40 +410,42 @@ function processSaleInternal(sale: GiftSale): ProcessSaleInternalResult {
       currentCandle = createCandleFromSale(sale, tf);
       activeCandles[instrumentKey][tf] = currentCandle;
       updatedCandles.push(currentCandle);
-      candleEvents.push({ type: "candle_update", timeframe: tf, candle: { ...currentCandle } });
+      candleEvents.push({ type: 'candle_update', timeframe: tf, candle: { ...currentCandle } });
     } else {
       if (sale.eventTime >= currentCandle.endTime) {
         currentCandle.confirmed = true;
         const closedCopy = { ...currentCandle };
         closedCandles[instrumentKey][tf].push(closedCopy);
-        candleEvents.push({ type: "candle_closed", timeframe: tf, candle: closedCopy });
+        candleEvents.push({ type: 'candle_closed', timeframe: tf, candle: closedCopy });
 
         currentCandle = createCandleFromSale(sale, tf);
         activeCandles[instrumentKey][tf] = currentCandle;
         updatedCandles.push(currentCandle);
-        candleEvents.push({ type: "candle_update", timeframe: tf, candle: { ...currentCandle } });
+        candleEvents.push({ type: 'candle_update', timeframe: tf, candle: { ...currentCandle } });
       } else if (sale.eventTime < currentCandle.startTime) {
         const pastRange = getCandleRange(sale.eventTime, tf);
-        const pastCandleIdx = closedCandles[instrumentKey][tf].findIndex(c => c.startTime === pastRange.startTime);
+        const pastCandleIdx = closedCandles[instrumentKey][tf].findIndex(
+          (c) => c.startTime === pastRange.startTime
+        );
         if (pastCandleIdx !== -1) {
           const pc = closedCandles[instrumentKey][tf][pastCandleIdx];
           const updatedPc = updateCandle(pc, sale);
           closedCandles[instrumentKey][tf][pastCandleIdx] = updatedPc;
           updatedCandles.push(updatedPc);
-          candleEvents.push({ type: "candle_update", timeframe: tf, candle: { ...updatedPc } });
+          candleEvents.push({ type: 'candle_update', timeframe: tf, candle: { ...updatedPc } });
         } else {
           const newClosed = createCandleFromSale(sale, tf);
           newClosed.confirmed = true;
           closedCandles[instrumentKey][tf].push(newClosed);
-          closedCandles[instrumentKey][tf].sort((a,b) => a.startTime - b.startTime);
+          closedCandles[instrumentKey][tf].sort((a, b) => a.startTime - b.startTime);
           updatedCandles.push(newClosed);
-          candleEvents.push({ type: "candle_closed", timeframe: tf, candle: { ...newClosed } });
+          candleEvents.push({ type: 'candle_closed', timeframe: tf, candle: { ...newClosed } });
         }
       } else {
         currentCandle = updateCandle(currentCandle, sale);
         activeCandles[instrumentKey][tf] = currentCandle;
         updatedCandles.push(currentCandle);
-        candleEvents.push({ type: "candle_update", timeframe: tf, candle: { ...currentCandle } });
+        candleEvents.push({ type: 'candle_update', timeframe: tf, candle: { ...currentCandle } });
       }
     }
 
@@ -417,7 +461,7 @@ export function getMarketSnapshot(instrumentKey: string, timeframes?: Timeframe[
   const normKey = normalizeInstrumentKey(instrumentKey);
   const parsed = parseInstrumentKey(normKey);
 
-  const ALL_TF: Timeframe[] = ["1s", "1m", "5m", "15m", "1h", "4h", "1d", "1w", "1M"];
+  const ALL_TF: Timeframe[] = ['1s', '1m', '5m', '15m', '1h', '4h', '1d', '1w', '1M'];
   const tfsToInclude = timeframes && timeframes.length > 0 ? timeframes : ALL_TF;
 
   const timeframesData: Record<string, GiftCandle[]> = {};
@@ -438,22 +482,20 @@ export function getMarketSnapshot(instrumentKey: string, timeframes?: Timeframe[
     timeframesData[tf] = list;
   }
 
-  const recentSales = allSales
-    .filter(s => getInstrumentKey(s) === normKey)
-    .slice(-50);
+  const recentSales = allSales.filter((s) => getInstrumentKey(s) === normKey).slice(-50);
 
   return {
     instrumentKey: normKey,
     currency: parsed.currency,
     timeframes: timeframesData,
     recentSales,
-    serverTime: Date.now()
+    serverTime: Date.now(),
   };
 }
 
 export function processSale(sale: GiftSale): GiftCandle[] | null {
   const res = acceptCompletedSale(sale);
-  return res.accepted ? (res.candles || []) : null;
+  return res.accepted ? res.candles || [] : null;
 }
 
 export function serializeMarketState(isSimulation = false): MarketSnapshot {
@@ -464,7 +506,7 @@ export function serializeMarketState(isSimulation = false): MarketSnapshot {
     processedSaleIds: Array.from(processedSaleIds),
     activeCandles: JSON.parse(JSON.stringify(activeCandles)),
     closedCandles: JSON.parse(JSON.stringify(closedCandles)),
-    isSimulation
+    isSimulation,
   };
 }
 
@@ -499,7 +541,16 @@ export function restoreMarketState(
     for (const instKey in snapshot.activeCandles) {
       for (const tf in snapshot.activeCandles[instKey]) {
         const c = snapshot.activeCandles[instKey][tf];
-        if (c && c.tradeCount > 0 && c.open && c.high && c.low && c.close && !isNaN(Number(c.open)) && !isNaN(Number(c.close))) {
+        if (
+          c &&
+          c.tradeCount > 0 &&
+          c.open &&
+          c.high &&
+          c.low &&
+          c.close &&
+          !isNaN(Number(c.open)) &&
+          !isNaN(Number(c.close))
+        ) {
           if (!activeCandles[instKey]) activeCandles[instKey] = {};
           activeCandles[instKey][tf] = c;
         }
@@ -514,7 +565,16 @@ export function restoreMarketState(
         const rawList = snapshot.closedCandles[instKey][tf] || [];
         const map = new Map<number, GiftCandle>();
         for (const c of rawList) {
-          if (c && c.tradeCount > 0 && c.open && c.high && c.low && c.close && !isNaN(Number(c.open)) && !isNaN(Number(c.close))) {
+          if (
+            c &&
+            c.tradeCount > 0 &&
+            c.open &&
+            c.high &&
+            c.low &&
+            c.close &&
+            !isNaN(Number(c.open)) &&
+            !isNaN(Number(c.close))
+          ) {
             map.set(c.startTime, c);
           }
         }
@@ -527,5 +587,3 @@ export function restoreMarketState(
 
   return { success: true, restoredSalesCount: allSales.length };
 }
-
-

@@ -23,11 +23,7 @@ export const GiftsProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     });
   }, []);
 
-  return (
-    <GiftsContext.Provider value={{ gifts, loading }}>
-      {children}
-    </GiftsContext.Provider>
-  );
+  return <GiftsContext.Provider value={{ gifts, loading }}>{children}</GiftsContext.Provider>;
 };
 
 export const useGifts = () => useContext(GiftsContext);

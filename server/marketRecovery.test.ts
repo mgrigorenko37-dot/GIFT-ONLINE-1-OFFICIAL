@@ -10,12 +10,12 @@ import {
   closedCandles,
   getMarketCandlesHistory,
   setMarketRepository,
-  getMarketRepository
+  getMarketRepository,
 } from './marketState';
 import {
   InMemoryMarketRepository,
   FilePersistentMarketRepository,
-  MarketSnapshot
+  MarketSnapshot,
 } from './marketRepository';
 import path from 'path';
 import fs from 'fs';
@@ -36,7 +36,7 @@ describe('Stage 15: Reliable Market Data Recovery Scenarios', () => {
       price: '100',
       quantity: '1',
       eventTime: baseTime,
-      status: 'completed'
+      status: 'completed',
     });
     expect(sale1Res.accepted).toBe(true);
 
@@ -47,7 +47,7 @@ describe('Stage 15: Reliable Market Data Recovery Scenarios', () => {
       price: '110',
       quantity: '2',
       eventTime: baseTime + 10000,
-      status: 'completed'
+      status: 'completed',
     });
     expect(sale2Res.accepted).toBe(true);
 
@@ -58,7 +58,7 @@ describe('Stage 15: Reliable Market Data Recovery Scenarios', () => {
       price: '120',
       quantity: '1',
       eventTime: baseTime + 60000,
-      status: 'completed'
+      status: 'completed',
     });
     expect(sale3Res.accepted).toBe(true);
 
@@ -91,7 +91,7 @@ describe('Stage 15: Reliable Market Data Recovery Scenarios', () => {
       price: '130',
       quantity: '1',
       eventTime: baseTime + 70000,
-      status: 'completed'
+      status: 'completed',
     });
     expect(sale4Res.accepted).toBe(true);
 
@@ -107,7 +107,7 @@ describe('Stage 15: Reliable Market Data Recovery Scenarios', () => {
       price: '100',
       quantity: '1',
       eventTime: baseTime,
-      status: 'completed'
+      status: 'completed',
     });
 
     expect(dupRes.accepted).toBe(false);
@@ -130,14 +130,14 @@ describe('Stage 15: Reliable Market Data Recovery Scenarios', () => {
       price: '50',
       quantity: '1',
       eventTime: 1710000000000,
-      status: 'completed'
+      status: 'completed',
     });
     expect(saleRes.accepted).toBe(true);
-    await new Promise(res => setTimeout(res, 100));
+    await new Promise((res) => setTimeout(res, 100));
 
     const snap = serializeMarketState();
     await fileRepo.saveSnapshot(snap);
-    await new Promise(res => setTimeout(res, 100));
+    await new Promise((res) => setTimeout(res, 100));
 
     clearMarketState(false);
     expect(allSales.length).toBe(0);
@@ -164,7 +164,7 @@ describe('Stage 15: Reliable Market Data Recovery Scenarios', () => {
       price: '100',
       quantity: '1',
       eventTime: baseTime,
-      status: 'completed'
+      status: 'completed',
     });
 
     acceptCompletedSale({
@@ -174,7 +174,7 @@ describe('Stage 15: Reliable Market Data Recovery Scenarios', () => {
       price: '110',
       quantity: '1',
       eventTime: baseTime + 60000,
-      status: 'completed'
+      status: 'completed',
     });
 
     const snapshot = serializeMarketState();
@@ -191,7 +191,7 @@ describe('Stage 15: Reliable Market Data Recovery Scenarios', () => {
       price: '200',
       quantity: '1',
       eventTime: baseTime + 30000,
-      status: 'completed'
+      status: 'completed',
     });
 
     expect(lateRes.accepted).toBe(true);
@@ -213,8 +213,8 @@ describe('Stage 15: Reliable Market Data Recovery Scenarios', () => {
           quantity: '1',
           currency: 'TON',
           eventTime: 1710000000000,
-          status: 'completed'
-        }
+          status: 'completed',
+        },
       ],
       processedSaleIds: ['valid-s1'],
       activeCandles: {
@@ -233,9 +233,9 @@ describe('Stage 15: Reliable Market Data Recovery Scenarios', () => {
             tradeCount: 1,
             confirmed: false,
             revision: 1,
-            updatedAt: 1710000000000
-          }
-        }
+            updatedAt: 1710000000000,
+          },
+        },
       },
       closedCandles: {
         [instKey]: {
@@ -254,7 +254,7 @@ describe('Stage 15: Reliable Market Data Recovery Scenarios', () => {
               tradeCount: 1,
               confirmed: true,
               revision: 1,
-              updatedAt: 1710000000000
+              updatedAt: 1710000000000,
             },
             {
               instrumentKey: instKey,
@@ -270,7 +270,7 @@ describe('Stage 15: Reliable Market Data Recovery Scenarios', () => {
               tradeCount: 2,
               confirmed: true,
               revision: 2,
-              updatedAt: 1710000010000
+              updatedAt: 1710000010000,
             },
             {
               instrumentKey: instKey,
@@ -286,11 +286,11 @@ describe('Stage 15: Reliable Market Data Recovery Scenarios', () => {
               tradeCount: 0,
               confirmed: true,
               revision: 0,
-              updatedAt: 1710000060000
-            }
-          ]
-        }
-      }
+              updatedAt: 1710000060000,
+            },
+          ],
+        },
+      },
     };
 
     restoreMarketState(badSnapshot);
@@ -312,7 +312,7 @@ describe('Stage 15: Reliable Market Data Recovery Scenarios', () => {
       quantity: '1',
       eventTime: 1710000000000,
       status: 'completed',
-      isMock: true
+      isMock: true,
     });
     expect(mockResProd.accepted).toBe(false);
 
@@ -325,7 +325,7 @@ describe('Stage 15: Reliable Market Data Recovery Scenarios', () => {
       quantity: '1',
       eventTime: 1710000000000,
       status: 'completed',
-      isMock: true
+      isMock: true,
     });
     expect(mockResSim.accepted).toBe(true);
 
@@ -337,4 +337,3 @@ describe('Stage 15: Reliable Market Data Recovery Scenarios', () => {
     expect(allSales.length).toBe(0);
   });
 });
-

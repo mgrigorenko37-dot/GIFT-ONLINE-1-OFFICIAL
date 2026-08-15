@@ -2,7 +2,8 @@ const fs = require('fs');
 let tsx = fs.readFileSync('src/screens/GXTerminal/GXTerminalScreen.tsx', 'utf8');
 
 // Replace the price heading
-const oldHeadingRegex = /<div className='gx-chart-heading'>[\s\S]*?<\/div>\s*<div className='gx-timeframes'>[\s\S]*?<\/div>/;
+const oldHeadingRegex =
+  /<div className='gx-chart-heading'>[\s\S]*?<\/div>\s*<div className='gx-timeframes'>[\s\S]*?<\/div>/;
 
 const newHeading = `<div className="price-head">
         <div>

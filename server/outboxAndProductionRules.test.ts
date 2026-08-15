@@ -65,11 +65,13 @@ describe('Transactional Outbox & Production Safety Rules', () => {
           eventTime: Date.now(),
           createdAt: Date.now(),
           status: 'completed' as const,
-          isMock: false
-        }
+          isMock: false,
+        },
       };
 
-      await expect(broadcastSaleResult(mockResult)).rejects.toThrow(/Redis is required for cluster realtime synchronization/);
+      await expect(broadcastSaleResult(mockResult)).rejects.toThrow(
+        /Redis is required for cluster realtime synchronization/
+      );
     } finally {
       process.env.REQUIRE_REDIS = originalEnv;
       process.env.NODE_ENV = originalNodeEnv;
@@ -83,8 +85,11 @@ describe('Transactional Outbox & Production Safety Rules', () => {
     try {
       process.env.NODE_ENV = 'production';
       delete process.env.DATABASE_URL;
+      delete process.env.SQL_HOST;
 
-      expect(() => resolveMarketRepository()).toThrow(/CRITICAL CONFIGURATION ERROR: Production mode requires DATABASE_URL/);
+      expect(() => resolveMarketRepository()).toThrow(
+        /CRITICAL CONFIGURATION ERROR: Production mode requires DATABASE_URL/
+      );
     } finally {
       process.env.NODE_ENV = originalNodeEnv;
       process.env.DATABASE_URL = originalDbUrl;

@@ -61,7 +61,11 @@ export class OutboxWorker {
           if (this.repo.markOutboxEventFailed) {
             const backoffMs = Math.min(1000 * Math.pow(2, evt.attempts || 1), 60000);
             const nextAvail = Date.now() + backoffMs;
-            await this.repo.markOutboxEventFailed(evt.eventId, err.message || String(err), nextAvail);
+            await this.repo.markOutboxEventFailed(
+              evt.eventId,
+              err.message || String(err),
+              nextAvail
+            );
           }
         }
       }

@@ -7,9 +7,14 @@ import {
   closeRedisConnections,
   setTestRedisClients,
   MARKET_EVENTS_CHANNEL,
-  REDIS_SEQUENCE_KEY
+  REDIS_SEQUENCE_KEY,
 } from './redisManager';
-import { acceptCompletedSale, clearMarketState, setMarketRepository, getActiveCandle } from './marketState';
+import {
+  acceptCompletedSale,
+  clearMarketState,
+  setMarketRepository,
+  getActiveCandle,
+} from './marketState';
 import { InMemoryMarketRepository } from './marketRepository';
 import { broadcastSaleResult, clearAllSubscriptions, handleSubscribe } from './realtimeManager';
 import { OutboxWorker } from './outboxWorker';
@@ -111,7 +116,7 @@ describe('Redis Fault Tolerance & Multi-Instance Production Rules', () => {
 
     const result = initRedisManager(undefined, {
       redisUrl: undefined,
-      requireRedis: false
+      requireRedis: false,
     });
 
     expect(result.success).toBe(false);
@@ -137,7 +142,7 @@ describe('Redis Fault Tolerance & Multi-Instance Production Rules', () => {
     expect(() => {
       initRedisManager(undefined, {
         redisUrl: undefined,
-        requireRedis: true
+        requireRedis: true,
       });
     }).toThrow(/CRITICAL CONFIGURATION ERROR: REDIS_URL is strictly required/);
 
@@ -172,12 +177,14 @@ describe('Redis Fault Tolerance & Multi-Instance Production Rules', () => {
         quantity: '1',
         eventTime: Date.now(),
         createdAt: Date.now(),
-        status: 'completed' as const
-      }
+        status: 'completed' as const,
+      },
     };
 
     // Must throw error rather than silently fallback locally
-    await expect(broadcastSaleResult(saleResult)).rejects.toThrow(/Redis is required for cluster realtime synchronization/);
+    await expect(broadcastSaleResult(saleResult)).rejects.toThrow(
+      /Redis is required for cluster realtime synchronization/
+    );
   });
 
   it('4. Redis reconnect: system recovers healthy status and flushes pending outbox events', async () => {
@@ -196,7 +203,7 @@ describe('Redis Fault Tolerance & Multi-Instance Production Rules', () => {
       price: '25',
       quantity: '1',
       eventTime: Date.now(),
-      status: 'completed' as const
+      status: 'completed' as const,
     };
     acceptCompletedSale(sale);
 
@@ -242,7 +249,7 @@ describe('Redis Fault Tolerance & Multi-Instance Production Rules', () => {
         if (event === 'sale_accepted' || event === 'market_event') {
           processASocketReceived = true;
         }
-      }
+      },
     };
     handleSubscribe(mockSocketA, { instrumentKey: 'gift_star:all:all:TON' });
 
@@ -253,7 +260,7 @@ describe('Redis Fault Tolerance & Multi-Instance Production Rules', () => {
         if (event === 'sale_accepted' || event === 'market_event') {
           processBSocketReceived = true;
         }
-      }
+      },
     };
 
     // Process A accepts sale
@@ -264,7 +271,7 @@ describe('Redis Fault Tolerance & Multi-Instance Production Rules', () => {
       price: '10',
       quantity: '1',
       eventTime: Date.now(),
-      status: 'completed' as const
+      status: 'completed' as const,
     };
 
     const res = acceptCompletedSale(saleData);
@@ -305,8 +312,8 @@ describe('Redis Fault Tolerance & Multi-Instance Production Rules', () => {
         quantity: '1',
         eventTime: Date.now(),
         createdAt: Date.now(),
-        status: 'completed' as const
-      }
+        status: 'completed' as const,
+      },
     };
 
     await broadcastSaleResult(saleResult);
@@ -332,7 +339,7 @@ describe('Redis Fault Tolerance & Multi-Instance Production Rules', () => {
       price: '10',
       quantity: '1',
       eventTime: Date.now(),
-      status: 'completed' as const
+      status: 'completed' as const,
     };
     const sale2 = {
       id: 'sale_dup_chk_2',
@@ -341,7 +348,7 @@ describe('Redis Fault Tolerance & Multi-Instance Production Rules', () => {
       price: '15',
       quantity: '1',
       eventTime: Date.now() + 1000,
-      status: 'completed' as const
+      status: 'completed' as const,
     };
 
     acceptCompletedSale(sale1);

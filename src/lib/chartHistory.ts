@@ -12,7 +12,7 @@ export interface FormattedChartCandle {
 /**
  * Validates, deduplicates, sorts, and converts GiftCandle array into
  * Lightweight Charts compatible candlestick data array.
- * 
+ *
  * Rules:
  * - Checks timezone / UTC timestamp conversion (ms -> seconds).
  * - Filters out invalid candles (e.g. wrong timeframe, non-positive startTime, NaN prices).
@@ -33,7 +33,7 @@ export function processCandlesForChart(
 
   for (const c of candles) {
     if (!c || typeof c !== 'object') continue;
-    
+
     // Strict timeframe check
     if (c.timeframe && c.timeframe !== expectedTimeframe) {
       continue;
@@ -66,7 +66,10 @@ export function processCandlesForChart(
       // Keep candle with higher revision or updatedAt
       const existingRev = existing.revision ?? 0;
       const currentRev = c.revision ?? 0;
-      if (currentRev > existingRev || (currentRev === existingRev && (c.updatedAt ?? 0) > (existing.updatedAt ?? 0))) {
+      if (
+        currentRev > existingRev ||
+        (currentRev === existingRev && (c.updatedAt ?? 0) > (existing.updatedAt ?? 0))
+      ) {
         map.set(c.startTime, c);
       }
     }

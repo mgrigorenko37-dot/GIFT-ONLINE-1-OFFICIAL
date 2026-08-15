@@ -46,9 +46,12 @@ app.get('/api/gifts', async (req, res) => {
 `;
 
 if (!code.includes('/api/gifts')) {
-    code = code.replace('async function startServer() {', apiEndpoint + '\nasync function startServer() {');
-    fs.writeFileSync('server.ts', code);
-    console.log("Added /api/gifts");
+  code = code.replace(
+    'async function startServer() {',
+    apiEndpoint + '\nasync function startServer() {'
+  );
+  fs.writeFileSync('server.ts', code);
+  console.log('Added /api/gifts');
 } else {
-    console.log("Already exists");
+  console.log('Already exists');
 }

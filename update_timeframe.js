@@ -93,10 +93,9 @@ code = code.replace(oldGenerateData, newGenerateData);
 
 // Update dependency array for chart useEffect
 code = code.replace(
-    /    };\n  }, \[activeGift\.floor\]\);/,
-    `    };\n  }, [activeGift.floor, timeframe]);`
+  /    };\n  }, \[activeGift\.floor\]\);/,
+  `    };\n  }, [activeGift.floor, timeframe]);`
 );
-
 
 // 3. Update HTML
 const oldTfRow = `<div className="chart-toolbar" id="tfRow">

@@ -21,11 +21,19 @@ const newArt = `const GiftArtwork: React.FC<{ className: string; large?: boolean
   );
 };`;
 
-['src/screens/Capital/CapitalScreen.tsx', 'src/screens/Portfolio/PortfolioScreen.tsx'].forEach(file => {
-  let code = fs.readFileSync(file, 'utf8');
-  code = code.replace(oldArt, newArt);
-  code = code.replace(/<GiftArtwork className=\{gift\.className\} large \/>/g, `<GiftArtwork className={gift.className} large emoji={gift.emoji} />`);
-  code = code.replace(/<GiftArtwork className=\{g\.className\} large \/>/g, `<GiftArtwork className={g.className} large emoji={g.emoji} />`);
-  fs.writeFileSync(file, code);
-});
-console.log("Fixed artworks");
+['src/screens/Capital/CapitalScreen.tsx', 'src/screens/Portfolio/PortfolioScreen.tsx'].forEach(
+  (file) => {
+    let code = fs.readFileSync(file, 'utf8');
+    code = code.replace(oldArt, newArt);
+    code = code.replace(
+      /<GiftArtwork className=\{gift\.className\} large \/>/g,
+      `<GiftArtwork className={gift.className} large emoji={gift.emoji} />`
+    );
+    code = code.replace(
+      /<GiftArtwork className=\{g\.className\} large \/>/g,
+      `<GiftArtwork className={g.className} large emoji={g.emoji} />`
+    );
+    fs.writeFileSync(file, code);
+  }
+);
+console.log('Fixed artworks');

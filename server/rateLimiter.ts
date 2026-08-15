@@ -26,7 +26,13 @@ export async function checkRateLimitKey(
   key: string,
   max: number,
   windowMs: number
-): Promise<{ allowed: boolean; current: number; limit: number; remaining: number; resetMs: number }> {
+): Promise<{
+  allowed: boolean;
+  current: number;
+  limit: number;
+  remaining: number;
+  resetMs: number;
+}> {
   const now = Date.now();
 
   if (isRedisActive()) {
@@ -105,11 +111,18 @@ export function createRateLimiter(options: RateLimiterOptions) {
 
       res.setHeader('X-RateLimit-Limit', result.limit.toString());
       res.setHeader('X-RateLimit-Remaining', result.remaining.toString());
-      res.setHeader('X-RateLimit-Reset', Math.ceil((Date.now() + result.resetMs) / 1000).toString());
+      res.setHeader(
+        'X-RateLimit-Reset',
+        Math.ceil((Date.now() + result.resetMs) / 1000).toString()
+      );
 
       if (!result.allowed) {
-        console.warn(`[RateLimiter] Blocked rate limit burst from IP ${clientIp} on path ${req.path} (${prefix})`);
-        return res.status(429).json({ error: message, retryAfterSeconds: Math.ceil(result.resetMs / 1000) });
+        console.warn(
+          `[RateLimiter] Blocked rate limit burst from IP ${clientIp} on path ${req.path} (${prefix})`
+        );
+        return res
+          .status(429)
+          .json({ error: message, retryAfterSeconds: Math.ceil(result.resetMs / 1000) });
       }
 
       next();
@@ -158,7 +171,9 @@ export function validateTelegramWebhookSecret(req: Request, res: Response, next:
       req.socket.remoteAddress ||
       'unknown_ip';
 
-    console.warn(`[Security] Unauthorized webhook access attempt from IP ${clientIp} on path ${req.path}`);
+    console.warn(
+      `[Security] Unauthorized webhook access attempt from IP ${clientIp} on path ${req.path}`
+    );
 
     return res.status(401).json({
       error: 'Unauthorized: Invalid or missing Telegram Webhook secret token.',

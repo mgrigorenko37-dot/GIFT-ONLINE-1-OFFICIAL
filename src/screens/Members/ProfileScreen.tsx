@@ -45,7 +45,9 @@ const ProfileScreen: React.FC = () => {
           </button>
         </nav>
 
-        <div className='gx-workspace-label gx-workspace-label-space'>{t('nav.account', 'Account')}</div>
+        <div className='gx-workspace-label gx-workspace-label-space'>
+          {t('nav.account', 'Account')}
+        </div>
         <nav className='gx-nav' aria-label='Account navigation'>
           <button className='gx-nav-item gx-nav-item-active' type='button'>
             <i className='material-icons'>person_outline</i>
@@ -74,7 +76,8 @@ const ProfileScreen: React.FC = () => {
             <span className='gx-status-dot' /> {t('nav.operational', 'All systems operational')}
           </div>
           <button className='gx-help-button' type='button'>
-            <i className='material-icons'>help_outline</i> {t('nav.help', 'Help center')} <span>↗</span>
+            <i className='material-icons'>help_outline</i> {t('nav.help', 'Help center')}{' '}
+            <span>↗</span>
           </button>
 
           <div className='gx-user-mini'>
@@ -165,7 +168,9 @@ const ProfileScreen: React.FC = () => {
               ACCOUNT <span className='gx-heading-line' />
             </p>
             <h1>{t('profile.title', 'Your Profile')}</h1>
-            <p className='gx-subheading'>{t('profile.subheading', 'Manage your personal details and app settings.')}</p>
+            <p className='gx-subheading'>
+              {t('profile.subheading', 'Manage your personal details and app settings.')}
+            </p>
           </div>
         </section>
 
@@ -234,13 +239,19 @@ const ProfileScreen: React.FC = () => {
 
             <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: 16 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ color: '#625d70', fontSize: 14 }}>{t('profile.user_id', 'User ID')}</span>
+                <span style={{ color: '#625d70', fontSize: 14 }}>
+                  {t('profile.user_id', 'User ID')}
+                </span>
                 <span style={{ color: '#f6f3ff', fontSize: 14, fontFamily: 'monospace' }}>
                   {user?.id || '981234567'}
                 </span>
               </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ color: '#625d70', fontSize: 14 }}>{t('profile.language', 'Language')}</span>
+              <div
+                style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+              >
+                <span style={{ color: '#625d70', fontSize: 14 }}>
+                  {t('profile.language', 'Language')}
+                </span>
                 <button
                   type='button'
                   onClick={openLangModal}
@@ -258,14 +269,18 @@ const ProfileScreen: React.FC = () => {
                   }}
                 >
                   <span>{currentLang.flag}</span>
-                  <span>{currentLang.nativeName} ({currentLang.name})</span>
+                  <span>
+                    {currentLang.nativeName} ({currentLang.name})
+                  </span>
                   <i className='material-icons' style={{ fontSize: '16px', color: '#8b76ff' }}>
                     edit
                   </i>
                 </button>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ color: '#625d70', fontSize: 14 }}>{t('profile.platform', 'Platform')}</span>
+                <span style={{ color: '#625d70', fontSize: 14 }}>
+                  {t('profile.platform', 'Platform')}
+                </span>
                 <span style={{ color: '#f6f3ff', fontSize: 14 }}>
                   {isTelegram ? 'Telegram Mini App' : 'Web'}
                 </span>
@@ -294,11 +309,23 @@ const ProfileScreen: React.FC = () => {
                 }}
               >
                 <div>
-                  <h4 style={{ color: '#f6f3ff', fontSize: 15, marginBottom: 4, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <h4
+                    style={{
+                      color: '#f6f3ff',
+                      fontSize: 15,
+                      marginBottom: 4,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                    }}
+                  >
                     <span>🌐</span> {t('profile.language', 'Interface Language')}
                   </h4>
                   <p style={{ color: '#8b859e', fontSize: 12 }}>
-                    {t('profile.language_sub', 'Choose your preferred language with instant search filter')}
+                    {t(
+                      'profile.language_sub',
+                      'Choose your preferred language with instant search filter'
+                    )}
                   </p>
                 </div>
                 <button
@@ -322,7 +349,9 @@ const ProfileScreen: React.FC = () => {
                   onMouseOver={(e) => (e.currentTarget.style.transform = 'translateY(-1px)')}
                   onMouseOut={(e) => (e.currentTarget.style.transform = 'translateY(0)')}
                 >
-                  <i className='material-icons' style={{ fontSize: '18px' }}>search</i>
+                  <i className='material-icons' style={{ fontSize: '18px' }}>
+                    search
+                  </i>
                   <span>{t('profile.change_lang', 'Change Language')}</span>
                 </button>
               </div>
@@ -368,7 +397,9 @@ const ProfileScreen: React.FC = () => {
                   <h4 style={{ color: '#f6f3ff', fontSize: 14, marginBottom: 4 }}>
                     {t('profile.hide_small', 'Hide Small Balances')}
                   </h4>
-                  <p style={{ color: '#625d70', fontSize: 12 }}>{t('profile.hide_small_sub', 'Hide assets worth less than 1 GX')}</p>
+                  <p style={{ color: '#625d70', fontSize: 12 }}>
+                    {t('profile.hide_small_sub', 'Hide assets worth less than 1 GX')}
+                  </p>
                 </div>
                 <div
                   style={{
@@ -410,4 +441,3 @@ const ProfileScreen: React.FC = () => {
 };
 
 export default ProfileScreen;
-

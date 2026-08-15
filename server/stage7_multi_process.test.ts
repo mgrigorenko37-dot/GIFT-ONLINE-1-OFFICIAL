@@ -9,7 +9,7 @@ import {
   closeRedisConnections,
   MARKET_EVENTS_CHANNEL,
   REDIS_SEQUENCE_KEY,
-  resetLocalSequence
+  resetLocalSequence,
 } from './redisManager';
 import { attachSocketListeners, clearAllSubscriptions, resetSequence } from './realtimeManager';
 import { clearMarketState, acceptCompletedSale } from './marketState';
@@ -156,7 +156,7 @@ describe('Stage 7: Real Multi-Instance Backend Inter-Process Tests', () => {
       price: '50',
       quantity: 1,
       eventTime: 1710000010000,
-      status: 'completed'
+      status: 'completed',
     });
 
     // Simulate Redis PubSub routing message across instances
@@ -164,7 +164,7 @@ describe('Stage 7: Real Multi-Instance Backend Inter-Process Tests', () => {
       kind: 'sale_result',
       result: saleResult,
       saleSeq: 1,
-      candleSeqs: [2]
+      candleSeqs: [2],
     });
 
     SharedRedisMock.globalBus.emit('message', MARKET_EVENTS_CHANNEL, redisMsg);
@@ -198,7 +198,7 @@ describe('Stage 7: Real Multi-Instance Backend Inter-Process Tests', () => {
       price: '100',
       quantity: 1,
       eventTime: 1710000020000,
-      status: 'completed'
+      status: 'completed',
     };
 
     // First ingestion (Instance A)
@@ -225,7 +225,7 @@ describe('Stage 7: Real Multi-Instance Backend Inter-Process Tests', () => {
       price: '75',
       quantity: 1,
       eventTime: 1710000030000,
-      status: 'completed'
+      status: 'completed',
     });
 
     const events: any[] = [];
@@ -242,8 +242,14 @@ describe('Stage 7: Real Multi-Instance Backend Inter-Process Tests', () => {
   });
 
   test('4. Strict isolation between TON and STARS across multi-instance event bus', async () => {
-    const clientTON: ClientSocket = socketClient(urlA, { transports: ['websocket'], forceNew: true });
-    const clientSTARS: ClientSocket = socketClient(urlB, { transports: ['websocket'], forceNew: true });
+    const clientTON: ClientSocket = socketClient(urlA, {
+      transports: ['websocket'],
+      forceNew: true,
+    });
+    const clientSTARS: ClientSocket = socketClient(urlB, {
+      transports: ['websocket'],
+      forceNew: true,
+    });
 
     await Promise.all([
       new Promise<void>((res) => clientTON.on('connect', res)),
@@ -273,15 +279,19 @@ describe('Stage 7: Real Multi-Instance Backend Inter-Process Tests', () => {
       price: '30',
       quantity: 1,
       eventTime: 1710000040000,
-      status: 'completed'
+      status: 'completed',
     });
 
-    SharedRedisMock.globalBus.emit('message', MARKET_EVENTS_CHANNEL, JSON.stringify({
-      kind: 'sale_result',
-      result: tonSaleResult,
-      saleSeq: 10,
-      candleSeqs: [11]
-    }));
+    SharedRedisMock.globalBus.emit(
+      'message',
+      MARKET_EVENTS_CHANNEL,
+      JSON.stringify({
+        kind: 'sale_result',
+        result: tonSaleResult,
+        saleSeq: 10,
+        candleSeqs: [11],
+      })
+    );
 
     await new Promise((r) => setTimeout(r, 150));
 

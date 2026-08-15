@@ -9,6 +9,7 @@ export type OrderStatus = 'Open' | 'PartiallyFilled' | 'Filled' | 'Cancelled' | 
 export type PositionStatus = 'Open' | 'Closed';
 
 export interface Order {
+  rejectionReason?: string;
   orderId: string;
   userId: string;
   instrumentKey: string;
@@ -23,6 +24,10 @@ export interface Order {
   remainingQty: number;
   avgFillPrice: number;
   fee: number;
+  settlementCurrency?: string;
+  feeCurrency?: string;
+  pnlCurrency?: string;
+  collateralCurrency?: string;
   createdAt: number;
   updatedAt: number;
 }
@@ -38,6 +43,9 @@ export interface Position {
   unrealizedPnl: number;
   realizedPnl: number;
   status: PositionStatus;
+  settlementCurrency?: string;
+  pnlCurrency?: string;
+  collateralCurrency?: string;
   openedAt: number;
   updatedAt: number;
 }
@@ -50,6 +58,11 @@ export interface Trade {
   side: Side;
   qty: number;
   price: number;
+  fee: number;
+  feeCurrency?: string;
+  realizedPnl?: number;
+  pnlCurrency?: string;
+  settlementCurrency?: string;
   timestamp: number;
 }
 
@@ -63,10 +76,13 @@ export class TradingEngine extends EventEmitter {
   constructor(dataPath?: string) {
     super();
     this.dataPath = dataPath || path.resolve(process.cwd(), '.data', 'trading_engine.json');
-    this.loadState();
+    if (this.dataPath !== ':memory:') {
+      this.loadState();
+    }
   }
 
   private loadState() {
+    if (this.dataPath === ':memory:') return;
     try {
       if (fs.existsSync(this.dataPath)) {
         const data = JSON.parse(fs.readFileSync(this.dataPath, 'utf-8'));
@@ -81,6 +97,7 @@ export class TradingEngine extends EventEmitter {
   }
 
   public saveState() {
+    if (this.dataPath === ':memory:') return;
     try {
       const dir = path.dirname(this.dataPath);
       if (!fs.existsSync(dir)) {
@@ -98,16 +115,46 @@ export class TradingEngine extends EventEmitter {
     }
   }
 
-  public getBalance(userId: string): number {
-    return this.balances.get(userId) || 12480.5; // Default initial balance matching frontend
+  public getBalance(userId: string, currency: string = 'TON'): number {
+    const key = `${userId}:${currency}`;
+    if (this.balances.has(key)) {
+      return this.balances.get(key)!;
+    }
+    if (currency === 'TON' && this.balances.has(userId)) {
+      return this.balances.get(userId)!;
+    }
+    return currency === 'TON' ? 12480.5 : 0;
   }
 
-  public setBalance(userId: string, amount: number) {
-    this.balances.set(userId, amount);
+  public setBalance(userId: string, amount: number, currency: string = 'TON') {
+    const key = `${userId}:${currency}`;
+    this.balances.set(key, amount);
+    if (currency === 'TON') {
+      this.balances.set(userId, amount);
+    }
   }
 
-  public placeOrder(orderData: Omit<Order, 'orderId' | 'status' | 'executedQty' | 'remainingQty' | 'avgFillPrice' | 'fee' | 'createdAt' | 'updatedAt'>, initialBalanceDeduct?: boolean): Order {
+  public placeOrder(
+    orderData: Omit<
+      Order,
+      | 'orderId'
+      | 'status'
+      | 'executedQty'
+      | 'remainingQty'
+      | 'avgFillPrice'
+      | 'fee'
+      | 'createdAt'
+      | 'updatedAt'
+    >,
+    initialBalanceDeduct?: boolean
+  ): Order {
     const now = Date.now();
+    const isStars =
+      orderData.instrumentKey.endsWith(':STARS') ||
+      orderData.instrumentKey.includes('STARS') ||
+      orderData.instrumentKey === 'star';
+    const currency = isStars ? 'STARS' : 'TON';
+
     const order: Order = {
       ...orderData,
       orderId: Math.random().toString(36).substring(2, 11),
@@ -116,42 +163,65 @@ export class TradingEngine extends EventEmitter {
       remainingQty: orderData.qty,
       avgFillPrice: 0,
       fee: 0,
+      settlementCurrency: orderData.settlementCurrency || currency,
+      feeCurrency: orderData.feeCurrency || currency,
+      pnlCurrency: orderData.pnlCurrency || currency,
+      collateralCurrency: orderData.collateralCurrency || currency,
       createdAt: now,
       updatedAt: now,
     };
 
-    // Enforcement of "Long only" lifecycle for now
     const posKey = `${order.userId}:${order.instrumentKey}`;
     const position = this.positions.get(posKey);
-    const hasLongPosition = position && position.status === 'Open' && position.side === 'Long';
+    const hasPosition = position && position.status === 'Open';
 
-    if (order.side === 'Sell') {
-      if (!hasLongPosition) {
-        order.status = 'Rejected';
-        this.orders.set(order.orderId, order);
-        this.saveState();
-        return order;
-      }
-      
-      // If we have a long position, any sell can only reduce it.
-      if (order.qty > position.qty) {
-        order.qty = position.qty;
-        order.remainingQty = position.qty;
+    if (order.reduceOnly && !hasPosition) {
+      order.status = 'Rejected';
+      this.orders.set(order.orderId, order);
+      this.saveState();
+      return order;
+    }
+
+    if (hasPosition) {
+      if (position.side === 'Long') {
+        if (order.side === 'Buy' && order.reduceOnly) {
+          order.status = 'Rejected';
+          this.orders.set(order.orderId, order);
+          this.saveState();
+          return order;
+        }
+        if (order.side === 'Sell') {
+          // Reducing Long
+          if (order.qty > position.qty) {
+            order.qty = position.qty;
+            order.remainingQty = position.qty;
+          }
+        }
+      } else if (position.side === 'Short') {
+        if (order.side === 'Sell' && order.reduceOnly) {
+          order.status = 'Rejected';
+          this.orders.set(order.orderId, order);
+          this.saveState();
+          return order;
+        }
+        if (order.side === 'Buy') {
+          // Reducing Short
+          if (order.qty > position.qty) {
+            order.qty = position.qty;
+            order.remainingQty = position.qty;
+          }
+        }
       }
     }
 
-    if (order.reduceOnly) {
-      if (order.side === 'Buy') {
-        order.status = 'Rejected';
-        this.orders.set(order.orderId, order);
-        this.saveState();
-        return order;
-      }
-    }
-
-    if (order.side === 'Buy' && order.orderType === 'Limit' && initialBalanceDeduct) {
-      const currentBalance = this.getBalance(order.userId);
-      this.setBalance(order.userId, currentBalance - (order.price * order.qty));
+    const availBalance = this.getBalance(order.userId, currency);
+    const requiredCollateral = order.qty * (order.price || 0);
+    if (!order.reduceOnly && requiredCollateral > 0 && availBalance < requiredCollateral) {
+      order.status = 'Rejected';
+      order.rejectionReason = `Insufficient funds in ${currency} balance`;
+      this.orders.set(order.orderId, order);
+      this.saveState();
+      return order;
     }
 
     this.orders.set(order.orderId, order);
@@ -183,7 +253,11 @@ export class TradingEngine extends EventEmitter {
   }
 
   public getAllPositions(userId: string): Position[] {
-    return Array.from(this.positions.values()).filter(p => p.userId === userId);
+    return Array.from(this.positions.values()).filter((p) => p.userId === userId);
+  }
+
+  public getUserTrades(userId: string): Trade[] {
+    return this.trades.filter((t) => t.userId === userId);
   }
 
   public updateMarkPrice(instrumentKey: string, markPrice: number) {
@@ -191,7 +265,8 @@ export class TradingEngine extends EventEmitter {
       if (position.instrumentKey === instrumentKey && position.status === 'Open') {
         position.markPrice = markPrice;
         const pnlMultiplier = position.side === 'Long' ? 1 : -1;
-        position.unrealizedPnl = (markPrice - position.avgEntryPrice) * position.qty * pnlMultiplier;
+        position.unrealizedPnl =
+          (markPrice - position.avgEntryPrice) * position.qty * pnlMultiplier;
       }
     }
     this.saveState();
@@ -210,9 +285,11 @@ export class TradingEngine extends EventEmitter {
 
     if (fillQty === 0) return null;
 
-    const totalCost = (order.avgFillPrice * order.executedQty) + (fillPrice * fillQty);
-    
+    const totalCost = order.avgFillPrice * order.executedQty + fillPrice * fillQty;
+    const fee = fillQty * fillPrice * 0.0025;
+
     order.executedQty += fillQty;
+    order.fee += fee;
     order.remainingQty -= fillQty;
     order.avgFillPrice = totalCost / order.executedQty;
     order.updatedAt = Date.now();
@@ -223,20 +300,11 @@ export class TradingEngine extends EventEmitter {
       order.status = 'PartiallyFilled';
     }
 
-    // Update balances
-    const currentBalance = this.getBalance(order.userId);
-    if (order.side === 'Buy') {
-      if (order.orderType === 'Market') {
-        this.setBalance(order.userId, currentBalance - (fillQty * fillPrice));
-        this.emit('balanceUpdated', { userId: order.userId, balance: this.getBalance(order.userId) });
-      }
-    } else {
-      this.setBalance(order.userId, currentBalance + (fillQty * fillPrice));
-      this.emit('balanceUpdated', { userId: order.userId, balance: this.getBalance(order.userId) });
-    }
-
-    this.updatePosition(order, fillQty, fillPrice);
-    this.emit('orderUpdated', order);
+    const isStars =
+      order.instrumentKey.endsWith(':STARS') ||
+      order.instrumentKey.includes('STARS') ||
+      order.instrumentKey === 'star';
+    const currency = isStars ? 'STARS' : 'TON';
 
     const trade: Trade = {
       tradeId: Math.random().toString(36).substring(2, 11),
@@ -246,12 +314,69 @@ export class TradingEngine extends EventEmitter {
       side: order.side,
       qty: fillQty,
       price: fillPrice,
-      timestamp: Date.now()
+      timestamp: Date.now(),
+      fee: fee,
+      feeCurrency: currency,
+      pnlCurrency: currency,
+      settlementCurrency: currency,
     };
     this.trades.push(trade);
 
-    this.saveState();
+    if ((order as any).realizedPnl !== undefined) {
+      (trade as any).realizedPnl = (order as any).realizedPnl;
+    }
+
+    // 1. execution/trade
     this.emit('tradeExecuted', trade);
+
+    // 3. position update (must happen first so we can grab realizedPnl)
+    const posKey = `${order.userId}:${order.instrumentKey}`;
+    const oldPosition = this.positions.get(posKey);
+    const hasOldPosition = oldPosition && oldPosition.status === 'Open';
+    const oldPnl = hasOldPosition ? oldPosition.realizedPnl : 0;
+
+    this.updatePosition(order, fillQty, fillPrice);
+
+    const newPosition = this.positions.get(posKey);
+    const newPnl = newPosition ? newPosition.realizedPnl : 0;
+
+    if (
+      order.reduceOnly ||
+      (hasOldPosition && oldPosition.side !== (order.side === 'Buy' ? 'Long' : 'Short'))
+    ) {
+      (order as any).realizedPnl = newPnl - oldPnl;
+      (order as any).positionEffect = 'Close';
+    } else {
+      (order as any).positionEffect = 'Open';
+    }
+
+    trade.realizedPnl = (order as any).realizedPnl || 0;
+
+    // 2. order update
+    this.emit('orderUpdated', order);
+
+    // 4. balance update (isolated by currency)
+    const currentBalance = this.getBalance(order.userId, currency);
+    const currentTradeRealizedPnl =
+      order.reduceOnly ||
+      (hasOldPosition && oldPosition.side !== (order.side === 'Buy' ? 'Long' : 'Short'))
+        ? newPnl - oldPnl
+        : 0;
+
+    const newBalance = currentBalance - fee + currentTradeRealizedPnl;
+    this.setBalance(order.userId, newBalance, currency);
+    this.emit('balanceUpdated', {
+      userId: order.userId,
+      balance: newBalance,
+      availableBalance: newBalance,
+      lockedBalance: 0,
+      currency,
+    });
+
+    // 5. history update
+    this.emit('historyUpdated', { userId: order.userId, trade });
+
+    this.saveState();
     return trade;
   }
 
@@ -260,40 +385,50 @@ export class TradingEngine extends EventEmitter {
     let position = this.positions.get(posKey);
 
     const isBuy = order.side === 'Buy';
+    const isStars =
+      order.instrumentKey.endsWith(':STARS') ||
+      order.instrumentKey.includes('STARS') ||
+      order.instrumentKey === 'star';
+    const currency = isStars ? 'STARS' : 'TON';
 
     if (!position || position.status === 'Closed') {
-      if (isBuy) {
-        position = {
-          positionId: Math.random().toString(36).substring(2, 11),
-          userId: order.userId,
-          instrumentKey: order.instrumentKey,
-          side: 'Long',
-          qty: fillQty,
-          avgEntryPrice: fillPrice,
-          markPrice: fillPrice,
-          unrealizedPnl: 0,
-          realizedPnl: 0,
-          status: 'Open',
-          openedAt: Date.now(),
-          updatedAt: Date.now()
-        };
-        this.positions.set(posKey, position);
-        this.emit('positionUpdated', position);
-      }
+      // Open new position
+      position = {
+        positionId: Math.random().toString(36).substring(2, 11),
+        userId: order.userId,
+        instrumentKey: order.instrumentKey,
+        side: isBuy ? 'Long' : 'Short',
+        qty: fillQty,
+        avgEntryPrice: fillPrice,
+        markPrice: fillPrice,
+        unrealizedPnl: 0,
+        realizedPnl: 0,
+        status: 'Open',
+        settlementCurrency: currency,
+        pnlCurrency: currency,
+        collateralCurrency: currency,
+        openedAt: Date.now(),
+        updatedAt: Date.now(),
+      };
+      this.positions.set(posKey, position);
+      this.emit('positionUpdated', position);
       return;
     }
 
-    // Position exists (is Long)
-    if (isBuy) {
-      // Increase Long position
-      const totalValue = (position.qty * position.avgEntryPrice) + (fillQty * fillPrice);
+    // Position exists
+    const isIncrease = (position.side === 'Long' && isBuy) || (position.side === 'Short' && !isBuy);
+
+    if (isIncrease) {
+      // Increase position
+      const totalValue = position.qty * position.avgEntryPrice + fillQty * fillPrice;
       position.qty += fillQty;
       position.avgEntryPrice = totalValue / position.qty;
       position.updatedAt = Date.now();
       this.emit('positionUpdated', position);
     } else {
-      // Decrease Long position (Sell)
-      const realizedPnl = (fillPrice - position.avgEntryPrice) * fillQty;
+      // Decrease position
+      const pnlMultiplier = position.side === 'Long' ? 1 : -1;
+      const realizedPnl = (fillPrice - position.avgEntryPrice) * fillQty * pnlMultiplier;
       position.realizedPnl += realizedPnl;
       position.qty -= fillQty;
       position.updatedAt = Date.now();

@@ -180,7 +180,7 @@ css += `
   height: 14px !important;
   border: 2px solid var(--gx-panel) !important;
 }
-`
+`;
 
 fs.writeFileSync('src/styles/site.css', css);
 
@@ -248,8 +248,10 @@ if (chartHeadingMatch) {
 }
 
 // Update Order Inputs
-const limitInputRegex = /<label className='gx-input-label'>\s*Price <span>GX<\/span>\s*<div className='gx-order-input'>\s*<input([\s\S]*?)\/>\s*<span>GX<\/span>\s*<\/div>\s*<\/label>/;
-tsx = tsx.replace(limitInputRegex, 
+const limitInputRegex =
+  /<label className='gx-input-label'>\s*Price <span>GX<\/span>\s*<div className='gx-order-input'>\s*<input([\s\S]*?)\/>\s*<span>GX<\/span>\s*<\/div>\s*<\/label>/;
+tsx = tsx.replace(
+  limitInputRegex,
   `<div className='gx-order-input'>
                     <span className='gx-input-prefix'>Order Price</span>
                     <input$1/>
@@ -257,8 +259,10 @@ tsx = tsx.replace(limitInputRegex,
                   </div>`
 );
 
-const amountInputRegex = /<label className='gx-input-label'>\s*Amount <span>SHARES<\/span>\s*<div className='gx-order-input'>\s*<input([\s\S]*?)\/>\s*<span>SHARES<\/span>\s*<\/div>\s*<\/label>/;
-tsx = tsx.replace(amountInputRegex, 
+const amountInputRegex =
+  /<label className='gx-input-label'>\s*Amount <span>SHARES<\/span>\s*<div className='gx-order-input'>\s*<input([\s\S]*?)\/>\s*<span>SHARES<\/span>\s*<\/div>\s*<\/label>/;
+tsx = tsx.replace(
+  amountInputRegex,
   `<div className='gx-order-input'>
                   <span className='gx-input-prefix'>Qty</span>
                   <input$1/>
@@ -266,8 +270,10 @@ tsx = tsx.replace(amountInputRegex,
                 </div>`
 );
 
-const submitRegex = /<button\s*type='button'\s*className={`gx-submit \$\{side === 'sell' \? 'gx-submit-sell' : ''\}`}[\s\S]*?<\/button>/;
-tsx = tsx.replace(submitRegex, 
+const submitRegex =
+  /<button\s*type='button'\s*className={`gx-submit \$\{side === 'sell' \? 'gx-submit-sell' : ''\}`}[\s\S]*?<\/button>/;
+tsx = tsx.replace(
+  submitRegex,
   `<button
                 type='button'
                 className={\`gx-submit \${side === 'sell' ? 'gx-submit-sell' : ''}\`}
@@ -280,6 +286,5 @@ tsx = tsx.replace(submitRegex,
 
 tsx = tsx.replace(/>\s*Buy\s*<\/button>/, '>Open</button>');
 tsx = tsx.replace(/>\s*Sell\s*<\/button>/, '>Close</button>');
-
 
 fs.writeFileSync('src/screens/GXTerminal/GXTerminalScreen.tsx', tsx);

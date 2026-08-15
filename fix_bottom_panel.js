@@ -2,7 +2,8 @@ const fs = require('fs');
 
 let tsx = fs.readFileSync('src/screens/GXTerminal/GXTerminalScreen.tsx', 'utf8');
 
-const oldSummaryRegex = /<div className='gx-order-summary'>[\s\S]*?<\/div>\s*<div style=\{\{ display: 'flex', gap: 12, marginTop: 16 \}\}>/;
+const oldSummaryRegex =
+  /<div className='gx-order-summary'>[\s\S]*?<\/div>\s*<div style=\{\{ display: 'flex', gap: 12, marginTop: 16 \}\}>/;
 
 const newSummary = `<div style={{ display: 'flex', justifyContent: 'space-between', color: '#EAECEF', fontSize: 12, fontWeight: 500, margin: '16px 0 12px' }}>
                 <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>

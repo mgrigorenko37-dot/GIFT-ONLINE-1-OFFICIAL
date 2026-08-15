@@ -131,11 +131,20 @@ export function useMarketSocket({
 
       // Validate configuration token to prevent race conditions from delayed REST responses
       if (configToken) {
-        if (configToken.instrumentKey && configToken.instrumentKey !== currentConfig.instrumentKey) return;
+        if (configToken.instrumentKey && configToken.instrumentKey !== currentConfig.instrumentKey)
+          return;
         if (configToken.timeframe && configToken.timeframe !== currentConfig.timeframe) return;
         if (configToken.currency && configToken.currency !== currentConfig.currency) return;
-        if (configToken.requestId !== undefined && configToken.requestId !== currentConfig.requestId) return;
-        if (configToken.subscriptionId !== undefined && configToken.subscriptionId !== currentConfig.subscriptionId) return;
+        if (
+          configToken.requestId !== undefined &&
+          configToken.requestId !== currentConfig.requestId
+        )
+          return;
+        if (
+          configToken.subscriptionId !== undefined &&
+          configToken.subscriptionId !== currentConfig.subscriptionId
+        )
+          return;
       }
 
       // Filter individual candles against current active configuration
@@ -244,7 +253,9 @@ export function useMarketSocket({
 
           // Process snapshot timeframes
           if (Array.isArray(event.timeframes)) {
-            const tfData = event.timeframes.find((t: any) => t.timeframe === currentConfig.timeframe);
+            const tfData = event.timeframes.find(
+              (t: any) => t.timeframe === currentConfig.timeframe
+            );
             if (tfData) {
               if (Array.isArray(tfData.closedCandles)) {
                 store.mergeCandles(
@@ -257,8 +268,10 @@ export function useMarketSocket({
               }
               if (tfData.activeCandle) {
                 if (
-                  (!tfData.activeCandle.instrumentKey || tfData.activeCandle.instrumentKey === currentConfig.instrumentKey) &&
-                  (!tfData.activeCandle.timeframe || tfData.activeCandle.timeframe === currentConfig.timeframe)
+                  (!tfData.activeCandle.instrumentKey ||
+                    tfData.activeCandle.instrumentKey === currentConfig.instrumentKey) &&
+                  (!tfData.activeCandle.timeframe ||
+                    tfData.activeCandle.timeframe === currentConfig.timeframe)
                 ) {
                   store.applyCandle(tfData.activeCandle);
                 }
@@ -295,8 +308,10 @@ export function useMarketSocket({
               }
               if (tfData.activeCandle) {
                 if (
-                  (!tfData.activeCandle.instrumentKey || tfData.activeCandle.instrumentKey === currentConfig.instrumentKey) &&
-                  (!tfData.activeCandle.timeframe || tfData.activeCandle.timeframe === currentConfig.timeframe)
+                  (!tfData.activeCandle.instrumentKey ||
+                    tfData.activeCandle.instrumentKey === currentConfig.instrumentKey) &&
+                  (!tfData.activeCandle.timeframe ||
+                    tfData.activeCandle.timeframe === currentConfig.timeframe)
                 ) {
                   store.applyCandle(tfData.activeCandle);
                 }
@@ -398,4 +413,3 @@ export function useMarketSocket({
     activeConfig: activeConfigRef.current,
   };
 }
-

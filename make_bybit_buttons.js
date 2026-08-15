@@ -7,13 +7,7 @@ tsx = tsx.replace(
   /const submitOrder = \(\) => \{/,
   "const submitOrder = (overrideSide?: 'buy' | 'sell') => {\n    const finalSide = overrideSide || side;"
 );
-tsx = tsx.replace(
-  /side,/g,
-  "finalSide,"
-);
-tsx = tsx.replace(
-  /\$\{side\.toUpperCase\(\)\}/,
-  "${finalSide.toUpperCase()}"
-);
+tsx = tsx.replace(/side,/g, 'finalSide,');
+tsx = tsx.replace(/\$\{side\.toUpperCase\(\)\}/, '${finalSide.toUpperCase()}');
 // fix the above replace since side is used in mapping userOrders etc. We should only replace inside submitOrder.
 // Actually, let's just do a specific string replace:

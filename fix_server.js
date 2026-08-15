@@ -5,7 +5,7 @@ let code = fs.readFileSync('server.ts', 'utf8');
 // Let's grab everything before the first // GIFTS API, and everything after the second app.get('/api/gifts' ...)
 const parts = code.split('// GIFTS API');
 const beforeGifts = parts[0];
-const afterGiftsString = "async function startServer() {";
+const afterGiftsString = 'async function startServer() {';
 const afterGifts = code.substring(code.indexOf(afterGiftsString));
 
 const replacement = `
@@ -59,4 +59,7 @@ app.get('/api/gifts', async (req, res) => {
 
 `;
 
-fs.writeFileSync('server.ts', beforeGifts + replacement + afterGiftsString + afterGifts.substring(afterGiftsString.length));
+fs.writeFileSync(
+  'server.ts',
+  beforeGifts + replacement + afterGiftsString + afterGifts.substring(afterGiftsString.length)
+);

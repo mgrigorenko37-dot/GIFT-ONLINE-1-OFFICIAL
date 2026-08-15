@@ -25,6 +25,7 @@ describe('Production Safety Rules: PostgreSQL & File Storage Isolation', () => {
       process.env.DATABASE_URL = origDbUrl;
     } else {
       delete process.env.DATABASE_URL;
+      delete process.env.SQL_HOST;
     }
     if (origStorageMode !== undefined) {
       process.env.STORAGE_MODE = origStorageMode;
@@ -41,11 +42,10 @@ describe('Production Safety Rules: PostgreSQL & File Storage Isolation', () => {
   it('1. production без DATABASE_URL: blocks startup and throws critical configuration error', () => {
     process.env.NODE_ENV = 'production';
     delete process.env.DATABASE_URL;
+    delete process.env.SQL_HOST;
     delete process.env.ALLOW_FILE_STORAGE_IN_PRODUCTION;
 
-    expect(() => resolveMarketRepository()).toThrow(
-      /CRITICAL CONFIGURATION ERROR/i
-    );
+    expect(() => resolveMarketRepository()).toThrow(/CRITICAL CONFIGURATION ERROR/i);
   });
 
   it('2. production с DATABASE_URL: resolves to PostgresMarketRepository', () => {
@@ -59,17 +59,17 @@ describe('Production Safety Rules: PostgreSQL & File Storage Isolation', () => {
   it('3. production с ALLOW_FILE_STORAGE_IN_PRODUCTION=true: ignores true flag, blocks file storage and throws error when DATABASE_URL missing', () => {
     process.env.NODE_ENV = 'production';
     delete process.env.DATABASE_URL;
+    delete process.env.SQL_HOST;
     process.env.STORAGE_MODE = 'file';
     process.env.ALLOW_FILE_STORAGE_IN_PRODUCTION = 'true';
 
-    expect(() => resolveMarketRepository()).toThrow(
-      /CRITICAL CONFIGURATION ERROR/i
-    );
+    expect(() => resolveMarketRepository()).toThrow(/CRITICAL CONFIGURATION ERROR/i);
   });
 
   it('4. development с file storage: returns FilePersistentMarketRepository', () => {
     process.env.NODE_ENV = 'development';
     delete process.env.DATABASE_URL;
+    delete process.env.SQL_HOST;
     process.env.STORAGE_MODE = 'file';
 
     const repo = resolveMarketRepository();
@@ -79,6 +79,7 @@ describe('Production Safety Rules: PostgreSQL & File Storage Isolation', () => {
   it('5. test с file storage: returns FilePersistentMarketRepository', () => {
     process.env.NODE_ENV = 'test';
     delete process.env.DATABASE_URL;
+    delete process.env.SQL_HOST;
     process.env.STORAGE_MODE = 'file';
 
     const repo = resolveMarketRepository();
@@ -99,7 +100,7 @@ describe('Production Safety Rules: PostgreSQL & File Storage Isolation', () => {
   it('7. миграции не запускаются обычным runtime-пользователем: initSchema ignores DDL in production unless RUN_MIGRATIONS=true', async () => {
     process.env.NODE_ENV = 'production';
     process.env.DATABASE_URL = 'postgres://user:pass@localhost:5432/testdb';
-    
+
     // We mock the pool connect to verify if it's called
     const repo = new PostgresMarketRepository();
     let connectCalled = false;

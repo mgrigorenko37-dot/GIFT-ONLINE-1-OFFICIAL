@@ -10,16 +10,21 @@ import {
   closeRedisConnections,
   MARKET_EVENTS_CHANNEL,
   REDIS_SEQUENCE_KEY,
-  resetLocalSequence
+  resetLocalSequence,
 } from './redisManager';
-import { acceptCompletedSale, clearMarketState, setMarketRepository, getMarketSnapshot } from './marketState';
+import {
+  acceptCompletedSale,
+  clearMarketState,
+  setMarketRepository,
+  getMarketSnapshot,
+} from './marketState';
 import { InMemoryMarketRepository, PostgresMarketRepository } from './marketRepository';
 import {
   broadcastSaleResult,
   broadcastLocalSaleResult,
   clearAllSubscriptions,
   handleSubscribe,
-  resetSequence
+  resetSequence,
 } from './realtimeManager';
 
 // Mock Redis Client for Fault Tolerance testing
@@ -135,7 +140,7 @@ describe('Stage 9: Redis Production Multi-Instance & Fault Tolerance', () => {
     });
 
     const mockClient = new MockFaultyRedisClient();
-    await new Promise(r => setTimeout(r, 15)); // wait for ready
+    await new Promise((r) => setTimeout(r, 15)); // wait for ready
 
     const payload = {
       kind: 'sale_result',
@@ -149,9 +154,9 @@ describe('Stage 9: Redis Production Multi-Instance & Fault Tolerance', () => {
           price: '250',
           quantity: '1',
           eventTime: 1710000000000,
-          status: 'completed'
-        }
-      }
+          status: 'completed',
+        },
+      },
     };
 
     await mockClient.publish(MARKET_EVENTS_CHANNEL, JSON.stringify(payload));
@@ -202,7 +207,7 @@ describe('Stage 9: Redis Production Multi-Instance & Fault Tolerance', () => {
       price: '500',
       quantity: 1,
       eventTime: 1710000010000,
-      status: 'completed'
+      status: 'completed',
     };
 
     // First acceptance succeeds
@@ -230,7 +235,7 @@ describe('Stage 9: Redis Production Multi-Instance & Fault Tolerance', () => {
       price: '100',
       quantity: 1,
       eventTime: 1710000020000,
-      status: 'completed'
+      status: 'completed',
     };
 
     // Process sale while Redis is completely down
@@ -251,7 +256,7 @@ describe('Stage 9: Redis Production Multi-Instance & Fault Tolerance', () => {
       price: '100',
       quantity: 1,
       eventTime: 1710000000000,
-      status: 'completed'
+      status: 'completed',
     };
     const sale2 = {
       id: 'sale_snap_2',
@@ -260,7 +265,7 @@ describe('Stage 9: Redis Production Multi-Instance & Fault Tolerance', () => {
       price: '200',
       quantity: 1,
       eventTime: 1710000060000,
-      status: 'completed'
+      status: 'completed',
     };
 
     acceptCompletedSale(sale1);
@@ -304,19 +309,19 @@ describe('Stage 9: Redis Production Multi-Instance & Fault Tolerance', () => {
         price: (10 * i).toString(),
         quantity: 1,
         eventTime: 1710000000000 + i * 1000,
-        status: 'completed'
+        status: 'completed',
       });
       expect(res.accepted).toBe(true);
     }
 
     const savedSales = repository.getSales();
     expect(savedSales.length).toBe(5);
-    expect(savedSales.map(s => s.id)).toEqual([
+    expect(savedSales.map((s) => s.id)).toEqual([
       'sale_no_redis_1',
       'sale_no_redis_2',
       'sale_no_redis_3',
       'sale_no_redis_4',
-      'sale_no_redis_5'
+      'sale_no_redis_5',
     ]);
   });
 
@@ -333,7 +338,7 @@ describe('Stage 9: Redis Production Multi-Instance & Fault Tolerance', () => {
     // Mock Redis reconnect where global sequence is resumed
     MockFaultyRedisClient.globalSeq = 50;
     const mockClient = new MockFaultyRedisClient();
-    await new Promise(r => setTimeout(r, 15));
+    await new Promise((r) => setTimeout(r, 15));
 
     // When Redis is active, getNextGlobalSequence uses Redis INCR
     const redisSeq = await mockClient.incr(REDIS_SEQUENCE_KEY);

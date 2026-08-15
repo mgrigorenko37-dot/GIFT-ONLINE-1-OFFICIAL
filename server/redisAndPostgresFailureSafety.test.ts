@@ -6,10 +6,15 @@ import {
   closeRedisConnections,
   setTestRedisClients,
   MARKET_EVENTS_CHANNEL,
-  REDIS_SEQUENCE_KEY
+  REDIS_SEQUENCE_KEY,
 } from './redisManager';
 import { clearMarketState, setMarketRepository } from './marketState';
-import { InMemoryMarketRepository, PostgresMarketRepository, OutboxEvent, MarketSnapshot } from './marketRepository';
+import {
+  InMemoryMarketRepository,
+  PostgresMarketRepository,
+  OutboxEvent,
+  MarketSnapshot,
+} from './marketRepository';
 import { broadcastSaleResult, clearAllSubscriptions } from './realtimeManager';
 import { OutboxWorker } from './outboxWorker';
 import { GiftSale, GiftCandle } from './chartEngine';
@@ -107,7 +112,7 @@ describe('Redis & PostgreSQL Failure & Edge Cases Safety Suite', () => {
   it('1. PostgreSQL недоступен до transaction: transaction fails before opening', async () => {
     const mockPool = {
       connect: vi.fn().mockRejectedValue(new Error('PostgreSQL connection error: ECONNREFUSED')),
-      query: vi.fn()
+      query: vi.fn(),
     };
 
     const pgRepo = Object.create(PostgresMarketRepository.prototype);
@@ -121,10 +126,12 @@ describe('Redis & PostgreSQL Failure & Edge Cases Safety Suite', () => {
       quantity: '1',
       currency: 'TON',
       eventTime: Date.now(),
-      status: 'completed'
+      status: 'completed',
     };
 
-    await expect(pgRepo.saveSaleAndCandlesAtomic(sampleSale, [])).rejects.toThrow('PostgreSQL connection error: ECONNREFUSED');
+    await expect(pgRepo.saveSaleAndCandlesAtomic(sampleSale, [])).rejects.toThrow(
+      'PostgreSQL connection error: ECONNREFUSED'
+    );
     expect(mockPool.connect).toHaveBeenCalled();
   });
 
@@ -133,16 +140,17 @@ describe('Redis & PostgreSQL Failure & Edge Cases Safety Suite', () => {
       query: vi.fn().mockImplementation((sql: string) => {
         if (sql === 'BEGIN') return Promise.resolve();
         if (sql.includes('INSERT INTO completed_sales')) return Promise.resolve({ rowCount: 1 });
-        if (sql.includes('INSERT INTO candles')) throw new Error('DB Error: Disk Full / Constraint Violation');
+        if (sql.includes('INSERT INTO candles'))
+          throw new Error('DB Error: Disk Full / Constraint Violation');
         if (sql === 'ROLLBACK') return Promise.resolve();
         return Promise.resolve();
       }),
-      release: vi.fn()
+      release: vi.fn(),
     };
 
     const mockPool = {
       connect: vi.fn().mockResolvedValue(mockClient),
-      query: vi.fn()
+      query: vi.fn(),
     };
 
     const pgRepo = Object.create(PostgresMarketRepository.prototype);
@@ -156,7 +164,7 @@ describe('Redis & PostgreSQL Failure & Edge Cases Safety Suite', () => {
       quantity: '1',
       currency: 'TON',
       eventTime: Date.now(),
-      status: 'completed'
+      status: 'completed',
     };
 
     const sampleCandle: GiftCandle = {
@@ -175,10 +183,12 @@ describe('Redis & PostgreSQL Failure & Edge Cases Safety Suite', () => {
       lastSaleId: 'sale_pg_fail_2',
       confirmed: false,
       revision: 1,
-      updatedAt: Date.now()
+      updatedAt: Date.now(),
     };
 
-    await expect(pgRepo.saveSaleAndCandlesAtomic(sampleSale, [sampleCandle])).rejects.toThrow('DB Error: Disk Full / Constraint Violation');
+    await expect(pgRepo.saveSaleAndCandlesAtomic(sampleSale, [sampleCandle])).rejects.toThrow(
+      'DB Error: Disk Full / Constraint Violation'
+    );
     expect(mockClient.query).toHaveBeenCalledWith('ROLLBACK');
     expect(mockClient.release).toHaveBeenCalled();
   });
@@ -219,11 +229,13 @@ describe('Redis & PostgreSQL Failure & Edge Cases Safety Suite', () => {
         quantity: '1',
         currency: 'TON' as const,
         eventTime: Date.now(),
-        status: 'completed' as const
-      }
+        status: 'completed' as const,
+      },
     };
 
-    await expect(broadcastSaleResult(result)).rejects.toThrow(/Redis is required for cluster realtime synchronization/i);
+    await expect(broadcastSaleResult(result)).rejects.toThrow(
+      /Redis is required for cluster realtime synchronization/i
+    );
   });
 
   it('5. Sale остаётся сохранённой в PostgreSQL: DB data is preserved despite Redis failure', async () => {
@@ -234,7 +246,7 @@ describe('Redis & PostgreSQL Failure & Edge Cases Safety Suite', () => {
       quantity: '2',
       currency: 'TON',
       eventTime: Date.now(),
-      status: 'completed'
+      status: 'completed',
     };
 
     const outboxEvent: OutboxEvent = {
@@ -248,13 +260,13 @@ describe('Redis & PostgreSQL Failure & Edge Cases Safety Suite', () => {
       attempts: 0,
       availableAt: Date.now(),
       createdAt: Date.now(),
-      updatedAt: Date.now()
+      updatedAt: Date.now(),
     };
 
     await repository.saveSaleAndCandlesAtomic(sale, [], [outboxEvent]);
 
     const sales = await repository.getSales();
-    expect(sales.some(s => s.id === sale.id)).toBe(true);
+    expect(sales.some((s) => s.id === sale.id)).toBe(true);
 
     process.env.REDIS_URL = 'redis://localhost:6379';
     process.env.REQUIRE_REDIS = 'true';
@@ -266,7 +278,7 @@ describe('Redis & PostgreSQL Failure & Edge Cases Safety Suite', () => {
     await worker.triggerImmediateProcessing();
 
     const salesAfter = await repository.getSales();
-    expect(salesAfter.some(s => s.id === sale.id)).toBe(true);
+    expect(salesAfter.some((s) => s.id === sale.id)).toBe(true);
   });
 
   it('6. Outbox event остаётся pending: event remains pending after failed dispatch', async () => {
@@ -277,7 +289,7 @@ describe('Redis & PostgreSQL Failure & Edge Cases Safety Suite', () => {
       quantity: '1',
       currency: 'TON',
       eventTime: Date.now(),
-      status: 'completed'
+      status: 'completed',
     };
 
     const outboxEvent: OutboxEvent = {
@@ -291,7 +303,7 @@ describe('Redis & PostgreSQL Failure & Edge Cases Safety Suite', () => {
       attempts: 0,
       availableAt: Date.now(),
       createdAt: Date.now(),
-      updatedAt: Date.now()
+      updatedAt: Date.now(),
     };
 
     await repository.saveSaleAndCandlesAtomic(sale, [], [outboxEvent]);
@@ -334,7 +346,7 @@ describe('Redis & PostgreSQL Failure & Edge Cases Safety Suite', () => {
       quantity: '1',
       currency: 'TON',
       eventTime: Date.now(),
-      status: 'completed'
+      status: 'completed',
     };
 
     const outboxEvent: OutboxEvent = {
@@ -348,7 +360,7 @@ describe('Redis & PostgreSQL Failure & Edge Cases Safety Suite', () => {
       attempts: 0,
       availableAt: Date.now(),
       createdAt: Date.now(),
-      updatedAt: Date.now()
+      updatedAt: Date.now(),
     };
 
     await repository.saveSaleAndCandlesAtomic(sale, [], [outboxEvent]);
@@ -389,7 +401,7 @@ describe('Redis & PostgreSQL Failure & Edge Cases Safety Suite', () => {
       quantity: '1',
       currency: 'TON',
       eventTime: Date.now(),
-      status: 'completed'
+      status: 'completed',
     };
 
     const outboxEvent: OutboxEvent = {
@@ -403,7 +415,7 @@ describe('Redis & PostgreSQL Failure & Edge Cases Safety Suite', () => {
       attempts: 0,
       availableAt: Date.now(),
       createdAt: Date.now(),
-      updatedAt: Date.now()
+      updatedAt: Date.now(),
     };
 
     await repository.saveSaleAndCandlesAtomic(sale, [], [outboxEvent]);
@@ -428,7 +440,7 @@ describe('Redis & PostgreSQL Failure & Edge Cases Safety Suite', () => {
       quantity: '1',
       currency: 'TON',
       eventTime: Date.now(),
-      status: 'completed'
+      status: 'completed',
     };
 
     const outboxEvent: OutboxEvent = {
@@ -442,7 +454,7 @@ describe('Redis & PostgreSQL Failure & Edge Cases Safety Suite', () => {
       attempts: 0,
       availableAt: Date.now(),
       createdAt: Date.now(),
-      updatedAt: Date.now()
+      updatedAt: Date.now(),
     };
 
     await repository.saveSaleAndCandlesAtomic(sale, [], [outboxEvent]);
@@ -454,7 +466,10 @@ describe('Redis & PostgreSQL Failure & Edge Cases Safety Suite', () => {
     const fetched = await repository.fetchPendingOutboxEvents(10, 0);
     expect(fetched.length).toBe(1);
 
-    await mockClient.publish(MARKET_EVENTS_CHANNEL, JSON.stringify({ event: 'sale_accepted', payload: { sale } }));
+    await mockClient.publish(
+      MARKET_EVENTS_CHANNEL,
+      JSON.stringify({ event: 'sale_accepted', payload: { sale } })
+    );
 
     // Reset lock so it can be picked up again
     const evtBefore = await repository.getOutboxEventById('evt_crash_after_redis');
@@ -488,7 +503,7 @@ describe('Redis & PostgreSQL Failure & Edge Cases Safety Suite', () => {
       lastSaleId: 'sale_idempotent_1',
       confirmed: false,
       revision: 1,
-      updatedAt: Date.now()
+      updatedAt: Date.now(),
     };
 
     await repository.saveCandles('col_1:TON', '1m', [sampleCandle]);
@@ -496,7 +511,7 @@ describe('Redis & PostgreSQL Failure & Edge Cases Safety Suite', () => {
     const duplicateCandle: GiftCandle = {
       ...sampleCandle,
       high: '15',
-      revision: 1
+      revision: 1,
     };
 
     const sale: GiftSale = {
@@ -506,7 +521,7 @@ describe('Redis & PostgreSQL Failure & Edge Cases Safety Suite', () => {
       quantity: '1',
       currency: 'TON',
       eventTime: 65000,
-      status: 'completed'
+      status: 'completed',
     };
 
     await repository.saveSaleAndCandlesAtomic(sale, [duplicateCandle]);
@@ -525,7 +540,7 @@ describe('Redis & PostgreSQL Failure & Edge Cases Safety Suite', () => {
       quantity: '1',
       currency: 'TON',
       eventTime: Date.now(),
-      status: 'completed'
+      status: 'completed',
     };
 
     const outboxEvent: OutboxEvent = {
@@ -539,7 +554,7 @@ describe('Redis & PostgreSQL Failure & Edge Cases Safety Suite', () => {
       attempts: 0,
       availableAt: Date.now(),
       createdAt: Date.now(),
-      updatedAt: Date.now()
+      updatedAt: Date.now(),
     };
 
     const firstRes = await repository.saveSaleAndCandlesAtomic(sale, [], [outboxEvent]);
@@ -564,12 +579,12 @@ describe('Redis & PostgreSQL Failure & Edge Cases Safety Suite', () => {
           quantity: '1',
           currency: 'TON',
           eventTime: Date.now(),
-          status: 'completed'
-        }
+          status: 'completed',
+        },
       ],
       processedSaleIds: ['sale_snapshot_1'],
       activeCandles: {},
-      closedCandles: {}
+      closedCandles: {},
     };
 
     await repository.saveSnapshot(snapshot);
@@ -592,7 +607,7 @@ describe('Redis & PostgreSQL Failure & Edge Cases Safety Suite', () => {
       attempts: 0,
       availableAt: Date.now(),
       createdAt: Date.now(),
-      updatedAt: Date.now()
+      updatedAt: Date.now(),
     };
 
     await repository.saveOutboxEvent(outboxEvent);
@@ -631,14 +646,14 @@ describe('Redis & PostgreSQL Failure & Edge Cases Safety Suite', () => {
           quantity: '1',
           currency: 'TON',
           eventTime: Date.now(),
-          status: 'completed'
-        }
+          status: 'completed',
+        },
       },
       status: 'pending',
       attempts: 0,
       availableAt: Date.now(),
       createdAt: Date.now(),
-      updatedAt: Date.now()
+      updatedAt: Date.now(),
     };
 
     await repository.saveOutboxEvent(outboxEvent);

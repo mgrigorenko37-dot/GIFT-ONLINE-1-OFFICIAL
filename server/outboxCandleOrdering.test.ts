@@ -6,7 +6,7 @@ import {
   serializeMarketState,
   restoreMarketState,
   setMarketRepository,
-  getActiveCandle
+  getActiveCandle,
 } from './marketState';
 import { InMemoryMarketRepository, OutboxEvent } from './marketRepository';
 import { CandleStore } from '../src/lib/realtimeStream';
@@ -43,7 +43,7 @@ describe('Outbox Events & Candle Revision Ordering Invariants', () => {
       lastSaleId: 'sale_1',
       confirmed: false,
       revision: 1,
-      updatedAt: 1710000005000
+      updatedAt: 1710000005000,
     };
 
     const candleRev2: GiftCandle = {
@@ -55,7 +55,7 @@ describe('Outbox Events & Candle Revision Ordering Invariants', () => {
       tradeCount: 2,
       lastSaleId: 'sale_2',
       revision: 2,
-      updatedAt: 1710000010000
+      updatedAt: 1710000010000,
     };
 
     // Apply Revision 2 first (simulating out-of-order execution)
@@ -91,14 +91,14 @@ describe('Outbox Events & Candle Revision Ordering Invariants', () => {
       lastSaleId: 'sale_1',
       confirmed: false,
       revision: 1,
-      updatedAt: 1710000005000
+      updatedAt: 1710000005000,
     };
 
     const candleRev2: GiftCandle = {
       ...candleRev1,
       close: '15',
       revision: 2,
-      updatedAt: 1710000010000
+      updatedAt: 1710000010000,
     };
 
     // Save Revision 2 first
@@ -117,7 +117,7 @@ describe('Outbox Events & Candle Revision Ordering Invariants', () => {
         quantity: '1',
         eventTime: 1710000005000,
         createdAt: 1710000005000,
-        status: 'completed'
+        status: 'completed',
       },
       [candleRev1]
     );
@@ -136,7 +136,7 @@ describe('Outbox Events & Candle Revision Ordering Invariants', () => {
       quantity: '1',
       eventTime: 1710000005000,
       createdAt: 1710000005000,
-      status: 'completed'
+      status: 'completed',
     };
 
     const res1 = acceptCompletedSale(sale);
@@ -163,7 +163,7 @@ describe('Outbox Events & Candle Revision Ordering Invariants', () => {
       quantity: '1',
       eventTime: 1710000005000,
       createdAt: 1710000005000,
-      status: 'completed'
+      status: 'completed',
     };
 
     const res = acceptCompletedSale(sale);
@@ -183,7 +183,7 @@ describe('Outbox Events & Candle Revision Ordering Invariants', () => {
       price: '10',
       quantity: '1',
       eventTime: 1710000005000,
-      status: 'completed'
+      status: 'completed',
     };
     const sale2 = {
       id: 'sale_rst_2',
@@ -192,7 +192,7 @@ describe('Outbox Events & Candle Revision Ordering Invariants', () => {
       price: '12',
       quantity: '1',
       eventTime: 1710000010000,
-      status: 'completed'
+      status: 'completed',
     };
 
     acceptCompletedSale(sale1);

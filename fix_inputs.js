@@ -2,7 +2,8 @@ const fs = require('fs');
 
 let tsx = fs.readFileSync('src/screens/GXTerminal/GXTerminalScreen.tsx', 'utf8');
 
-const oldInputsRegex = /\{orderType === 'Limit' && \([\s\S]*?<span className='gx-input-suffix'>BTC<\/span>\s*<\/div>/;
+const oldInputsRegex =
+  /\{orderType === 'Limit' && \([\s\S]*?<span className='gx-input-suffix'>BTC<\/span>\s*<\/div>/;
 
 const newInputs = `{orderType === 'Limit' && (
                 <div style={{ marginBottom: 12 }}>
