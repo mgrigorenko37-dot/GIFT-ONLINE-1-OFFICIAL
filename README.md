@@ -1,94 +1,112 @@
-# React Crypto Exchange Template
+# GX Exchange — Telegram Mini App for Collectible Gift Trading
 
-Are you ready to dive into the world of cryptocurrency trading? Look no further! This React Crypto Exchange Template is designed to provide a solid foundation for building a comprehensive cryptocurrency exchange platform. With its sleek and modern design, this template is perfect for anyone looking to create a user-friendly and intuitive trading experience.
+**GX Exchange** is a high-performance Telegram Mini App and trading terminal designed specifically for fractional and whole collectible Telegram Gifts trading. It combines modern React frontend, real-time WebSocket matching, PostgreSQL trading persistence, and robust TON blockchain integration.
 
-**Key Features**
+---
 
-- **Real-time Market Data**: Stay up-to-date with the latest market trends and prices.
-- **User Profile Management**: Manage your account, view transaction history, and track your portfolio.
-- **Secure Transactions**: Execute trades with confidence using our secure transaction processing system.
-- **Multi-Currency Support**: Trade with a variety of cryptocurrencies and fiat currencies.
-- **Responsive Design**: Accessible on any device, ensuring a seamless user experience across all platforms.
+## 🏗 Architecture & Core Components
 
-**Why Choose This Template?**
+```
+Telegram Mini App / Browser
+        │
+        ▼
+React + Vite Frontend (Tailwind CSS, Trading Terminal, Real-time Charts)
+        │
+        ├── REST API (Telegram HMAC Auth, Invoices, Withdrawals)
+        │                           │
+        └── Socket.IO Realtime ──────┼───── Express Backend
+                                    │
+              ┌─────────────────────┼─────────────────────┐
+              ▼                     ▼                     ▼
+        PostgreSQL              Redis                 Telegram API
+  (ACID State & Trades)   (Pub/Sub Adapter)      (Invoices & Webhooks)
+              │
+              ├── PostgresTradingEngine (Margin, Orders, Positions, Executions)
+              ├── TradingOutboxWorker (Reliable event dispatch)
+              └── TonScanner (TON Deposit Tracking with Cursor & Sender Verification)
+```
 
-- **Easy Customization**: Tailor the template to fit your brand's unique style and needs.
-- **Fast Development**: Get your exchange up and running quickly with our pre-built components and features.
+---
 
-**Get Started Today!**
+## 🚀 Key Features
 
-Explore the demo, review the code, and start building your cryptocurrency exchange platform with React Crypto Exchange Template.
+1. **Telegram Native Authentication**:
+   - Cryptographic verification via HMAC-SHA256 of `Telegram.WebApp.initData`.
+   - Complete prevention of user impersonation and spoofing across REST and Socket.io endpoints.
 
-## Support this project
+2. **Real PostgreSQL Trading Engine (`PostgresTradingEngine`)**:
+   - Single source of truth for all trades, order books, positions, margin, and balances.
+   - Atomic ACID transactions for order matching, balance reservation, and PnL calculation.
+   - Currency isolation (`TON` / `STARS` / `GX`).
 
-You are free to download, change and use it anywhere. I will regularly update this template with new resources and pages I found on the web. Don't hesitate to participate by sending a PR! Maybe your first on Github :)
+3. **TON Deposit Tracking & Resilience (`TonScanner`)**:
+   - Cursor-based Logical Time (`lt`) blockchain scanning via TonAPI.
+   - Strict sender verification against registered user wallet (`te_users`).
+   - Idempotent deposit crediting with outbox notifications.
 
-If you like this resource, please follow me on GitHub. Thank you!
+4. **Withdrawal State Machine (`te_withdrawals`)**:
+   - Secure multi-stage withdrawal flow: balance locking → `PENDING` queue → execution.
+   - Bound wallet verification ensuring users only withdraw to their authenticated address.
 
-## Demo
+5. **Telegram Stars Deposits**:
+   - Protected invoice generation (`/api/create-invoice`) with server-side pricing and payload validation.
 
-[https://react-crypto-exchange-nine.vercel.app/](https://react-crypto-exchange-nine.vercel.app/)
+6. **Interactive Terminal & Real-Time Charts**:
+   - Live Order Book (pure real liquidity from Postgres).
+   - Real-time candlestick charts, recent trades, active orders, and position management.
 
-## Screenshots
+---
 
-![Dashboard](https://github.com/cenksari/react-crypto-exchange/blob/master/screenshots/1-dashboard.png?raw=true)
+## 🛠 Tech Stack
 
-![Profile](https://github.com/cenksari/react-crypto-exchange/blob/master/screenshots/2-profile.png?raw=true)
+- **Frontend**: React 18, Vite, TypeScript, Tailwind CSS, Lucide React, Canvas Candles.
+- **Backend**: Node.js, Express, TypeScript (`tsx`), Socket.io, `pg` (PostgreSQL client).
+- **Database**: PostgreSQL with ACID transactions, Outbox Pattern, and optimistic locking.
+- **Cache & Realtime**: Redis adapter for Socket.io clustering (with fallback for standalone mode).
+- **Blockchain**: TON Blockchain integration, TonAPI v2, Telegram WebApp SDK.
 
-![Deposit](https://github.com/cenksari/react-crypto-exchange/blob/master/screenshots/3-deposit.png?raw=true)
+---
 
-![Transactions](https://github.com/cenksari/react-crypto-exchange/blob/master/screenshots/4-transactions.png?raw=true)
+## 📦 Getting Started
 
-![Market](https://github.com/cenksari/react-crypto-exchange/blob/master/screenshots/5-market.png?raw=true)
+### Prerequisites
+- Node.js 18+
+- PostgreSQL database instance
 
-![Signin](https://github.com/cenksari/react-crypto-exchange/blob/master/screenshots/6-signin.png?raw=true)
+### Environment Variables
+Configure `.env` or set environment variables:
+```env
+PORT=3000
+DATABASE_URL=postgresql://user:password@localhost:5432/gx_exchange
+SQL_HOST=localhost
+SQL_PORT=5432
+SQL_USER=postgres
+SQL_PASSWORD=secret
+SQL_DATABASE=gx_exchange
+TELEGRAM_BOT_TOKEN=your_bot_token
+EXCHANGE_HOT_WALLET_ADDRESS=your_ton_hot_wallet_address
+```
 
-![Signup](https://github.com/cenksari/react-crypto-exchange/blob/master/screenshots/7-signup.png?raw=true)
+### Running Locally
+```bash
+# Install dependencies
+npm install
 
-## Installation
+# Start development server
+npm run dev
 
-1. Clone the project:
+# Run test suite
+npm test
 
-   ```bash
-   git clone https://github.com/cenksari/react-crypto-exchange.git
-   ```
+# Build for production
+npm run build
+```
 
-2. Navigate to the project directory:
+---
 
-   ```bash
-   cd react-crypto-exchange
-   ```
+## 🔒 Security Measures
 
-3. Install dependencies:
-
-   ```bash
-   npm install
-   ```
-
-   or
-
-   ```bash
-   yarn install
-   ```
-
-4. Start the application:
-
-   ```bash
-   npm start
-   ```
-
-## Usage
-
-Once the application is started, navigate to [http://localhost:3000](http://localhost:3000) in your browser to test application.
-
-## Contributing
-
-If you would like to contribute, please create a new branch and submit a pull request with your changes. Review may be needed before acceptance.
-
-## Authors
-
-@cenksari
-
-## License
-
-MIT
+- **No client-side identity trust**: User IDs are always derived server-side from validated Telegram cryptographic signatures.
+- **No fake liquidity**: Pure real-market order matching without synthetic random spoofing.
+- **Balance protection**: ACID `SELECT ... FOR UPDATE` isolation preventing double-spending.
+- **Outbox Pattern**: Fault-tolerant message broadcasting across workers and WebSocket clients.
