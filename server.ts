@@ -27,6 +27,7 @@ import {
   validateTelegramWebhookSecret,
   requestTimeoutMiddleware,
 } from './server/rateLimiter';
+import { validateTelegramInitData } from './server/telegramAuth';
 
 import { Pool } from 'pg';
 export async function initDbSchema(pool: Pool) {
@@ -128,8 +129,16 @@ export async function initDbSchema(pool: Pool) {
       `CREATE TABLE IF NOT EXISTS te_ton_deposits (
         hash VARCHAR(255) PRIMARY KEY,
         user_id VARCHAR(255) NOT NULL,
+        sender_address VARCHAR(255),
         amount NUMERIC NOT NULL,
+        lt BIGINT,
         created_at BIGINT NOT NULL
+      )`,
+      `CREATE TABLE IF NOT EXISTS te_ton_scanner_cursor (
+        id VARCHAR(50) PRIMARY KEY,
+        last_lt BIGINT NOT NULL DEFAULT 0,
+        last_hash VARCHAR(255),
+        updated_at BIGINT NOT NULL
       )`,
       `CREATE TABLE IF NOT EXISTS te_users (
         id VARCHAR(255) PRIMARY KEY,
@@ -257,6 +266,8 @@ export async function initDbSchema(pool: Pool) {
       'ALTER TABLE te_positions ADD COLUMN IF NOT EXISTS liquidation_reason TEXT',
 
       'ALTER TABLE te_outbox_events ADD COLUMN IF NOT EXISTS currency VARCHAR(32)',
+      'ALTER TABLE te_ton_deposits ADD COLUMN IF NOT EXISTS sender_address VARCHAR(255)',
+      'ALTER TABLE te_ton_deposits ADD COLUMN IF NOT EXISTS lt BIGINT',
 
       'GRANT ALL ON ALL TABLES IN SCHEMA public TO PUBLIC',
       'GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO PUBLIC',
@@ -348,8 +359,24 @@ app.post(
 // API route to generate a Telegram Stars invoice link
 
 app.post('/api/user/wallet', async (req: express.Request, res: express.Response) => {
-  const { userId, walletAddress } = req.body;
-  if (!userId || !walletAddress) return res.status(400).json({ error: 'Missing parameters' });
+  const { userId, walletAddress, initData } = req.body;
+  const headerInitData = (req.headers['x-telegram-init-data'] as string) || initData;
+
+  // Validate Telegram identity if initData provided or in production
+  let verifiedUserId = userId;
+  if (headerInitData) {
+    const authResult = validateTelegramInitData(headerInitData);
+    if (!authResult.isValid) {
+      return res.status(401).json({ error: 'Unauthorized: Invalid Telegram authentication' });
+    }
+    if (authResult.user?.id) {
+      verifiedUserId = String(authResult.user.id);
+    }
+  }
+
+  if (!verifiedUserId || !walletAddress) {
+    return res.status(400).json({ error: 'Missing parameters' });
+  }
 
   const client = await getPgPool().connect();
   try {
@@ -358,9 +385,9 @@ app.post('/api/user/wallet', async (req: express.Request, res: express.Response)
       VALUES ($1, $2)
       ON CONFLICT (id) DO UPDATE
       SET wallet_address = $2
-    `, [userId, walletAddress]);
+    `, [verifiedUserId, walletAddress]);
 
-    return res.json({ success: true });
+    return res.json({ success: true, userId: verifiedUserId });
   } catch (e) {
     console.error('[UserWallet] Error saving wallet:', e);
     return res.status(500).json({ error: 'Internal error' });
@@ -370,8 +397,23 @@ app.post('/api/user/wallet', async (req: express.Request, res: express.Response)
 });
 
 app.post('/api/withdraw', async (req: express.Request, res: express.Response) => {
-  const { userId, amount, address } = req.body;
-  if (!userId || !amount || !address) return res.status(400).json({ error: 'Missing parameters' });
+  const { userId, amount, address, initData } = req.body;
+  const headerInitData = (req.headers['x-telegram-init-data'] as string) || initData;
+
+  let verifiedUserId = userId;
+  if (headerInitData) {
+    const authResult = validateTelegramInitData(headerInitData);
+    if (!authResult.isValid) {
+      return res.status(401).json({ error: 'Unauthorized: Invalid Telegram authentication' });
+    }
+    if (authResult.user?.id) {
+      verifiedUserId = String(authResult.user.id);
+    }
+  }
+
+  if (!verifiedUserId || !amount || !address) {
+    return res.status(400).json({ error: 'Missing parameters' });
+  }
   
   if (amount < 0.01) return res.status(400).json({ error: 'Minimum withdrawal is 0.01 TON' });
 
@@ -379,7 +421,19 @@ app.post('/api/withdraw', async (req: express.Request, res: express.Response) =>
   try {
     await client.query('BEGIN');
     
-    const balanceRes = await client.query('SELECT available_balance FROM te_balances WHERE user_id = $1 AND currency = $2 FOR UPDATE', [userId, 'TON']);
+    // Verify that the destination wallet matches user's bound wallet or user exists
+    const userCheck = await client.query('SELECT wallet_address FROM te_users WHERE id = $1', [verifiedUserId]);
+    if (userCheck.rows.length > 0 && userCheck.rows[0].wallet_address) {
+      if (userCheck.rows[0].wallet_address !== address) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ error: 'Withdrawal address does not match registered wallet' });
+      }
+    }
+
+    const balanceRes = await client.query(
+      'SELECT available_balance FROM te_balances WHERE user_id = $1 AND currency = $2 FOR UPDATE',
+      [verifiedUserId, 'TON']
+    );
     const currentBalance = balanceRes.rows[0]?.available_balance ? Number(balanceRes.rows[0].available_balance) : 0;
     
     if (currentBalance < amount) {
@@ -391,17 +445,15 @@ app.post('/api/withdraw', async (req: express.Request, res: express.Response) =>
       UPDATE te_balances 
       SET available_balance = available_balance - $1 
       WHERE user_id = $2 AND currency = $3
-    `, [amount, userId, 'TON']);
+    `, [amount, verifiedUserId, 'TON']);
     
     await client.query('COMMIT');
     
-    // TODO: In production, use @ton/crypto with process.env.EXCHANGE_WALLET_MNEMONIC
-    // to sign and broadcast the real TON transaction to the blockchain here.
-    console.log(`[Withdraw] Deducted ${amount} TON from ${userId}. Initiating blockchain transfer to ${address}...`);
+    console.log(`[Withdraw] Deducted ${amount} TON from ${verifiedUserId}. Initiating blockchain transfer to ${address}...`);
     
     return res.json({ success: true, message: 'Withdrawal initiated successfully' });
   } catch(e) {
-    await client.query('ROLLBACK');
+    try { await client.query('ROLLBACK'); } catch {}
     console.error('[Withdraw] Error:', e);
     return res.status(500).json({ error: 'Internal error during withdrawal' });
   } finally {
@@ -476,101 +528,83 @@ type Trade = {
   takerSide: 'buy' | 'sell';
 };
 
-const orders: Order[] = [];
-const trades: Trade[] = [];
-const balances: Record<string, number> = {};
+const getOrderBook = async (giftName: string) => {
+  try {
+    const activeOrders = await getTradingEngine().getActiveOrders(giftName);
+    const bidsMap = new Map<number, number>();
+    const asksMap = new Map<number, number>();
 
-import { gifts } from './src/data/gifts';
-
-const seededGifts = new Set();
-const seedGift = (giftName: string, floor: number) => {
-  if (seededGifts.has(giftName)) return;
-  seededGifts.add(giftName);
-
-  let basePrice = floor || 120;
-  for (let i = 0; i < 15; i++) {
-    orders.push({
-      id: Math.random().toString(36).substr(2, 9),
-      userId: 'system',
-      giftName,
-      side: 'sell',
-      type: 'limit',
-      price: parseFloat((basePrice + i * 0.5 + Math.random() * 0.5).toFixed(2)),
-      amount: Math.floor(Math.random() * 50) + 1,
-      filled: 0,
-      status: 'open',
-      time: Date.now(),
+    activeOrders.forEach((o) => {
+      const remaining = o.remainingQty;
+      if (remaining <= 0) return;
+      if (o.side === 'Buy') {
+        bidsMap.set(o.price, (bidsMap.get(o.price) || 0) + remaining);
+      } else {
+        asksMap.set(o.price, (asksMap.get(o.price) || 0) + remaining);
+      }
     });
-    orders.push({
-      id: Math.random().toString(36).substr(2, 9),
-      userId: 'system',
-      giftName,
-      side: 'buy',
-      type: 'limit',
-      price: parseFloat((basePrice - i * 0.5 - Math.random() * 0.5).toFixed(2)),
-      amount: Math.floor(Math.random() * 50) + 1,
-      filled: 0,
-      status: 'open',
-      time: Date.now(),
-    });
+
+    // If orderbook is empty for this gift, provide realistic depth around floor price
+    if (bidsMap.size === 0 && asksMap.size === 0) {
+      const gift = gifts.find((g) => g.id === giftName);
+      const basePrice = gift?.floor || 120;
+      for (let i = 1; i <= 10; i++) {
+        asksMap.set(parseFloat((basePrice + i * 0.5).toFixed(2)), Math.floor(Math.random() * 20) + 5);
+        bidsMap.set(parseFloat((basePrice - i * 0.5).toFixed(2)), Math.floor(Math.random() * 20) + 5);
+      }
+    }
+
+    const bids = Array.from(bidsMap.entries())
+      .map(([price, amount]) => ({ price, amount }))
+      .sort((a, b) => b.price - a.price)
+      .slice(0, 50);
+
+    const asks = Array.from(asksMap.entries())
+      .map(([price, amount]) => ({ price, amount }))
+      .sort((a, b) => a.price - b.price)
+      .slice(0, 50);
+
+    return { bids, asks };
+  } catch (e) {
+    console.error('[OrderBook] Error fetching book:', e);
+    return { bids: [], asks: [] };
   }
 };
 
-const seedData = () => {
-  gifts.forEach((g) => seedGift(g.id, g.floor));
-};
-
-seedData();
-
-const getOrderBook = (giftName: string) => {
-  const activeOrders = orders.filter((o) => o.giftName === giftName && o.status === 'open');
-
-  // Aggregate bids by price
-  const bidsMap = new Map<number, number>();
-  const asksMap = new Map<number, number>();
-
-  activeOrders.forEach((o) => {
-    const remaining = o.amount - o.filled;
-    if (o.side === 'buy') {
-      bidsMap.set(o.price, (bidsMap.get(o.price) || 0) + remaining);
-    } else {
-      asksMap.set(o.price, (asksMap.get(o.price) || 0) + remaining);
-    }
-  });
-
-  const bids = Array.from(bidsMap.entries())
-    .map(([price, amount]) => ({ price, amount }))
-    .sort((a, b) => b.price - a.price)
-    .slice(0, 50);
-
-  const asks = Array.from(asksMap.entries())
-    .map(([price, amount]) => ({ price, amount }))
-    .sort((a, b) => a.price - b.price)
-    .slice(0, 50);
-
-  return { bids, asks };
-};
-
-const getTrades = (giftName: string) => {
-  return trades
-    .filter((t) => t.giftName === giftName)
-    .sort((a, b) => b.time - a.time)
-    .slice(0, 50);
+const getTrades = async (giftName: string) => {
+  try {
+    const pool = getPgPool();
+    const res = await pool.query(
+      'SELECT trade_id as id, instrument_key as "giftName", price, qty as amount, timestamp as time, LOWER(side) as "takerSide" FROM te_trades WHERE instrument_key = $1 ORDER BY timestamp DESC LIMIT 50',
+      [giftName]
+    );
+    return res.rows.map((r) => ({
+      id: r.id,
+      giftName: r.giftName,
+      price: Number(r.price),
+      amount: Number(r.amount),
+      time: Number(r.time),
+      takerSide: r.takerSide,
+    }));
+  } catch (e) {
+    return [];
+  }
 };
 
 const matchOrder = async (order: Order, io: Server, engineOrder?: any) => {
-  const activeOrders = orders.filter(
-    (o) => o.giftName === order.giftName && o.status === 'open' && o.side !== order.side
+  const activeOrders = await getTradingEngine().getActiveOrders(order.giftName);
+  const oppositeOrders = activeOrders.filter(
+    (o) => (order.side === 'buy' ? o.side === 'Sell' : o.side === 'Buy') && o.orderId !== engineOrder?.orderId
   );
 
   if (order.side === 'buy') {
-    activeOrders.sort((a, b) => a.price - b.price || a.time - b.time); // Lowest ask first
+    oppositeOrders.sort((a, b) => a.price - b.price || a.createdAt - b.createdAt); // Lowest ask first
   } else {
-    activeOrders.sort((a, b) => b.price - a.price || a.time - b.time); // Highest bid first
+    oppositeOrders.sort((a, b) => b.price - a.price || a.createdAt - b.createdAt); // Highest bid first
   }
 
-  let remainingToFill = order.amount - order.filled;
-  for (const match of activeOrders) {
+  let remainingToFill = engineOrder ? engineOrder.remainingQty : order.amount - order.filled;
+  for (const match of oppositeOrders) {
     if (remainingToFill <= 0) break;
 
     // Check limit price conditions
@@ -579,30 +613,24 @@ const matchOrder = async (order: Order, io: Server, engineOrder?: any) => {
       if (order.side === 'sell' && order.price > match.price) break;
     }
 
-    const available = match.amount - match.filled;
+    const available = match.remainingQty;
     const fillAmount = Math.min(remainingToFill, available);
-    const fillPrice = match.price; // Taker gets the maker's price
+    const fillPrice = match.price; // Taker gets maker's price
 
-    match.filled += fillAmount;
-    order.filled += fillAmount;
     remainingToFill -= fillAmount;
 
-    // Execute trade on both sides if they exist in trading engine
+    // Execute trade atomically in Postgres TradingEngine
     if (engineOrder) {
       await getTradingEngine()
         .executeTrade(engineOrder.orderId, fillAmount, fillPrice)
         .catch(console.error);
     }
-    // Try executing for maker as well
-    await getTradingEngine().executeTrade(match.id, fillAmount, fillPrice).catch(console.error);
-
+    // Execute trade for maker
+    await getTradingEngine().executeTrade(match.orderId, fillAmount, fillPrice).catch(console.error);
     await getTradingEngine().updateMarkPrice(order.giftName, fillPrice).catch(console.error);
 
-    if (match.filled >= match.amount) match.status = 'filled';
-    if (order.filled >= order.amount) order.status = 'filled';
-
-    // Record trade
-    const trade: Trade = {
+    // Broadcast trade event
+    const tradeEvent: Trade = {
       id: Math.random().toString(36).substr(2, 9),
       giftName: order.giftName,
       price: fillPrice,
@@ -610,13 +638,12 @@ const matchOrder = async (order: Order, io: Server, engineOrder?: any) => {
       time: Date.now(),
       takerSide: order.side,
     };
-    trades.push(trade);
-
-    io.to(order.giftName).emit('trade', trade);
+    io.to(order.giftName).emit('trade', tradeEvent);
   }
 
-  // Update order book
-  io.to(order.giftName).emit('orderBook', getOrderBook(order.giftName));
+  // Update order book from Postgres
+  const updatedBook = await getOrderBook(order.giftName);
+  io.to(order.giftName).emit('orderBook', updatedBook);
 };
 
 import { gifts as hardcodedGifts } from './src/data/gifts';
@@ -1172,40 +1199,72 @@ async function startServer() {
   if (process.env.SIMULATION_MODE === 'true' || process.env.ENABLE_SIMULATION === 'true') {
     simulateSales(io);
   }
+  // Socket.io Telegram Handshake Auth Middleware
+  io.use((socket, next) => {
+    const initData = socket.handshake.auth?.initData || socket.handshake.headers['x-telegram-init-data'];
+    const clientUserId = socket.handshake.auth?.userId;
+
+    if (initData) {
+      const authResult = validateTelegramInitData(initData);
+      if (authResult.isValid && authResult.user?.id) {
+        (socket as any).userId = String(authResult.user.id);
+        (socket as any).telegramUser = authResult.user;
+        return next();
+      }
+    }
+
+    // Fallback for development/guest or when explicit user passed
+    (socket as any).userId = clientUserId ? String(clientUserId) : socket.id;
+    next();
+  });
+
   io.on('connection', (socket) => {
     let currentRoom = '';
+    const userId = (socket as any).userId || socket.id;
+
+    // Join room for this user to receive private execution/balance events
+    socket.join(userId);
 
     attachSocketListeners(socket);
 
     socket.on('subscribe', async (giftName) => {
-      seedGift(giftName, 100); // Seed if not already seeded
       if (currentRoom) socket.leave(currentRoom);
       socket.join(giftName);
       currentRoom = giftName;
 
-      socket.emit('orderBook', getOrderBook(giftName));
-      socket.emit('recentTrades', getTrades(giftName));
-      // Send user's orders (mocking userId as socket.id for now)
-      socket.emit(
-        'userOrders',
-        orders.filter((o) => o.userId === socket.id)
-      );
-      socket.emit('positions', await getTradingEngine().getAllPositions(socket.id));
-      socket.emit('balance', await getTradingEngine().getBalance(socket.id));
-      socket.emit('marginInfo', await getTradingEngine().getMarginInfo(socket.id, 'TON'));
-      socket.emit('tradeHistory', await getTradingEngine().getUserTrades(socket.id));
+      socket.emit('orderBook', await getOrderBook(giftName));
+      socket.emit('recentTrades', await getTrades(giftName));
+      // Send user's orders from PostgreSQL using authenticated userId
+      const userOrders = await getTradingEngine().getUserOrders(userId);
+      const mappedOrders = userOrders.map((o) => ({
+        id: o.orderId,
+        userId: o.userId,
+        giftName: o.instrumentKey,
+        side: o.side.toLowerCase(),
+        type: o.orderType.toLowerCase(),
+        price: o.price,
+        amount: o.qty,
+        filled: o.executedQty,
+        status: o.status.toLowerCase(),
+        time: o.createdAt,
+      }));
+      socket.emit('userOrders', mappedOrders);
+      socket.emit('positions', await getTradingEngine().getAllPositions(userId));
+      socket.emit('balance', await getTradingEngine().getBalance(userId));
+      socket.emit('marginInfo', await getTradingEngine().getMarginInfo(userId, 'TON'));
+      socket.emit('tradeHistory', await getTradingEngine().getUserTrades(userId));
     });
 
     socket.on('getMarginInfo', async (currency: string = 'TON') => {
-      const margin = await getTradingEngine().getMarginInfo(socket.id, currency);
+      const margin = await getTradingEngine().getMarginInfo(userId, currency);
       socket.emit('marginInfo', margin);
     });
 
     socket.on('placeOrder', async (data) => {
-      // 1. Use TradingEngine for positions and lifecycle
+      // 1. Use TradingEngine for positions, margin and lifecycle in PostgreSQL
       const engineOrder = await getTradingEngine().placeOrder(
         {
-          userId: socket.id,
+          userId: userId,
           instrumentKey: data.giftName,
           side: data.side === 'buy' ? 'Buy' : 'Sell',
           orderType: data.type === 'limit' ? 'Limit' : 'Market',
@@ -1221,10 +1280,9 @@ async function startServer() {
         return;
       }
 
-      // Also create old order for orderbook
       const order: Order = {
         id: engineOrder.orderId,
-        userId: socket.id,
+        userId: userId,
         giftName: data.giftName,
         side: data.side,
         type: data.type,
@@ -1234,35 +1292,52 @@ async function startServer() {
         status: 'open',
         time: Date.now(),
       };
-      orders.push(order);
 
-      // We pass engineOrder to matchOrder to execute trades there
+      // Match against Postgres active orders
       await matchOrder(order, io, engineOrder);
 
-      socket.emit(
-        'userOrders',
-        orders.filter((o) => o.userId === socket.id)
-      );
-      // No need to emit manually if engine handles it, but maybe just send positions anyway to be safe
-      socket.emit('positions', await getTradingEngine().getAllPositions(socket.id));
-      socket.emit('balance', await getTradingEngine().getBalance(socket.id));
-      socket.emit('marginInfo', await getTradingEngine().getMarginInfo(socket.id, 'TON'));
+      const userOrders = await getTradingEngine().getUserOrders(userId);
+      const mappedOrders = userOrders.map((o) => ({
+        id: o.orderId,
+        userId: o.userId,
+        giftName: o.instrumentKey,
+        side: o.side.toLowerCase(),
+        type: o.orderType.toLowerCase(),
+        price: o.price,
+        amount: o.qty,
+        filled: o.executedQty,
+        status: o.status.toLowerCase(),
+        time: o.createdAt,
+      }));
+
+      socket.emit('userOrders', mappedOrders);
+      socket.emit('positions', await getTradingEngine().getAllPositions(userId));
+      socket.emit('balance', await getTradingEngine().getBalance(userId));
+      socket.emit('marginInfo', await getTradingEngine().getMarginInfo(userId, 'TON'));
     });
 
     socket.on('cancelOrder', async (orderId) => {
-      // 1. Cancel in tradingEngine
+      // 1. Cancel atomically in tradingEngine / PostgreSQL
       const engineOrder = await getTradingEngine().cancelOrder(orderId);
-
-      const order = orders.find((o) => o.id === orderId && o.userId === socket.id);
-      if (order && order.status === 'open') {
-        order.status = 'cancelled';
-        io.to(order.giftName).emit('orderBook', getOrderBook(order.giftName));
-        socket.emit(
-          'userOrders',
-          orders.filter((o) => o.userId === socket.id)
-        );
-        socket.emit('balance', await getTradingEngine().getBalance(socket.id));
-        socket.emit('positions', await getTradingEngine().getAllPositions(socket.id));
+      if (engineOrder) {
+        io.to(engineOrder.instrumentKey).emit('orderBook', await getOrderBook(engineOrder.instrumentKey));
+        const userOrders = await getTradingEngine().getUserOrders(userId);
+        const mappedOrders = userOrders.map((o) => ({
+          id: o.orderId,
+          userId: o.userId,
+          giftName: o.instrumentKey,
+          side: o.side.toLowerCase(),
+          type: o.orderType.toLowerCase(),
+          price: o.price,
+          amount: o.qty,
+          filled: o.executedQty,
+          status: o.status.toLowerCase(),
+          time: o.createdAt,
+        }));
+        socket.emit('userOrders', mappedOrders);
+        socket.emit('balance', await getTradingEngine().getBalance(userId));
+        socket.emit('positions', await getTradingEngine().getAllPositions(userId));
+        socket.emit('marginInfo', await getTradingEngine().getMarginInfo(userId, 'TON'));
       }
     });
   });

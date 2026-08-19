@@ -3,98 +3,221 @@ import { Pool } from 'pg';
 export class TonScanner {
   private pool: Pool;
   private intervalId: NodeJS.Timeout | null = null;
-  private lastProcessedHash: string | null = null;
+  private isScanning: boolean = false;
 
   constructor(pool: Pool) {
     this.pool = pool;
   }
 
   public start() {
-    console.log('[TonScanner] Starting background scanner...');
+    console.log('[TonScanner] Starting robust background scanner with cursor tracking and sender verification...');
     this.intervalId = setInterval(() => this.scan(), 10000); // Check every 10 seconds
   }
 
   public stop() {
     if (this.intervalId) {
       clearInterval(this.intervalId);
+      this.intervalId = null;
+    }
+  }
+
+  private normalizeAddress(addr: string | null | undefined): string {
+    if (!addr) return '';
+    return addr.trim().toLowerCase();
+  }
+
+  private async getCursor(): Promise<number> {
+    try {
+      const res = await this.pool.query(
+        "SELECT last_lt FROM te_ton_scanner_cursor WHERE id = 'main_scanner'"
+      );
+      if (res.rows.length > 0) {
+        return Number(res.rows[0].last_lt) || 0;
+      }
+    } catch (e) {
+      console.warn('[TonScanner] Could not read cursor, defaulting to 0:', e);
+    }
+    return 0;
+  }
+
+  private async updateCursor(lt: number, hash: string) {
+    try {
+      await this.pool.query(
+        `INSERT INTO te_ton_scanner_cursor (id, last_lt, last_hash, updated_at)
+         VALUES ('main_scanner', $1, $2, $3)
+         ON CONFLICT (id)
+         DO UPDATE SET last_lt = GREATEST(te_ton_scanner_cursor.last_lt, $1), last_hash = $2, updated_at = $3`,
+        [lt, hash, Date.now()]
+      );
+    } catch (e) {
+      console.error('[TonScanner] Failed to update scanner cursor:', e);
     }
   }
 
   private async scan() {
-    const address = process.env.EXCHANGE_HOT_WALLET_ADDRESS;
-    // For demo purposes, if not set, we can just skip or listen to a known testnet address.
-    // Here we'll just log once and skip if not configured.
-    if (!address) {
-      // console.warn('[TonScanner] EXCHANGE_HOT_WALLET_ADDRESS not set. Scanner inactive.');
+    if (this.isScanning) return;
+    this.isScanning = true;
+
+    const hotWallet = process.env.EXCHANGE_HOT_WALLET_ADDRESS;
+    if (!hotWallet) {
+      this.isScanning = false;
       return;
     }
 
     try {
-      const res = await fetch(`https://tonapi.io/v2/blockchain/accounts/${address}/transactions?limit=20`);
-      if (!res.ok) return;
+      const lastLt = await this.getCursor();
+      const url = `https://tonapi.io/v2/blockchain/accounts/${hotWallet}/transactions?limit=50`;
+      const res = await fetch(url);
+      if (!res.ok) {
+        this.isScanning = false;
+        return;
+      }
+
       const data = await res.json();
-      
-      if (!data.transactions || !Array.isArray(data.transactions)) return;
+      if (!data.transactions || !Array.isArray(data.transactions)) {
+        this.isScanning = false;
+        return;
+      }
 
-      // Transactions are typically ordered newest first. We iterate from oldest to newest in the chunk
-      // Or just check each.
-      for (const tx of data.transactions) {
-        // Skip if there are no incoming messages
-        if (!tx.in_msg) continue;
-        
+      // Filter transactions newer than cursor and sort ascending (oldest first)
+      const validTxs = data.transactions
+        .filter((tx: any) => tx && tx.in_msg && (!lastLt || Number(tx.lt) > lastLt))
+        .sort((a: any, b: any) => Number(a.lt) - Number(b.lt));
+
+      let highestProcessedLt = lastLt;
+      let lastHash = '';
+
+      for (const tx of validTxs) {
         const msg = tx.in_msg;
-        
-        // We only care about incoming internal transfers with a value
-        if (msg.value && msg.decoded_op_name === 'text_comment' && msg.decoded_body && msg.decoded_body.text) {
-          const text = msg.decoded_body.text as string;
-          if (text.startsWith('Deposit_')) {
-            const userId = text.split('_')[1];
-            const amount = Number(msg.value) / 1e9;
-            const hash = tx.hash;
+        const txLt = Number(tx.lt) || 0;
+        const txHash = tx.hash;
 
-            await this.processDeposit(hash, userId, amount);
+        // Skip non-transfers or 0-value messages
+        if (!msg.value || Number(msg.value) <= 0) {
+          if (txLt > highestProcessedLt) highestProcessedLt = txLt;
+          continue;
+        }
+
+        // Validate text comment format: Deposit_<userId>
+        if (
+          msg.decoded_op_name === 'text_comment' &&
+          msg.decoded_body &&
+          typeof msg.decoded_body.text === 'string'
+        ) {
+          const text = msg.decoded_body.text.trim();
+          if (text.startsWith('Deposit_')) {
+            const userId = text.substring('Deposit_'.length).trim();
+            const amount = Number(msg.value) / 1e9;
+            const senderRaw = msg.source?.address || msg.source || '';
+
+            if (userId && amount > 0) {
+              await this.processDeposit(txHash, txLt, userId, amount, senderRaw);
+            }
           }
         }
+
+        if (txLt > highestProcessedLt) {
+          highestProcessedLt = txLt;
+          lastHash = txHash;
+        }
       }
-    } catch(err) {
-      console.error('[TonScanner] Error fetching transactions:', err);
+
+      // Update cursor to highest processed block/lt
+      if (highestProcessedLt > lastLt) {
+        await this.updateCursor(highestProcessedLt, lastHash);
+      }
+    } catch (err) {
+      console.error('[TonScanner] Error scanning blockchain:', err);
+    } finally {
+      this.isScanning = false;
     }
   }
-  
-  private async processDeposit(hash: string, userId: string, amount: number) {
+
+  private async processDeposit(
+    hash: string,
+    lt: number,
+    userId: string,
+    amount: number,
+    senderRaw: string
+  ) {
     const client = await this.pool.connect();
     try {
       await client.query('BEGIN');
-      
-      // Check if already processed
-      const res = await client.query('SELECT hash FROM te_ton_deposits WHERE hash = $1', [hash]);
-      if (res.rowCount && res.rowCount > 0) {
+
+      // 1. Check idempotency: hash already credited?
+      const existing = await client.query('SELECT hash FROM te_ton_deposits WHERE hash = $1 FOR UPDATE', [hash]);
+      if (existing.rowCount && existing.rowCount > 0) {
         await client.query('ROLLBACK');
         return; // Already processed
       }
-      
-      // Mark as processed
-      await client.query('INSERT INTO te_ton_deposits (hash, user_id, amount, created_at) VALUES ($1, $2, $3, $4)', [hash, userId, amount, Date.now()]);
-      
-      // Update user balance
-      await client.query(`
-        INSERT INTO te_balances (user_id, currency, available_balance, updated_at) 
-        VALUES ($1, 'TON', $2, $3) 
-        ON CONFLICT (user_id, currency) 
-        DO UPDATE SET 
-          available_balance = te_balances.available_balance + $2, 
-          updated_at = $3
-      `, [userId, amount, Date.now()]);
-      
-      await client.query('COMMIT');
-      console.log(`[TonScanner] Processed incoming deposit of ${amount} TON for user ${userId} (Tx: ${hash.substring(0,8)}...)`);
-    } catch(e: any) {
-      await client.query('ROLLBACK');
-      // If it's a unique violation, another instance might have processed it
-      if (e.code === '23505') {
+
+      // 2. Sender Address Validation (C-04)
+      // Check if user has a registered wallet address in te_users
+      const userRes = await client.query('SELECT wallet_address FROM te_users WHERE id = $1', [userId]);
+      if (userRes.rows.length === 0) {
+        console.warn(`[TonScanner] Rejected deposit: User ID ${userId} does not exist in exchange records (Tx: ${hash})`);
+        await client.query('ROLLBACK');
         return;
       }
-      console.error('[TonScanner] Error processing deposit:', e?.message);
+
+      const registeredWallet = userRes.rows[0].wallet_address;
+      if (!registeredWallet) {
+        console.warn(`[TonScanner] Rejected deposit: User ${userId} has no registered wallet address (Tx: ${hash})`);
+        await client.query('ROLLBACK');
+        return;
+      }
+
+      // Ensure transaction sender matches authenticated user's wallet address
+      const normSender = this.normalizeAddress(senderRaw);
+      const normRegistered = this.normalizeAddress(registeredWallet);
+
+      if (normSender && normRegistered && normSender !== normRegistered) {
+        console.error(
+          `[TonScanner] SECURITY ALERT: Deposit sender spoofing detected! Tx sender '${normSender}' does not match registered wallet '${normRegistered}' for userId '${userId}' (Tx: ${hash})`
+        );
+        await client.query('ROLLBACK');
+        return;
+      }
+
+      // 3. Mark deposit as processed
+      await client.query(
+        'INSERT INTO te_ton_deposits (hash, user_id, sender_address, amount, lt, created_at) VALUES ($1, $2, $3, $4, $5, $6)',
+        [hash, userId, senderRaw, amount, lt, Date.now()]
+      );
+
+      // 4. Update user balance atomically
+      await client.query(
+        `INSERT INTO te_balances (user_id, currency, available_balance, updated_at) 
+         VALUES ($1, 'TON', $2, $3) 
+         ON CONFLICT (user_id, currency) 
+         DO UPDATE SET 
+           available_balance = te_balances.available_balance + $2, 
+           updated_at = $3`,
+        [userId, amount, Date.now()]
+      );
+
+      // 5. Emit outbox event for real-time notification
+      await client.query(
+        `INSERT INTO te_outbox_events (event_type, user_id, payload, status, currency, created_at)
+         VALUES ($1, $2, $3, $4, $5, $6)`,
+        [
+          'depositProcessed',
+          userId,
+          JSON.stringify({ hash, amount, currency: 'TON', timestamp: Date.now() }),
+          'pending',
+          'TON',
+          Date.now(),
+        ]
+      );
+
+      await client.query('COMMIT');
+      console.log(
+        `[TonScanner] Successfully credited ${amount} TON to authenticated user ${userId} (Sender: ${senderRaw}, Tx: ${hash.substring(0, 10)}...)`
+      );
+    } catch (e: any) {
+      await client.query('ROLLBACK');
+      if (e.code === '23505') return; // Unique violation concurrent skip
+      console.error('[TonScanner] Error processing deposit transaction:', e?.message);
     } finally {
       client.release();
     }

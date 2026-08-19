@@ -88,7 +88,7 @@ const GXTerminalScreen = () => {
   const [searchParams, setSearchParams] = useSearchParams();
 
   const [giftId, setGiftId] = useState(searchParams.get('gift') || 'durov-cap');
-  const { isTelegram, user } = useTelegramWebApp();
+  const { isTelegram, user, initData } = useTelegramWebApp();
 
   const activeGift = useMemo(() => gifts.find((g) => g.id === giftId) || gifts[0], [giftId, gifts]);
   const [mktPanelOpen, setMktPanelOpen] = useState(false);
@@ -196,7 +196,14 @@ const GXTerminalScreen = () => {
     setOrderBook({ bids: [], asks: [] });
     setRecentTrades([]);
 
-    const socket = io({ path: '/socket.io', transports: ['websocket'] });
+    const socket = io({
+      path: '/socket.io',
+      transports: ['websocket'],
+      auth: {
+        initData: initData || '',
+        userId: user?.id ? String(user.id) : undefined,
+      },
+    });
     socketRef.current = socket;
 
     socket.on('orderBook', (book: any) => setOrderBook(book));
@@ -275,7 +282,7 @@ const GXTerminalScreen = () => {
       });
       socket.disconnect();
     };
-  }, [activeGift?.id, activeInstrumentKey]);
+  }, [activeGift?.id, activeInstrumentKey, initData, user?.id]);
 
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<any>(null);

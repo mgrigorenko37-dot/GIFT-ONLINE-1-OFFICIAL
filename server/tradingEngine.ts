@@ -260,9 +260,7 @@ export class PostgresTradingEngine extends EventEmitter {
     const walletBalance =
       balRes.rows.length > 0
         ? Number(balRes.rows[0].available_balance)
-        : currency === 'TON'
-          ? 12480.5
-          : 0;
+        : 0;
 
     const posRes = await client.query(
       "SELECT qty, avg_entry_price, side, mark_price, instrument_key FROM te_positions WHERE user_id = $1 AND (collateral_currency = $2 OR collateral_currency IS NULL) AND status IN ('Open', 'MarginCall')",
@@ -337,13 +335,29 @@ export class PostgresTradingEngine extends EventEmitter {
       'SELECT available_balance FROM te_balances WHERE user_id = $1 AND currency = $2',
       [userId, currency]
     );
-    if (res.rows.length === 0) return currency === 'TON' ? 12480.5 : 0; // Default
+    if (res.rows.length === 0) return 0;
     return Number(res.rows[0].available_balance);
   }
 
   public async getAllPositions(userId: string): Promise<Position[]> {
     const res = await this.pool.query('SELECT * FROM te_positions WHERE user_id = $1', [userId]);
     return res.rows.map((r) => this.mapPosition(r));
+  }
+
+  public async getUserOrders(userId: string): Promise<Order[]> {
+    const res = await this.pool.query(
+      'SELECT * FROM te_orders WHERE user_id = $1 ORDER BY created_at DESC',
+      [userId]
+    );
+    return res.rows.map((r) => this.mapOrder(r));
+  }
+
+  public async getActiveOrders(instrumentKey: string): Promise<Order[]> {
+    const res = await this.pool.query(
+      "SELECT * FROM te_orders WHERE instrument_key = $1 AND status IN ('Open', 'PartiallyFilled') ORDER BY created_at ASC",
+      [instrumentKey]
+    );
+    return res.rows.map((r) => this.mapOrder(r));
   }
 
   public async getUserTrades(userId: string): Promise<Trade[]> {

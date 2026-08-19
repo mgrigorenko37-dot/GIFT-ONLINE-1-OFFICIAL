@@ -11,17 +11,20 @@ import './styles/site.css';
 
 const App: React.FC = () => {
   const address = useTonAddress();
-  const { user } = useTelegramWebApp();
+  const { user, initData } = useTelegramWebApp();
 
   useEffect(() => {
     if (address && user?.id) {
       fetch('/api/user/wallet', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: String(user.id), walletAddress: address }),
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Telegram-Init-Data': initData,
+        },
+        body: JSON.stringify({ userId: String(user.id), walletAddress: address, initData }),
       }).catch((e) => console.error('Failed to link wallet:', e));
     }
-  }, [address, user?.id]);
+  }, [address, user?.id, initData]);
 
   return (
     <LanguageProvider>

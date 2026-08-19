@@ -112,6 +112,7 @@ export const useTelegramWebApp = () => {
   return {
     isTelegram: webApp !== null,
     webApp,
+    initData: webApp?.initData || '',
     openInvoice: webApp?.openInvoice ?? (() => {}),
     user,
   };
