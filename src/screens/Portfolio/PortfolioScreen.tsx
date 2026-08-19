@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTelegramWebApp } from '../../hooks/useTelegramWebApp';
-import { formatGX, type Gift } from '../../data/gifts';
+import { formatUSDT, type Gift } from '../../data/gifts';
 import { useGifts } from '../../context/GiftsContext';
 import { useLanguage } from '../../context/LanguageContext';
 import Chart from 'react-apexcharts';
@@ -86,20 +86,20 @@ const PortfolioScreen: React.FC = () => {
                 color: '#f6f3ff',
                 fontSize: '20px',
                 fontWeight: 600,
-                formatter: (val) => `${val} GX`,
+                formatter: (val) => `${val} USDT`,
               },
               total: {
                 show: true,
                 label: 'Total Value',
                 color: '#625d70',
-                formatter: () => `${formatGX(portfolioValue)} GX`,
+                formatter: () => `${formatUSDT(portfolioValue)} USDT`,
               },
             },
           },
         },
       },
       legend: { show: false },
-      tooltip: { y: { formatter: (val) => `${val} GX` } },
+      tooltip: { y: { formatter: (val) => `${val} USDT` } },
     }),
     [portfolioValue]
   );
@@ -271,7 +271,7 @@ const PortfolioScreen: React.FC = () => {
           <div className='gx-balance'>
             <span>Available balance</span>
             <strong>
-              12,480.50 <small>GX</small>
+              12,480.50 <small>USDT</small>
             </strong>
             <button type='button' onClick={() => navigate('/capital')}>
               <i className='material-icons'>add</i> Buy gifts
@@ -390,7 +390,7 @@ const PortfolioScreen: React.FC = () => {
                 >
                   <span style={{ color: '#625d70', fontSize: 13 }}>Total Investment</span>
                   <span style={{ color: '#f6f3ff', fontSize: 13, fontWeight: 600 }}>
-                    {formatGX(myGifts.reduce((s, g) => s + g.avgBuy * g.shares, 0))} GX
+                    {formatUSDT(myGifts.reduce((s, g) => s + g.avgBuy * g.shares, 0))} USDT
                   </span>
                 </div>
                 <div
@@ -403,7 +403,7 @@ const PortfolioScreen: React.FC = () => {
                 >
                   <span style={{ color: '#625d70', fontSize: 13 }}>Current Value</span>
                   <span style={{ color: '#f6f3ff', fontSize: 13, fontWeight: 600 }}>
-                    {formatGX(portfolioValue)} GX
+                    {formatUSDT(portfolioValue)} USDT
                   </span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: 4 }}>
@@ -495,8 +495,8 @@ const PortfolioScreen: React.FC = () => {
                         Avg buy
                       </span>
                       <strong style={{ fontSize: 13, color: '#f6f3ff' }}>
-                        {formatGX(gift.avgBuy)}{' '}
-                        <small style={{ color: '#625d70', fontWeight: 'normal' }}>GX</small>
+                        {formatUSDT(gift.avgBuy)}{' '}
+                        <small style={{ color: '#625d70', fontWeight: 'normal' }}>USDT</small>
                       </strong>
                     </div>
                     <div
@@ -518,8 +518,8 @@ const PortfolioScreen: React.FC = () => {
                         Current
                       </span>
                       <strong style={{ fontSize: 13, color: '#f6f3ff' }}>
-                        {formatGX(gift.floor)}{' '}
-                        <small style={{ color: '#625d70', fontWeight: 'normal' }}>GX</small>
+                        {formatUSDT(gift.floor)}{' '}
+                        <small style={{ color: '#625d70', fontWeight: 'normal' }}>USDT</small>
                       </strong>
                     </div>
                   </div>
@@ -532,8 +532,8 @@ const PortfolioScreen: React.FC = () => {
                       {gift.rarity}
                     </span>
                     <strong style={{ fontSize: 14, color: '#f6f3ff' }}>
-                      {formatGX(gift.floor * gift.shares)}{' '}
-                      <small style={{ color: '#625d70' }}>GX</small>
+                      {formatUSDT(gift.floor * gift.shares)}{' '}
+                      <small style={{ color: '#625d70' }}>USDT</small>
                     </strong>
                   </div>
                 </article>

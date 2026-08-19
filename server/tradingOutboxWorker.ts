@@ -16,7 +16,7 @@ export async function processTradingOutbox(pool: Pool, io: Server) {
     `);
 
     if (res.rows.length === 0) {
-      await client.query('ROLLBACK');
+      try { await client.query('ROLLBACK'); } catch(e) {}
       return;
     }
 
@@ -48,7 +48,7 @@ export async function processTradingOutbox(pool: Pool, io: Server) {
 
     await client.query('COMMIT');
   } catch (e) {
-    await client.query('ROLLBACK');
+    try { await client.query('ROLLBACK'); } catch(e) {}
     console.error('Error processing trading outbox', e);
   } finally {
     client.release();

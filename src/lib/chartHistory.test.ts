@@ -8,7 +8,7 @@ describe('Stage 7: REST History & Chart Data Processing', () => {
   it('1. Supports and validates all 9 timeframes without error', () => {
     for (const tf of ALL_TIMEFRAMES) {
       const mockCandle: GiftCandle = {
-        instrumentKey: 'durov-cap:all:all:TON',
+        instrumentKey: 'durov-cap:all:all:Gram',
         timeframe: tf,
         startTime: 1710000000000,
         endTime: 1710000060000,
@@ -35,7 +35,7 @@ describe('Stage 7: REST History & Chart Data Processing', () => {
   it('2. Correctly converts ms to seconds without double conversion', () => {
     const msTime = 1710000000000;
     const candle: GiftCandle = {
-      instrumentKey: 'durov-cap:all:all:TON',
+      instrumentKey: 'durov-cap:all:all:Gram',
       timeframe: '1m',
       startTime: msTime,
       endTime: msTime + 60000,
@@ -58,7 +58,7 @@ describe('Stage 7: REST History & Chart Data Processing', () => {
 
   it('3. Strictly isolates 1m and 1M timeframes and rejects mixed timeframe data', () => {
     const candle1m: GiftCandle = {
-      instrumentKey: 'durov-cap:all:all:TON',
+      instrumentKey: 'durov-cap:all:all:Gram',
       timeframe: '1m',
       startTime: 1710000000000,
       endTime: 1710000060000,
@@ -75,7 +75,7 @@ describe('Stage 7: REST History & Chart Data Processing', () => {
     };
 
     const candle1M: GiftCandle = {
-      instrumentKey: 'durov-cap:all:all:TON',
+      instrumentKey: 'durov-cap:all:all:Gram',
       timeframe: '1M',
       startTime: 1710000000000,
       endTime: 1712678400000,
@@ -109,7 +109,7 @@ describe('Stage 7: REST History & Chart Data Processing', () => {
 
   it('5. Handles exact string prices and parses them correctly for chart', () => {
     const candle: GiftCandle = {
-      instrumentKey: 'durov-cap:all:all:TON',
+      instrumentKey: 'durov-cap:all:all:Gram',
       timeframe: '5m',
       startTime: 1710000000000,
       endTime: 1710000300000,
@@ -134,7 +134,7 @@ describe('Stage 7: REST History & Chart Data Processing', () => {
 
   it('6. Removes duplicates by startTime and sorts strictly ASC', () => {
     const c1: GiftCandle = {
-      instrumentKey: 'durov-cap:all:all:TON',
+      instrumentKey: 'durov-cap:all:all:Gram',
       timeframe: '1m',
       startTime: 1710000060000, // second
       endTime: 1710000120000,
@@ -151,7 +151,7 @@ describe('Stage 7: REST History & Chart Data Processing', () => {
     };
 
     const c2Old: GiftCandle = {
-      instrumentKey: 'durov-cap:all:all:TON',
+      instrumentKey: 'durov-cap:all:all:Gram',
       timeframe: '1m',
       startTime: 1710000000000, // first (old rev)
       endTime: 1710000060000,
@@ -168,7 +168,7 @@ describe('Stage 7: REST History & Chart Data Processing', () => {
     };
 
     const c2New: GiftCandle = {
-      instrumentKey: 'durov-cap:all:all:TON',
+      instrumentKey: 'durov-cap:all:all:Gram',
       timeframe: '1m',
       startTime: 1710000000000, // first (new rev)
       endTime: 1710000060000,
@@ -199,7 +199,7 @@ describe('Stage 7: REST History & Chart Data Processing', () => {
   it('7. Handles timeframe switching correctly', () => {
     const candles: GiftCandle[] = [
       {
-        instrumentKey: 'durov-cap:all:all:TON',
+        instrumentKey: 'durov-cap:all:all:Gram',
         timeframe: '1h',
         startTime: 1710000000000,
         endTime: 1710003600000,
@@ -222,11 +222,11 @@ describe('Stage 7: REST History & Chart Data Processing', () => {
     expect(processCandlesForChart(candles, '1h').length).toBe(1);
   });
 
-  it('8 & 9. Supports both TON and STARS instrument keys', () => {
-    const tonKey = buildInstrumentKey({ collectionId: 'pepe-hat', currency: 'TON' });
+  it('8 & 9. Supports both Gram and STARS instrument keys', () => {
+    const tonKey = buildInstrumentKey({ collectionId: 'pepe-hat', currency: 'Gram' });
     const starsKey = buildInstrumentKey({ collectionId: 'pepe-hat', currency: 'STARS' });
 
-    expect(tonKey).toBe('pepe-hat:all:all:TON');
+    expect(tonKey).toBe('pepe-hat:all:all:Gram');
     expect(starsKey).toBe('pepe-hat:all:all:STARS');
 
     const tonCandle: GiftCandle = {

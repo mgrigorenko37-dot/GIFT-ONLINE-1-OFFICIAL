@@ -1,6 +1,7 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
 
 // pages
+import SplashScreen from '../screens/Auth/SplashScreen';
 import SignupScreen from '../screens/Members/SignupScreen';
 import ForgotScreen from '../screens/Members/ForgotScreen';
 import ProfileScreen from '../screens/Members/ProfileScreen';
@@ -13,7 +14,7 @@ import GXTerminalScreen from '../screens/GXTerminal/GXTerminalScreen';
 
 const Navigation: React.FC = () => (
   <Routes>
-    <Route path='/' element={<GXTerminalScreen />} />
+    <Route path='/' element={<SplashScreen />} />
     <Route path='/market' element={<GXTerminalScreen />} />
     <Route path='/profile' element={<ProfileScreen />} />
     <Route path='/members' element={<Navigate to='/portfolio' replace />} />

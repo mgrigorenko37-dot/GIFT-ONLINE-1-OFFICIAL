@@ -35,6 +35,7 @@ export function getMarketRepository(): IMarketRepository {
 export function initMarketStateRepository() {
   try {
     const repo = resolveMarketRepository();
+    console.log('INIT REPO CALLED. Repo class:', repo.constructor.name);
     setMarketRepository(repo);
   } catch (err) {
     console.error('Failed to resolve market repository:', err);

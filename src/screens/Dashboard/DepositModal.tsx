@@ -1,13 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { formatGX } from '../../data/gifts';
+import { formatUSDT } from '../../data/gifts';
 import { useTelegramWebApp } from '../../hooks/useTelegramWebApp';
-
-type DepositMethod = 'stars' | 'usdt';
 
 interface DepositModalProps {
   isOpen: boolean;
   onClose: () => void;
-  method: DepositMethod;
   amount: string;
   gxPreview: number;
 }
@@ -15,7 +12,6 @@ interface DepositModalProps {
 export const DepositModal: React.FC<DepositModalProps> = ({
   isOpen,
   onClose,
-  method,
   amount,
   gxPreview,
 }) => {
@@ -33,42 +29,9 @@ export const DepositModal: React.FC<DepositModalProps> = ({
   const handleConfirm = () => {
     setStatus('processing');
 
-    // Simulate API call for invoice creation
     setTimeout(() => {
-      if (method === 'stars') {
-        fetch('/api/create-invoice', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            title: 'Deposit Stars',
-            description: 'Deposit ' + amount + ' Stars for GX tokens.',
-            payload: 'deposit_' + Date.now(),
-            currency: 'XTR',
-            prices: [{ label: 'Deposit', amount: parseInt(amount, 10) }],
-          }),
-        })
-          .then((res) => res.json())
-          .then((data) => {
-            if (data.invoiceLink) {
-              openInvoice(data.invoiceLink, (invoiceStatus) => {
-                if (invoiceStatus === 'paid') {
-                  setStatus('success');
-                } else {
-                  setStatus('error');
-                }
-              });
-            } else {
-              // Fallback for non-telegram environments or missing bot token
-              setTimeout(() => setStatus('success'), 1500);
-            }
-          })
-          .catch(() => {
-            setTimeout(() => setStatus('success'), 1500);
-          });
-      } else {
-        // USDT deposit simulation
+        // Gram deposit simulation
         setTimeout(() => setStatus('success'), 2000);
-      }
     }, 1000);
   };
 
@@ -138,7 +101,7 @@ export const DepositModal: React.FC<DepositModalProps> = ({
                 Confirm Deposit
               </h2>
               <p style={{ color: '#625d70', fontSize: 14, margin: 0 }}>
-                You are about to deposit {amount} {method === 'stars' ? 'Stars' : 'USDT'} to your
+                You are about to deposit {amount} {method === 'stars' ? 'Stars' : 'Gram'} to your
                 account.
               </p>
             </div>
@@ -154,21 +117,21 @@ export const DepositModal: React.FC<DepositModalProps> = ({
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
                 <span style={{ color: '#625d70', fontSize: 14 }}>Amount</span>
                 <span style={{ color: '#f6f3ff', fontSize: 14, fontWeight: 600 }}>
-                  {amount} {method === 'stars' ? '⭐' : 'USDT'}
+                  {amount} {method === 'stars' ? '⭐' : 'Gram'}
                 </span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
                 <span style={{ color: '#625d70', fontSize: 14 }}>Rate</span>
                 <span style={{ color: '#f6f3ff', fontSize: 14 }}>
-                  1 {method === 'stars' ? 'Star' : 'USDT'} = {formatGX(gxPreview / Number(amount))}{' '}
-                  GX
+                  1 {method === 'stars' ? 'Star' : 'Gram'} = {formatUSDT(gxPreview / Number(amount))}{' '}
+                  USDT
                 </span>
               </div>
               <div style={{ height: 1, background: '#2a2840', margin: '12px 0' }} />
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                 <span style={{ color: '#625d70', fontSize: 14 }}>You Receive</span>
                 <span style={{ color: '#8b76ff', fontSize: 16, fontWeight: 700 }}>
-                  {formatGX(gxPreview)} GX
+                  {formatUSDT(gxPreview)} USDT
                 </span>
               </div>
             </div>
@@ -179,7 +142,7 @@ export const DepositModal: React.FC<DepositModalProps> = ({
               onClick={handleConfirm}
               style={{ width: '100%' }}
             >
-              {method === 'stars' ? 'Pay with Telegram Stars' : 'Generate USDT Invoice'}
+              {method === 'stars' ? 'Pay with Telegram Stars' : 'Generate Gram Invoice'}
             </button>
           </>
         )}
@@ -231,7 +194,7 @@ export const DepositModal: React.FC<DepositModalProps> = ({
               Deposit Successful!
             </h2>
             <p style={{ color: '#625d70', fontSize: 14, margin: '0 0 24px 0' }}>
-              Your account has been credited with {formatGX(gxPreview)} GX.
+              Your account has been credited with {formatUSDT(gxPreview)} USDT.
             </p>
             <button
               type='button'

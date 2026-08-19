@@ -664,7 +664,7 @@ export class PostgresMarketRepository implements IMarketRepository {
       );
 
       if (saleRes.rowCount === 0) {
-        await client.query('ROLLBACK');
+        try { await client.query('ROLLBACK'); } catch(e) {}
         return { isNew: false };
       }
 
@@ -749,7 +749,7 @@ export class PostgresMarketRepository implements IMarketRepository {
       await client.query('COMMIT');
       return { isNew: true };
     } catch (err) {
-      await client.query('ROLLBACK');
+      try { await client.query('ROLLBACK'); } catch(e) {}
       console.error('PostgresMarketRepository saveSaleAndCandlesAtomic error:', err);
       throw err;
     } finally {
@@ -843,7 +843,7 @@ export class PostgresMarketRepository implements IMarketRepository {
         sequence: r.sequence ? Number(r.sequence) : undefined,
       }));
     } catch (err) {
-      await client.query('ROLLBACK');
+      try { await client.query('ROLLBACK'); } catch(e) {}
       console.error('PostgresMarketRepository fetchPendingOutboxEvents error:', err);
       return [];
     } finally {
@@ -985,7 +985,7 @@ export class PostgresMarketRepository implements IMarketRepository {
       }
       await client.query('COMMIT');
     } catch (err) {
-      await client.query('ROLLBACK');
+      try { await client.query('ROLLBACK'); } catch(e) {}
       console.error('PostgresMarketRepository saveCandles error:', err);
       throw err;
     } finally {
@@ -999,13 +999,26 @@ export class PostgresMarketRepository implements IMarketRepository {
     options?: { from?: number; to?: number; limit?: number }
   ): Promise<GiftCandle[]> {
     await this.initSchema();
+    let actualKey = instrumentKey.split(':')[0]; // Default fallback
+    if (instrumentKey.includes(':')) {
+      const parts = instrumentKey.split(':');
+      // Convert "backpack-telegram:classic:default:TON" to "BACKPACK_TELEGRAM_CLASSIC"
+      actualKey = `${parts[0].replace(/-/g, '_').toUpperCase()}_${parts[1].toUpperCase()}`;
+    } else {
+      // If it's already "plush-pepe", convert it to "PLUSH_PEPE_CLASSIC"
+      if (!actualKey.includes('_')) {
+        actualKey = `${actualKey.replace(/-/g, '_').toUpperCase()}_CLASSIC`;
+      }
+    }
+    
+    
     let query = `SELECT instrument_key as "instrumentKey", timeframe, start_time as "startTime",
                         end_time as "endTime", open::text, high::text, low::text, close::text,
                         volume::text, quote_volume as "quoteVolume", sum_quote as "sumQuote",
                         sum_quantity as "sumQuantity", item_count as "itemCount", trade_count as "tradeCount",
                         first_sale_id as "firstSaleId", last_sale_id as "lastSaleId", confirmed, revision, updated_at as "updatedAt"
                  FROM candles WHERE instrument_key = $1 AND timeframe = $2`;
-    const params: any[] = [instrumentKey, timeframe];
+    const params: any[] = [actualKey, timeframe];
 
     if (options?.from !== undefined) {
       params.push(options.from);
@@ -1016,11 +1029,12 @@ export class PostgresMarketRepository implements IMarketRepository {
       query += ` AND start_time < $${params.length}`;
     }
 
-    query += ` ORDER BY start_time ASC`;
-
     if (options?.limit && options.limit > 0) {
-      params.push(options.limit);
-      query += ` LIMIT $${params.length}`;
+      // Get the newest N candles, then order them ASC
+      let limitQuery = query + ` ORDER BY start_time DESC LIMIT ${options.limit}`;
+      query = `SELECT * FROM (${limitQuery}) sub ORDER BY "startTime" ASC`;
+    } else {
+      query += ` ORDER BY start_time ASC`;
     }
 
     const res = await this.pool.query(query, params);

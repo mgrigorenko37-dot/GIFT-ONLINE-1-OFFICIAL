@@ -17,17 +17,17 @@ describe('Market Types and Instrument Key Tests', () => {
       collectionId: 'pepe-gifts',
       modelId: 'golden',
       backdropId: 'sunset',
-      currency: 'TON',
+      currency: 'Gram',
     });
-    expect(key).toBe('pepe-gifts:golden:sunset:TON');
+    expect(key).toBe('pepe-gifts:golden:sunset:Gram');
   });
 
   it("builds instrument key with missing optional fields defaulting to 'all'", () => {
     const key = buildInstrumentKey({
       collectionId: 'pepe-gifts',
-      currency: 'TON',
+      currency: 'Gram',
     });
-    expect(key).toBe('pepe-gifts:all:all:TON');
+    expect(key).toBe('pepe-gifts:all:all:Gram');
   });
 
   it('is deterministic for same parameters', () => {
@@ -47,16 +47,16 @@ describe('Market Types and Instrument Key Tests', () => {
   });
 
   it('parses valid instrument key', () => {
-    const parsed = parseInstrumentKey('pepe-gifts:golden:sunset:TON');
+    const parsed = parseInstrumentKey('pepe-gifts:golden:sunset:Gram');
     expect(parsed.collectionId).toBe('pepe-gifts');
     expect(parsed.modelId).toBe('golden');
     expect(parsed.backdropId).toBe('sunset');
-    expect(parsed.currency).toBe('TON');
+    expect(parsed.currency).toBe('Gram');
   });
 
-  it('handles TON and STARS currency', () => {
-    const keyTON = buildInstrumentKey({ collectionId: 'cap', currency: 'TON' });
-    expect(parseInstrumentKey(keyTON).currency).toBe('TON');
+  it('handles Gram and STARS currency', () => {
+    const keyTON = buildInstrumentKey({ collectionId: 'cap', currency: 'Gram' });
+    expect(parseInstrumentKey(keyTON).currency).toBe('Gram');
 
     const keySTARS = buildInstrumentKey({ collectionId: 'cap', currency: 'STARS' });
     expect(parseInstrumentKey(keySTARS).currency).toBe('STARS');
@@ -66,7 +66,7 @@ describe('Market Types and Instrument Key Tests', () => {
     expect(() => buildInstrumentKey({ collectionId: 'cap', currency: 'USD' as any })).toThrow(
       /Invalid currency/
     );
-    expect(() => buildInstrumentKey({ collectionId: '', currency: 'TON' })).toThrow(
+    expect(() => buildInstrumentKey({ collectionId: '', currency: 'Gram' })).toThrow(
       /collectionId must be a non-empty string/
     );
   });
@@ -89,7 +89,7 @@ describe('Market Types and Instrument Key Tests', () => {
     const sale: GiftSale = {
       id: 'sale-1',
       collectionId: 'durov-cap',
-      currency: 'TON',
+      currency: 'Gram',
       price: '100',
       quantity: '1',
       eventTime: nowMs,

@@ -115,21 +115,21 @@ export class TradingEngine extends EventEmitter {
     }
   }
 
-  public getBalance(userId: string, currency: string = 'TON'): number {
+  public getBalance(userId: string, currency: string = 'Gram'): number {
     const key = `${userId}:${currency}`;
     if (this.balances.has(key)) {
       return this.balances.get(key)!;
     }
-    if (currency === 'TON' && this.balances.has(userId)) {
+    if (currency === 'Gram' && this.balances.has(userId)) {
       return this.balances.get(userId)!;
     }
-    return currency === 'TON' ? 12480.5 : 0;
+    return currency === 'Gram' ? 12480.5 : 0;
   }
 
-  public setBalance(userId: string, amount: number, currency: string = 'TON') {
+  public setBalance(userId: string, amount: number, currency: string = 'Gram') {
     const key = `${userId}:${currency}`;
     this.balances.set(key, amount);
-    if (currency === 'TON') {
+    if (currency === 'Gram') {
       this.balances.set(userId, amount);
     }
   }
@@ -153,7 +153,7 @@ export class TradingEngine extends EventEmitter {
       orderData.instrumentKey.endsWith(':STARS') ||
       orderData.instrumentKey.includes('STARS') ||
       orderData.instrumentKey === 'star';
-    const currency = isStars ? 'STARS' : 'TON';
+    const currency = isStars ? 'STARS' : 'Gram';
 
     const order: Order = {
       ...orderData,
@@ -304,7 +304,7 @@ export class TradingEngine extends EventEmitter {
       order.instrumentKey.endsWith(':STARS') ||
       order.instrumentKey.includes('STARS') ||
       order.instrumentKey === 'star';
-    const currency = isStars ? 'STARS' : 'TON';
+    const currency = isStars ? 'STARS' : 'Gram';
 
     const trade: Trade = {
       tradeId: Math.random().toString(36).substring(2, 11),
@@ -389,7 +389,7 @@ export class TradingEngine extends EventEmitter {
       order.instrumentKey.endsWith(':STARS') ||
       order.instrumentKey.includes('STARS') ||
       order.instrumentKey === 'star';
-    const currency = isStars ? 'STARS' : 'TON';
+    const currency = isStars ? 'STARS' : 'Gram';
 
     if (!position || position.status === 'Closed') {
       // Open new position

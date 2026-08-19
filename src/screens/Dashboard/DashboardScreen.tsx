@@ -3,14 +3,13 @@ import { WithdrawModal } from './WithdrawModal';
 import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useTelegramWebApp } from '../../hooks/useTelegramWebApp';
-import { formatGX } from '../../data/gifts';
+import { formatUSDT } from '../../data/gifts';
 import { useLanguage } from '../../context/LanguageContext';
+import { useTonConnectUI, useTonAddress, useTonWallet } from '@tonconnect/ui-react';
+import { beginCell } from '@ton/core';
 
 type Tab = 'deposit' | 'withdraw';
-type DepositMethod = 'stars' | 'usdt';
 
-const STARS_RATE = 0.021; // 1 Star ≈ 0.021 GX (demo)
-const USDT_RATE = 10.5; // 1 USDT = 10.5 GX (demo)
 
 const DashboardScreen: React.FC = () => {
   const navigate = useNavigate();
@@ -34,15 +33,85 @@ const DashboardScreen: React.FC = () => {
       setTab('deposit');
     }
   }, [location.state]);
-  const [method, setMethod] = useState<DepositMethod>('stars');
+
+  const [gramRate, setGramRate] = useState<number>(5.50);
+  
+  useEffect(() => {
+    const fetchRate = async () => {
+      try {
+        const res = await fetch('/api/rates');
+        const data = await res.json();
+        if (data && data.gram) {
+          setGramRate(data.gram);
+        }
+      } catch (e) {
+        console.error('Failed to fetch rate:', e);
+      }
+    };
+    fetchRate();
+    const intervalId = setInterval(fetchRate, 30000);
+    return () => clearInterval(intervalId);
+  }, []);
+
   const [amount, setAmount] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [walletAddress, setWalletAddress] = useState('');
   const [isWithdrawModalOpen, setIsWithdrawModalOpen] = useState(false);
 
-  const rate = method === 'stars' ? STARS_RATE : USDT_RATE;
-  const unit = method === 'stars' ? '⭐ Stars' : '💵 USDT';
+  const [tonConnectUI] = useTonConnectUI();
+  const address = useTonAddress();
+  const wallet = useTonWallet();
+
+  const rate = gramRate;
+  const unit = '💎 Gram';
   const gxPreview = Number(amount) > 0 ? Number(amount) * rate : 0;
+
+  useEffect(() => {
+    if (address) {
+      setWalletAddress(address);
+    }
+  }, [address]);
+
+  const handleTonDeposit = async () => {
+    if (!wallet) {
+      tonConnectUI.openModal();
+      return;
+    }
+    
+    if (Number(amount) <= 0) return;
+
+    try {
+      const nanoTon = Math.floor(Number(amount) * 1e9).toString();
+      const userId = user?.id || 'demo_user';
+      
+      // 1. Fetch Hot Wallet Address from server
+      const configRes = await fetch('/api/config');
+      const config = await configRes.json();
+      const hotWallet = config.hotWalletAddress || address; // Fallback to own address if not configured
+      
+      // Standard way to add a text comment in Gram
+      const body = beginCell()
+        .storeUint(0, 32)
+        .storeStringTail(`Deposit_${userId}`)
+        .endCell();
+
+      const transaction = {
+        validUntil: Math.floor(Date.now() / 1000) + 360,
+        messages: [
+          {
+            address: hotWallet, 
+            amount: nanoTon,
+            payload: body.toBoc().toString('base64')
+          }
+        ]
+      };
+
+      await tonConnectUI.sendTransaction(transaction);
+      setIsModalOpen(true); // show success modal or proceed
+    } catch (e) {
+      console.error('Transaction error:', e);
+    }
+  };
 
   return (
     <div className='gx-app'>
@@ -221,14 +290,14 @@ const DashboardScreen: React.FC = () => {
             <h1>{tab === 'deposit' ? 'Add funds' : 'Withdraw funds'}</h1>
             <p className='gx-subheading'>
               {tab === 'deposit'
-                ? 'Top up your GX balance with Telegram Stars or USDT.'
-                : 'Withdraw your GX balance as crypto via Telegram bots.'}
+                ? 'Top up your USDT balance with Telegram Stars or USDT.'
+                : 'Withdraw your USDT balance as crypto via Telegram bots.'}
             </p>
           </div>
           <div className='gx-balance'>
             <span>Available balance</span>
             <strong>
-              12,480.50 <small>GX</small>
+              12,480.50 <small>USDT</small>
             </strong>
           </div>
         </section>
@@ -259,37 +328,11 @@ const DashboardScreen: React.FC = () => {
                 Withdraw
               </button>
             </div>
-
             {tab === 'deposit' ? (
               <div style={{ padding: '20px' }}>
                 <p style={{ color: '#625d70', fontSize: 12, marginBottom: 16 }}>
-                  Choose deposit method
+                  Deposit Gram to receive USDT instantly
                 </p>
-                <div style={{ display: 'flex', gap: 10, marginBottom: 20 }}>
-                  {(['stars', 'usdt'] as DepositMethod[]).map((m) => (
-                    <button
-                      key={m}
-                      type='button'
-                      onClick={() => {
-                        setMethod(m);
-                        setAmount('');
-                      }}
-                      style={{
-                        flex: 1,
-                        padding: '12px',
-                        borderRadius: 10,
-                        cursor: 'pointer',
-                        background: method === m ? 'rgba(181,158,255,0.12)' : '#161425',
-                        border: method === m ? '1px solid #8b76ff' : '1px solid #2a2840',
-                        color: method === m ? '#f6f3ff' : '#625d70',
-                        fontSize: 13,
-                        fontWeight: 600,
-                      }}
-                    >
-                      {m === 'stars' ? '⭐ Telegram Stars' : '💵 USDT'}
-                    </button>
-                  ))}
-                </div>
 
                 <label className='gx-input-label'>
                   Amount <span>{unit}</span>
@@ -300,7 +343,7 @@ const DashboardScreen: React.FC = () => {
                       inputMode='decimal'
                       placeholder='0'
                     />
-                    <span>{method === 'stars' ? '⭐' : 'USDT'}</span>
+                    <span>Gram</span>
                   </div>
                 </label>
 
@@ -308,12 +351,11 @@ const DashboardScreen: React.FC = () => {
                   <span>
                     Rate{' '}
                     <b>
-                      1 {method === 'stars' ? 'Star' : 'USDT'} ={' '}
-                      {method === 'stars' ? STARS_RATE : USDT_RATE} GX
+                      1 Gram = {gramRate.toFixed(2)} USDT
                     </b>
                   </span>
                   <span>
-                    You receive <strong>{formatGX(gxPreview)} GX</strong>
+                    You receive <strong>{formatUSDT(gxPreview)} USDT</strong>
                   </span>
                   <span>
                     Fee <b>0%</b>
@@ -325,23 +367,23 @@ const DashboardScreen: React.FC = () => {
                   className='gx-submit'
                   style={{ marginTop: 16 }}
                   disabled={!Number(amount)}
-                  onClick={() => setIsModalOpen(true)}
+                  onClick={handleTonDeposit}
                 >
-                  {method === 'stars' ? '⭐ Pay with Stars' : '💵 Pay with USDT'}
-                  <i className='material-icons'>arrow_forward</i>
+                  {wallet ? '💎 Deposit Gram' : '💎 Connect Wallet'}
+                  <i className='material-icons'>{wallet ? 'arrow_forward' : 'account_balance_wallet'}</i>
                 </button>
                 <p className='gx-order-disclaimer'>
-                  <i className='material-icons'>lock</i> Payments processed via Telegram
+                  <i className='material-icons'>lock</i> Payments processed securely
                 </p>
               </div>
             ) : (
               <div style={{ padding: '20px' }}>
                 <p style={{ color: '#625d70', fontSize: 12, marginBottom: 16 }}>
-                  Withdraw GX as cryptocurrency via Telegram bots
+                  Withdraw USDT as cryptocurrency via Telegram bots
                 </p>
 
                 <label className='gx-input-label'>
-                  GX amount <span>GX</span>
+                  USDT amount <span>USDT</span>
                   <div className='gx-order-input'>
                     <input
                       value={amount}
@@ -349,7 +391,7 @@ const DashboardScreen: React.FC = () => {
                       inputMode='decimal'
                       placeholder='0'
                     />
-                    <span>GX</span>
+                    <span>USDT</span>
                   </div>
                 </label>
 
@@ -368,25 +410,45 @@ const DashboardScreen: React.FC = () => {
                 </div>
 
                 <label className='gx-input-label' style={{ marginTop: 16 }}>
-                  Wallet address
-                  <div className='gx-order-input'>
+                  Wallet address (Gram)
+                  <div className='gx-order-input' style={{ display: 'flex', gap: 8 }}>
                     <input
                       placeholder='UQ...'
                       value={walletAddress}
                       onChange={(e) => setWalletAddress(e.target.value)}
+                      style={{ flex: 1 }}
                     />
+                    {!wallet && (
+                      <button 
+                        type="button"
+                        onClick={() => tonConnectUI.openModal()}
+                        style={{
+                          background: 'rgba(139, 118, 255, 0.15)',
+                          color: '#8b76ff',
+                          border: 'none',
+                          padding: '0 16px',
+                          borderRadius: 8,
+                          cursor: 'pointer',
+                          fontWeight: 600,
+                          fontSize: 13,
+                          whiteSpace: 'nowrap'
+                        }}
+                      >
+                        Connect
+                      </button>
+                    )}
                   </div>
                 </label>
 
                 <div className='gx-order-summary' style={{ marginTop: 12 }}>
                   <span>
-                    Available <b>12,480.50 GX</b>
+                    Available <b>12,480.50 USDT</b>
                   </span>
                   <span>
-                    Min withdrawal <b>100 GX</b>
+                    Min withdrawal <b>100 USDT</b>
                   </span>
                   <span>
-                    Processing <b>via @wallet bot</b>
+                    Processing <b>Direct to wallet</b>
                   </span>
                 </div>
 
@@ -400,7 +462,7 @@ const DashboardScreen: React.FC = () => {
                   Withdraw <i className='material-icons'>output</i>
                 </button>
                 <p className='gx-order-disclaimer'>
-                  <i className='material-icons'>lock</i> Withdrawals processed via Telegram
+                  <i className='material-icons'>lock</i> Exchange signs tx and sends Gram
                 </p>
               </div>
             )}
@@ -419,36 +481,31 @@ const DashboardScreen: React.FC = () => {
               {(tab === 'deposit'
                 ? [
                     {
-                      icon: 'star',
-                      title: 'Telegram Stars',
-                      text: 'Buy Stars inside Telegram and instantly top up your GX balance. No external wallets needed.',
-                    },
-                    {
-                      icon: 'attach_money',
-                      title: 'USDT deposit',
-                      text: 'Send USDT (TON network) to your personal deposit address. Balance is credited after 1 confirmation.',
+                      icon: 'account_balance_wallet',
+                      title: 'Gram deposit',
+                      text: 'Send Gram securely from your wallet to instantly top up your USDT balance.',
                     },
                     {
                       icon: 'bolt',
                       title: 'Instant credit',
-                      text: 'Star deposits are credited instantly. USDT deposits take ~30 seconds.',
+                      text: 'Gram deposits are credited instantly based on the current market rate.',
                     },
                   ]
                 : [
                     {
                       icon: 'output',
                       title: 'Crypto withdrawal',
-                      text: 'Withdraw your GX balance as USDT or TON to any wallet via the @wallet Telegram bot.',
+                      text: 'Withdraw your USDT balance directly to your connected Gram wallet. Fast and secure.',
                     },
                     {
                       icon: 'schedule',
                       title: 'Processing time',
-                      text: 'Withdrawals are processed within 5 minutes during trading hours.',
+                      text: 'Our backend Hot Wallet automatically signs and executes your withdrawal in seconds.',
                     },
                     {
                       icon: 'security',
                       title: 'Security',
-                      text: 'All withdrawals require Telegram identity confirmation. No 3rd-party logins.',
+                      text: 'No smart-contract locks required for withdrawal. Handled by centralized matching.',
                     },
                   ]
               ).map(({ icon, title, text }) => (
@@ -490,7 +547,6 @@ const DashboardScreen: React.FC = () => {
         <DepositModal
           isOpen={isModalOpen}
           onClose={() => setIsModalOpen(false)}
-          method={method}
           amount={amount}
           gxPreview={gxPreview}
         />
@@ -501,6 +557,7 @@ const DashboardScreen: React.FC = () => {
           onClose={() => setIsWithdrawModalOpen(false)}
           amount={amount}
           walletAddress={walletAddress}
+          rate={gramRate}
         />
       )}
     </div>

@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { formatGX } from '../../data/gifts';
+import { formatUSDT } from '../../data/gifts';
 
 interface WithdrawModalProps {
   isOpen: boolean;
   onClose: () => void;
   amount: string;
   walletAddress: string;
+  rate: number;
 }
 
 export const WithdrawModal: React.FC<WithdrawModalProps> = ({
@@ -13,6 +14,7 @@ export const WithdrawModal: React.FC<WithdrawModalProps> = ({
   onClose,
   amount,
   walletAddress,
+  rate,
 }) => {
   const [status, setStatus] = useState<'confirm' | 'processing' | 'success' | 'error'>('confirm');
 
@@ -33,7 +35,7 @@ export const WithdrawModal: React.FC<WithdrawModalProps> = ({
     }, 2000);
   };
 
-  const usdtAmount = (Number(amount) / 10.5).toFixed(2);
+  const tonAmount = (Number(amount) / rate).toFixed(2);
 
   return (
     <div
@@ -101,7 +103,7 @@ export const WithdrawModal: React.FC<WithdrawModalProps> = ({
                 Confirm Withdrawal
               </h2>
               <p style={{ color: '#625d70', fontSize: 14, margin: 0 }}>
-                You are about to withdraw {formatGX(Number(amount))} GX to the following wallet
+                You are about to withdraw {formatUSDT(Number(amount))} USDT to the following wallet
                 address.
               </p>
             </div>
@@ -115,9 +117,9 @@ export const WithdrawModal: React.FC<WithdrawModalProps> = ({
               }}
             >
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
-                <span style={{ color: '#625d70', fontSize: 14 }}>GX Amount</span>
+                <span style={{ color: '#625d70', fontSize: 14 }}>USDT Amount</span>
                 <span style={{ color: '#f6f3ff', fontSize: 14, fontWeight: 600 }}>
-                  {formatGX(Number(amount))} GX
+                  {formatUSDT(Number(amount))} USDT
                 </span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
@@ -140,7 +142,7 @@ export const WithdrawModal: React.FC<WithdrawModalProps> = ({
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                 <span style={{ color: '#625d70', fontSize: 14 }}>You Receive (est.)</span>
                 <span style={{ color: '#f43f5e', fontSize: 16, fontWeight: 700 }}>
-                  ~ {usdtAmount} USDT
+                  ~ {tonAmount} Gram
                 </span>
               </div>
             </div>
@@ -201,7 +203,7 @@ export const WithdrawModal: React.FC<WithdrawModalProps> = ({
               Withdrawal Initiated!
             </h2>
             <p style={{ color: '#625d70', fontSize: 14, margin: '0 0 24px 0' }}>
-              Your withdrawal of {formatGX(Number(amount))} GX has been queued. The funds will
+              Your withdrawal of {formatUSDT(Number(amount))} USDT has been queued. The funds will
               arrive in your wallet shortly.
             </p>
             <button

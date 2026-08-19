@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { formatGX, type Gift } from '../../data/gifts';
+import { formatUSDT, type Gift } from '../../data/gifts';
 import { useGifts } from '../../context/GiftsContext';
 import { useLanguage } from '../../context/LanguageContext';
 
@@ -8,11 +8,32 @@ type SortKey = 'floor' | 'change' | 'volume';
 
 const rarityOptions = ['All', 'Common', 'Rare', 'Epic', 'Limited', 'Legendary'];
 
-const GiftArtwork: React.FC<{ className: string; large?: boolean; emoji?: string }> = ({
+const GiftArtwork: React.FC<{ className: string; large?: boolean; emoji?: string; image_url?: string }> = ({
   className,
   large,
   emoji,
+  image_url,
 }) => {
+  if (image_url) {
+    return (
+      <div
+        className={`gift-art ${className} ${large ? 'gift-art-large' : ''}`}
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          fontSize: large ? '48px' : '24px',
+          background: 'transparent'
+        }}
+      >
+        <img
+          src={image_url}
+          alt='gift'
+          style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }}
+        />
+      </div>
+    );
+  }
   if (emoji) {
     return (
       <div
@@ -204,7 +225,7 @@ const CapitalScreen: React.FC = () => {
         <section className='gx-markets-heading'>
           <div>
             <p className='gx-eyebrow'>
-              GX MARKET <span className='gx-heading-line' />
+              USDT MARKET <span className='gx-heading-line' />
             </p>
             <h1>Gift markets</h1>
             <p className='gx-subheading'>
@@ -222,7 +243,7 @@ const CapitalScreen: React.FC = () => {
           <div>
             <span>Total market volume</span>
             <strong>
-              1.84M <small>GX</small>
+              1.84M <small>USDT</small>
             </strong>
             <em className='gx-positive'>+6.28% today</em>
           </div>
@@ -234,7 +255,7 @@ const CapitalScreen: React.FC = () => {
           <div>
             <span>Highest floor</span>
             <strong>
-              640.00 <small>GX</small>
+              640.00 <small>USDT</small>
             </strong>
             <em>Genie Lamp</em>
           </div>
@@ -293,7 +314,7 @@ const CapitalScreen: React.FC = () => {
               {visibleGifts.map((gift) => (
                 <article className='gx-market-card' key={gift.id}>
                   <div className='gx-card-art-wrap'>
-                    <GiftArtwork className={gift.className} large emoji={gift.emoji} />
+                    <GiftArtwork className={gift.className} large emoji={gift.emoji} image_url={gift.image_url} />
                     <span
                       className={
                         gift.change > 0
@@ -316,13 +337,13 @@ const CapitalScreen: React.FC = () => {
                     <div>
                       <span>Floor price</span>
                       <strong>
-                        {formatGX(gift.floor)} <small>GX</small>
+                        {formatUSDT(gift.floor)} <small>USDT</small>
                       </strong>
                     </div>
                     <div>
                       <span>24h volume</span>
                       <strong>
-                        {gift.volume} <small>GX</small>
+                        {gift.volume} <small>USDT</small>
                       </strong>
                     </div>
                   </div>

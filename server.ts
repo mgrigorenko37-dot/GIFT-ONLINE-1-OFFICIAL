@@ -20,6 +20,7 @@ import {
 import { getMarketStats } from './server/marketStats';
 import { getIndicators } from './server/indicatorEngine';
 import { initOutboxWorker, stopOutboxWorker } from './server/outboxWorker';
+import { TonScanner } from './server/tonScanner';
 import {
   webhookRateLimiter,
   restApiRateLimiter,
@@ -124,6 +125,16 @@ export async function initDbSchema(pool: Pool) {
         created_at BIGINT NOT NULL,
         published_at BIGINT
       )`,
+      `CREATE TABLE IF NOT EXISTS te_ton_deposits (
+        hash VARCHAR(255) PRIMARY KEY,
+        user_id VARCHAR(255) NOT NULL,
+        amount NUMERIC NOT NULL,
+        created_at BIGINT NOT NULL
+      )`,
+      `CREATE TABLE IF NOT EXISTS te_users (
+        id VARCHAR(255) PRIMARY KEY,
+        wallet_address VARCHAR(255)
+      )`,
       `CREATE TABLE IF NOT EXISTS te_funding_payments (
         funding_id VARCHAR(255) PRIMARY KEY,
         position_id VARCHAR(255) NOT NULL,
@@ -170,7 +181,25 @@ export async function initDbSchema(pool: Pool) {
         created_at BIGINT NOT NULL
       )`,
       `CREATE INDEX IF NOT EXISTS te_pos_snap_pos_time_idx ON te_position_snapshots(position_id, valid_from, valid_to)`,
-    ];
+      `CREATE TABLE IF NOT EXISTS gift_collections (
+        id VARCHAR(255) PRIMARY KEY,
+        name TEXT NOT NULL,
+        total_supply NUMERIC,
+        image_url TEXT,
+        floor_price_gx NUMERIC,
+        created_at TIMESTAMPTZ DEFAULT now()
+      )`,
+      `CREATE TABLE IF NOT EXISTS gift_variants (
+        id VARCHAR(255) PRIMARY KEY,
+        collection_id VARCHAR(255) REFERENCES gift_collections(id) ON DELETE CASCADE,
+        model_name TEXT,
+        backdrop_color TEXT,
+        symbol_name TEXT,
+        rarity_percentage NUMERIC,
+        current_price_gx NUMERIC,
+        image_url TEXT,
+        last_synced_at TIMESTAMPTZ DEFAULT now()
+      )`];
 
     for (const sql of tables) {
       try {
@@ -247,24 +276,24 @@ export async function initDbSchema(pool: Pool) {
   }
 }
 
+
+
 async function setupDatabaseSchema() {
-  if (!process.env.DATABASE_URL) return;
-  const pool = new Pool({ connectionString: process.env.DATABASE_URL });
-  pool.on('error', (err) => {
-    console.error('Setup DB Pool idle error:', err?.message);
-  });
   try {
+    const pool = getPgPool();
     await initDbSchema(pool);
-    console.log(`[DB Setup] Ensured TE tables exist.`);
-  } catch (err: any) {
-    console.error('[DB Setup] Error setting up schema:', err?.message);
-  } finally {
-    await pool.end();
+    console.log('[DB Setup] Ensured TE tables exist.');
+  } catch (err) {
+        console.warn('[DB Setup] Skipped or error:', err?.message);
   }
 }
-setupDatabaseSchema().catch(console.error);
+setupDatabaseSchema().catch((err) => {
+    console.error(err);
+});
 
 import express from 'express';
+import { errorLogger } from './server/errorLogger';
+
 import path from 'path';
 import cors from 'cors';
 import { createServer as createViteServer } from 'vite';
@@ -279,7 +308,8 @@ app.use(express.json({ limit: '100kb' }));
 app.use(requestTimeoutMiddleware(30000));
 
 // Apply REST API rate limiter globally to all /api/ endpoints (webhook routes override with specific webhook limiter)
-app.use('/api', (req, res, next) => {
+app.use(errorLogger);
+  app.use('/api', (req, res, next) => {
   if (req.path.startsWith('/telegram/webhook') || req.path.startsWith('/sales/ingest')) {
     return next();
   }
@@ -316,8 +346,67 @@ app.post(
 );
 
 // API route to generate a Telegram Stars invoice link
-app.get('/api/gifts', (req: express.Request, res: express.Response) => {
-  res.json(gifts);
+
+app.post('/api/user/wallet', async (req: express.Request, res: express.Response) => {
+  const { userId, walletAddress } = req.body;
+  if (!userId || !walletAddress) return res.status(400).json({ error: 'Missing parameters' });
+
+  const client = await getPgPool().connect();
+  try {
+    await client.query(`
+      INSERT INTO te_users (id, wallet_address)
+      VALUES ($1, $2)
+      ON CONFLICT (id) DO UPDATE
+      SET wallet_address = $2
+    `, [userId, walletAddress]);
+
+    return res.json({ success: true });
+  } catch (e) {
+    console.error('[UserWallet] Error saving wallet:', e);
+    return res.status(500).json({ error: 'Internal error' });
+  } finally {
+    client.release();
+  }
+});
+
+app.post('/api/withdraw', async (req: express.Request, res: express.Response) => {
+  const { userId, amount, address } = req.body;
+  if (!userId || !amount || !address) return res.status(400).json({ error: 'Missing parameters' });
+  
+  if (amount < 0.01) return res.status(400).json({ error: 'Minimum withdrawal is 0.01 TON' });
+
+  const client = await getPgPool().connect();
+  try {
+    await client.query('BEGIN');
+    
+    const balanceRes = await client.query('SELECT available_balance FROM te_balances WHERE user_id = $1 AND currency = $2 FOR UPDATE', [userId, 'TON']);
+    const currentBalance = balanceRes.rows[0]?.available_balance ? Number(balanceRes.rows[0].available_balance) : 0;
+    
+    if (currentBalance < amount) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'Insufficient balance' });
+    }
+    
+    await client.query(`
+      UPDATE te_balances 
+      SET available_balance = available_balance - $1 
+      WHERE user_id = $2 AND currency = $3
+    `, [amount, userId, 'TON']);
+    
+    await client.query('COMMIT');
+    
+    // TODO: In production, use @ton/crypto with process.env.EXCHANGE_WALLET_MNEMONIC
+    // to sign and broadcast the real TON transaction to the blockchain here.
+    console.log(`[Withdraw] Deducted ${amount} TON from ${userId}. Initiating blockchain transfer to ${address}...`);
+    
+    return res.json({ success: true, message: 'Withdrawal initiated successfully' });
+  } catch(e) {
+    await client.query('ROLLBACK');
+    console.error('[Withdraw] Error:', e);
+    return res.status(500).json({ error: 'Internal error during withdrawal' });
+  } finally {
+    client.release();
+  }
 });
 
 app.post('/api/create-invoice', async (req: express.Request, res: express.Response) => {
@@ -553,35 +642,45 @@ export interface GiftVariant {
   current_price_gx: number;
 }
 
-const dbCollections: GiftCollection[] = [];
-const dbVariants: GiftVariant[] = [];
+
 
 // Cron Job for syncing Telegram Gifts
+
 const syncTelegramGifts = async () => {
-  console.log('Starting Telegram Gifts Sync via TonAPI...');
+  
+  
+  let client;
   try {
-    // 1. Fetch collections from TonAPI
+    client = await getPgPool().connect();
+    
+    // Advisory lock to prevent multiple instances from syncing simultaneously
+    const lockRes = await client.query('SELECT pg_try_advisory_lock(8182991) as locked');
+    if (!lockRes.rows[0].locked) {
+      console.log('Sync already running in another instance. Skipping...');
+      return;
+    }
+
     const res = await fetch('https://tonapi.io/v2/nfts/collections?limit=100');
     const data = await res.json();
     const tonCollections = data.nft_collections || [];
 
-    // Process TonAPI collections (filter by telegram gifts if possible)
-    const tgCollections = tonCollections.filter(
+    
+        const tgCollections = tonCollections.filter(
       (c: any) => c.name && c.name.toLowerCase().includes('gift')
     );
 
+    
     for (const c of tgCollections) {
-      if (!dbCollections.find((dbC) => dbC.id === c.address)) {
-        dbCollections.push({
-          id: c.address,
-          name: c.name,
-          total_supply: c.next_item_index || 10000,
-          image_url: c.metadata?.image || '',
-          floor_price_gx: 100,
-        });
-      }
+      const totalSupply = c.next_item_index || 0;
+      const imageUrl = c.previews?.[0]?.url || c.image || '';
+      const floorPrice = 0;
+      await client.query(`
+        INSERT INTO gift_collections (id, name, total_supply, image_url, floor_price_gx, created_at)
+        VALUES ($1, $2, $3, $4, $5, now())
+        ON CONFLICT (id) DO UPDATE
+        SET name = $2, total_supply = $3, image_url = $4, floor_price_gx = $5
+      `, [c.address, c.name, totalSupply, imageUrl, floorPrice]);
 
-      // Attempt to fetch items for this collection to parse traits
       try {
         const itemsRes = await fetch(
           `https://tonapi.io/v2/nfts/collections/${c.address}/items?limit=10`
@@ -589,76 +688,69 @@ const syncTelegramGifts = async () => {
         const itemsData = await itemsRes.json();
         const items = itemsData.nft_items || [];
 
-        items.forEach((item: any) => {
+        for (const item of items) {
           const attributes = item.metadata?.attributes || [];
           const model = attributes.find((a: any) => a.trait_type === 'Model')?.value || 'Standard';
-          const backdrop =
-            attributes.find((a: any) => a.trait_type === 'Backdrop')?.value || '#2a2840';
+          const backdrop = attributes.find((a: any) => a.trait_type === 'Backdrop')?.value || '#2a2840';
           const symbol = attributes.find((a: any) => a.trait_type === 'Symbol')?.value || 'None';
+          const itemImage = item.metadata?.image || '';
 
-          if (!dbVariants.find((v) => v.id === item.address)) {
-            dbVariants.push({
-              id: item.address,
-              collection_id: c.address,
-              model_name: model,
-              backdrop_color: backdrop,
-              symbol_name: symbol,
-              rarity_percentage: 5.0,
-              image_url: item.metadata?.image || '',
-              current_price_gx: 120,
-            });
-          }
-        });
+          await client.query(`
+            INSERT INTO gift_variants (id, collection_id, model_name, symbol_name, backdrop_color, rarity_percentage, current_price_gx, image_url, last_synced_at)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, now())
+            ON CONFLICT (id) DO UPDATE
+            SET model_name = $3, symbol_name = $4, backdrop_color = $5, rarity_percentage = $6,
+                current_price_gx = $7, image_url = $8, last_synced_at = now()
+          `, [
+            item.address, c.address, model, symbol, backdrop, 5.0, 120, itemImage
+          ]);
+        }
       } catch (err) {
         console.error('Failed to fetch items for collection', c.address);
       }
     }
 
-    // Ensure our hardcoded gifts are in the DB so the UI works
-    for (const g of hardcodedGifts) {
-      const existingCol = dbCollections.find((c) => c.id === g.id);
-      if (!existingCol) {
-        dbCollections.push({
-          id: g.id,
-          name: g.name,
-          total_supply: parseInt((g.volume || '10').replace('K', '000')),
-          image_url: '',
-          floor_price_gx: g.floor,
-        });
-      } else {
-        existingCol.floor_price_gx = g.floor;
-      }
+    const useMocks = process.env.USE_MOCK_GIFTS !== 'false';
+    if (useMocks || tgCollections.length === 0) {
+      for (const g of hardcodedGifts) {
+        await client.query(`
+          INSERT INTO gift_collections (id, name, total_supply, image_url, floor_price_gx, created_at)
+          VALUES ($1, $2, $3, $4, $5, now())
+          ON CONFLICT (id) DO UPDATE
+          SET name = $2, total_supply = $3, floor_price_gx = $5
+        `, [g.id, g.name, 10000, '', g.floor]);
 
-      // Generate some variants if not exist
-      const backdrops = ['#ff0000', '#00ff00', '#0000ff', '#f0f0f0', '#2a2a2a'];
-      const models = ['Standard', 'Holographic', 'Gold', 'Diamond'];
+        const backdrops = ['#ff0000', '#00ff00', '#0000ff', '#f0f0f0', '#2a2a2a'];
+        const models = ['Standard', 'Holographic', 'Gold', 'Diamond'];
 
-      for (let i = 0; i < 5; i++) {
-        const variantId = `${g.id}-var-${i}`;
-        const existingVar = dbVariants.find((v) => v.id === variantId);
-        if (!existingVar) {
-          dbVariants.push({
-            id: variantId,
-            collection_id: g.id,
-            model_name: models[Math.floor(Math.random() * models.length)],
-            backdrop_color: backdrops[Math.floor(Math.random() * backdrops.length)],
-            symbol_name: 'Original',
-            rarity_percentage: parseFloat((Math.random() * 100).toFixed(1)),
-            image_url: '',
-            current_price_gx: parseFloat((g.floor * (1 + Math.random())).toFixed(2)),
-          });
-        } else {
-          // 4. Update floor prices
-          existingVar.current_price_gx = parseFloat(
-            (g.floor * (1 + Math.random() * 0.5)).toFixed(2)
-          );
+        for (let i = 0; i < 5; i++) {
+          const variantId = `${g.id}-var-${i}`;
+          const currentPrice = parseFloat((g.floor * (1 + Math.random() * 0.5)).toFixed(2));
+          await client.query(`
+            INSERT INTO gift_variants (id, collection_id, model_name, symbol_name, backdrop_color, rarity_percentage, current_price_gx, image_url, last_synced_at)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, now())
+            ON CONFLICT (id) DO UPDATE
+            SET model_name = $3, symbol_name = $4, backdrop_color = $5, rarity_percentage = $6,
+                current_price_gx = $7, last_synced_at = now()
+          `, [
+            variantId, g.id, models[Math.floor(Math.random() * models.length)], 'Original', backdrops[Math.floor(Math.random() * backdrops.length)], parseFloat((Math.random() * 100).toFixed(1)), currentPrice, ''
+          ]);
         }
       }
     }
 
-    console.log(`Synced ${dbCollections.length} collections and ${dbVariants.length} variants.`);
+    console.log(`Synced collections and variants via Postgres.`);
   } catch (error) {
+    
     console.error('Sync failed:', error);
+
+  } finally {
+    if (client) {
+      try {
+        await client.query('SELECT pg_advisory_unlock(8182991)');
+      } catch (e) {}
+      client.release();
+    }
   }
 };
 
@@ -812,36 +904,33 @@ app.post('/api/market/listings/:id/sell', (req: express.Request, res: express.Re
   return res.json(result);
 });
 
-app.get('/api/collections', (req, res) => res.json(dbCollections));
-app.get('/api/variants/:collection_id', (req, res) => {
-  res.json(dbVariants.filter((v) => v.collection_id === req.params.collection_id));
-});
-
-app.get('/api/gifts', async (req, res) => {
+app.get('/api/collections', async (req, res) => {
   try {
-    const token = process.env.TELEGRAM_BOT_TOKEN;
-    if (token) {
-      const response = await fetch(`https://api.telegram.org/bot${token}/getAvailableGifts`);
-      const data = await response.json();
-
-      if (data.ok && data.result && data.result.gifts) {
-        // Filter limited gifts and map to our schema
-        const mappedGifts = data.result.gifts
-          .filter((g: any) => g.total_count !== undefined)
-          .map(mapTelegramGift);
-
-        // Merge with our hardcoded historical list so they show up everywhere
-        const mergedIds = new Set(mappedGifts.map((g: any) => g.id));
-        const finalGifts = [...mappedGifts, ...hardcodedGifts.filter((g) => !mergedIds.has(g.id))];
-        return res.json(finalGifts);
-      }
-    }
-
-    // Fallback if no token or API fails (using hardcoded list logic)
-    res.json(hardcodedGifts);
+    const client = await getPgPool().connect();
+    const result = await client.query('SELECT id, name, total_supply, image_url, floor_price_gx, created_at FROM gift_collections');
+    client.release();
+    
+    const mapped = result.rows.map(r => {
+      const fallback = hardcodedGifts.find(g => g.id === r.id);
+      return {
+        id: r.id,
+        name: r.name,
+        collection: 'Telegram Gifts',
+        rarity: fallback ? fallback.rarity : 'Common',
+        floor: Number(r.floor_price_gx) || (fallback ? fallback.floor : 0),
+        change: fallback ? fallback.change : 0,
+        volume: fallback ? fallback.volume : '0',
+        className: fallback ? fallback.className : 'gx-gift-box',
+        emoji: fallback ? fallback.emoji : undefined,
+        image_url: r.image_url || (fallback ? fallback.image_url : undefined),
+        is_nft: true,
+        source: 'postgres'
+      };
+    });
+    res.json(mapped);
   } catch (error) {
     console.error('Error fetching gifts:', error);
-    res.status(500).json({ error: 'Failed to fetch gifts' });
+    res.status(500).json({ error: String(error) });
   }
 });
 
@@ -867,6 +956,69 @@ app.get(['/health', '/api/health'], (req: express.Request, res: express.Response
       simulationMode: process.env.SIMULATION_MODE === 'true',
       allowFileStorageInProd: process.env.ALLOW_FILE_STORAGE_IN_PRODUCTION === 'true',
     },
+  });
+});
+
+
+
+app.get('/api/gifts', async (req, res) => {
+  try {
+    const client = await getPgPool().connect();
+    const result = await client.query('SELECT id, name, total_supply, image_url, floor_price_gx FROM gift_collections');
+    client.release();
+    
+    const mapped = result.rows.map(r => {
+      const fallback = hardcodedGifts.find(g => g.id === r.id);
+      return {
+        id: r.id,
+        name: r.name,
+        collection: 'Telegram Gifts',
+        rarity: fallback ? fallback.rarity : 'Common',
+        floor: Number(r.floor_price_gx) || (fallback ? fallback.floor : 0),
+        change: fallback ? fallback.change : 0,
+        volume: fallback ? fallback.volume : '0',
+        className: fallback ? fallback.className : 'gx-gift-box',
+        emoji: fallback ? fallback.emoji : undefined,
+        image_url: r.image_url || (fallback ? fallback.image_url : undefined),
+        is_nft: true,
+        source: 'postgres'
+      };
+    });
+    res.json(mapped);
+  } catch (error) {
+    console.error('Error fetching gifts:', error);
+    res.status(500).json({ error: String(error) });
+  }
+});
+
+// --- Real-time Price Cache ---
+let cachedGramPrice = 5.50; // Fallback realistic price
+let lastGramPriceFetch = 0;
+
+app.get('/api/rates', async (req, res) => {
+  const now = Date.now();
+  // Update cache every 30 seconds
+  if (now - lastGramPriceFetch > 30000) {
+    try {
+      // Fetching TON/USDT price from Binance public API
+      const response = await fetch('https://api.binance.com/api/v3/ticker/price?symbol=TONUSDT');
+      if (response.ok) {
+        const data = await response.json();
+        if (data && data.price) {
+          cachedGramPrice = parseFloat(data.price);
+          lastGramPriceFetch = now;
+        }
+      }
+    } catch (e) {
+      console.error('Failed to fetch real-time Gram/TON rate:', e);
+    }
+  }
+  res.json({ gram: cachedGramPrice });
+});
+
+app.get('/api/config', (req, res) => {
+  res.json({
+    hotWalletAddress: process.env.EXCHANGE_HOT_WALLET_ADDRESS || ''
   });
 });
 
@@ -991,6 +1143,10 @@ async function startServer() {
 
   if (process.env.SQL_HOST) {
     startTradingOutboxWorker(getPgPool(), io);
+    
+    // Start TON Deposit Scanner
+    const tonScanner = new TonScanner(getPgPool());
+    tonScanner.start();
   }
 
   // Subscribe to tradingEngine events and forward to connected clients

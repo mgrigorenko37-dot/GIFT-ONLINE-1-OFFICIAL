@@ -10,7 +10,7 @@ export function getMarketSocket(): Socket {
   if (!sharedSocket) {
     const origin = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000';
     sharedSocket = io(origin, {
-      transports: ['websocket', 'polling'],
+      transports: ['websocket'],
       autoConnect: true,
       reconnection: true,
       reconnectionAttempts: Infinity,
@@ -68,7 +68,7 @@ export function useMarketSocket({
     try {
       return parseInstrumentKey(key).currency;
     } catch {
-      return key.endsWith(':STARS') ? 'STARS' : 'TON';
+      return key.endsWith(':STARS') ? 'STARS' : 'Gram';
     }
   };
 

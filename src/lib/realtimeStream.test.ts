@@ -7,7 +7,7 @@ describe('Stage 8: Realtime Stream & Socket Data Rules', () => {
   let sequenceTracker: SequenceTracker;
   let saleTracker: SaleTracker;
 
-  const instA = 'durov-cap:all:all:TON';
+  const instA = 'durov-cap:all:all:Gram';
   const instB = 'pepe-hat:all:all:STARS';
   const tf1m: Timeframe = '1m';
   const tf1M: Timeframe = '1M';
@@ -229,7 +229,7 @@ describe('Stage 8: Realtime Stream & Socket Data Rules', () => {
     expect(candleStore.getSortedCandles().length).toBe(1);
   });
 
-  it('6. Enforces instrument key isolation (TON vs STARS, Gift A vs Gift B)', () => {
+  it('6. Enforces instrument key isolation (Gram vs STARS, Gift A vs Gift B)', () => {
     const candleA: GiftCandle = {
       instrumentKey: instA,
       timeframe: tf1m,
@@ -277,7 +277,7 @@ describe('Stage 8: Realtime Stream & Socket Data Rules', () => {
       collectionId: 'durov-cap',
       modelId: 'all',
       backdropId: 'all',
-      currency: 'TON',
+      currency: 'Gram',
       price: '10.5',
       quantity: 1,
       eventTime: 1710000010000,

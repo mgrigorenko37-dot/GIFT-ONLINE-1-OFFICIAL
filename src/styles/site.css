@@ -2790,7 +2790,7 @@ body {
 }
 
 .gx-market-browser {
-  overflow: hidden;
+  overflow: visible;
 }
 
 .gx-market-browser-header {

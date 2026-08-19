@@ -398,7 +398,7 @@ const ProfileScreen: React.FC = () => {
                     {t('profile.hide_small', 'Hide Small Balances')}
                   </h4>
                   <p style={{ color: '#625d70', fontSize: 12 }}>
-                    {t('profile.hide_small_sub', 'Hide assets worth less than 1 GX')}
+                    {t('profile.hide_small_sub', 'Hide assets worth less than 1 USDT')}
                   </p>
                 </div>
                 <div

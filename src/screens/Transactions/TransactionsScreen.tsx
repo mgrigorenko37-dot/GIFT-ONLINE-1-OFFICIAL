@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router-dom';
 import { useTelegramWebApp } from '../../hooks/useTelegramWebApp';
-import { formatGX } from '../../data/gifts';
+import { formatUSDT } from '../../data/gifts';
 import { useGifts } from '../../context/GiftsContext';
 import { useLanguage } from '../../context/LanguageContext';
 
@@ -249,7 +249,7 @@ const TransactionsScreen: React.FC = () => {
           <div className='gx-balance'>
             <span>Total traded</span>
             <strong>
-              {formatGX(totalVolume)} <small>GX</small>
+              {formatUSDT(totalVolume)} <small>USDT</small>
             </strong>
             <button type='button' onClick={() => navigate('/market')}>
               <i className='material-icons'>candlestick_chart</i> Trade now
@@ -266,14 +266,14 @@ const TransactionsScreen: React.FC = () => {
           <div>
             <span>Total volume</span>
             <strong>
-              {formatGX(totalVolume)} <small>GX</small>
+              {formatUSDT(totalVolume)} <small>USDT</small>
             </strong>
             <em>lifetime</em>
           </div>
           <div>
             <span>Best trade</span>
             <strong>Genie Lamp</strong>
-            <em>640.00 GX</em>
+            <em>640.00 USDT</em>
           </div>
           <div>
             <span>Avg fee paid</span>
@@ -310,8 +310,8 @@ const TransactionsScreen: React.FC = () => {
               <span>Type</span>
               <span>Gift</span>
               <span>Amount</span>
-              <span>Price (GX)</span>
-              <span>Total (GX)</span>
+              <span>Price (USDT)</span>
+              <span>Total (USDT)</span>
               <span>Date</span>
               <span>Status</span>
             </div>
@@ -334,12 +334,12 @@ const TransactionsScreen: React.FC = () => {
                   </b>
                 </span>
                 <span style={{ color: '#f6f3ff' }}>
-                  <strong>{order.gift.toUpperCase().replace(/[^A-Z0-9]/g, '_')}_GIFT / GX</strong>
+                  <strong>{order.gift.toUpperCase().replace(/[^A-Z0-9]/g, '_')}_GIFT / USDT</strong>
                 </span>
                 <span style={{ color: '#f6f3ff' }}>{order.amount}</span>
-                <span style={{ color: '#f6f3ff' }}>{formatGX(order.price)}</span>
+                <span style={{ color: '#f6f3ff' }}>{formatUSDT(order.price)}</span>
                 <span style={{ color: '#f6f3ff' }}>
-                  <strong>{formatGX(order.total)}</strong>
+                  <strong>{formatUSDT(order.total)}</strong>
                 </span>
                 <span className='gx-muted' style={{ color: '#625d70' }}>
                   {order.date}

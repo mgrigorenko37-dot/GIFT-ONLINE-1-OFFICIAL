@@ -1,0 +1,1 @@
+const { syncTelegramGifts } = require('./dist/server.cjs') || {}; // Oh wait, I can just call the REST api to trigger sync or write a script that calls the DB. Let's just restart the server and the sync runs immediately because of setTimeout(syncTelegramGifts, 1000).

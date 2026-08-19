@@ -1,20 +1,18 @@
-const { Client } = require('pg');
+const { Pool } = require('pg');
 async function run() {
-  const client = new Client({ connectionString: process.env.DATABASE_URL });
-  await client.connect();
+  const p = new Pool({ 
+    host: process.env.SQL_HOST, 
+    user: process.env.SQL_USER, 
+    password: process.env.SQL_PASSWORD, 
+    database: process.env.SQL_DB_NAME
+  });
   try {
-    const res = await client.query('SELECT current_schema(), current_user');
-    console.log('Current schema/user:', res.rows[0]);
-
-    // Check permissions on public schema
-    const perms = await client.query(
-      `SELECT has_schema_privilege(current_user, 'public', 'USAGE') as usage_priv, has_schema_privilege(current_user, 'public', 'CREATE') as create_priv`
-    );
-    console.log('Permissions:', perms.rows[0]);
-  } catch (e) {
-    console.error(e);
+    const res = await p.query('SELECT count(*) FROM gift_variants WHERE image_url != \'\'');
+    console.log("Variants with images:", res.rows[0].count);
+    const res2 = await p.query('SELECT count(*) FROM gift_variants');
+    console.log("Total variants:", res2.rows[0].count);
   } finally {
-    await client.end();
+    await p.end();
   }
 }
 run();

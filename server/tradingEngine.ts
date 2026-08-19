@@ -466,7 +466,7 @@ export class PostgresTradingEngine extends EventEmitter {
       await this.lockMarginResources(client, orderData.userId, collateralCurrency);
 
       if (orderData.qty <= 0) {
-        await client.query('ROLLBACK');
+        try { await client.query('ROLLBACK'); } catch(e) {}
         throw new Error(`Invalid order quantity: qty must be strictly positive (> 0), received ${orderData.qty}`);
       }
 
@@ -572,7 +572,7 @@ export class PostgresTradingEngine extends EventEmitter {
           ]
         );
       } catch (e: any) {
-        await client.query('ROLLBACK TO SAVEPOINT insert_order_sp');
+        try { await client.query('ROLLBACK TO SAVEPOINT insert_order_sp'); } catch(e) {}
         if (e?.message?.includes('does not exist')) {
           await client.query(
             `INSERT INTO te_orders (order_id, user_id, instrument_key, side, order_type, qty, price, reduce_only, position_effect, rejection_reason, status, executed_qty, remaining_qty, avg_fill_price, fee, created_at, updated_at)
@@ -617,7 +617,7 @@ export class PostgresTradingEngine extends EventEmitter {
       await client.query('COMMIT');
       return order;
     } catch (e) {
-      await client.query('ROLLBACK');
+      try { await client.query('ROLLBACK'); } catch(e) {}
       throw e;
     } finally {
       client.release();
@@ -631,7 +631,7 @@ export class PostgresTradingEngine extends EventEmitter {
 
       const initialOrderRes = await client.query('SELECT user_id, instrument_key, collateral_currency FROM te_orders WHERE order_id = $1', [orderId]);
       if (initialOrderRes.rows.length === 0) {
-        await client.query('ROLLBACK');
+        try { await client.query('ROLLBACK'); } catch(e) {}
         return null;
       }
       const initialOrder = initialOrderRes.rows[0];
@@ -642,7 +642,7 @@ const orderRes = await client.query(
         [orderId]
       );
       if (orderRes.rows.length === 0) {
-        await client.query('ROLLBACK');
+        try { await client.query('ROLLBACK'); } catch(e) {}
         return null;
       }
       const order = this.mapOrder(orderRes.rows[0]);
@@ -680,10 +680,10 @@ const orderRes = await client.query(
         await client.query('COMMIT');
         return order;
       }
-      await client.query('ROLLBACK');
+      try { await client.query('ROLLBACK'); } catch(e) {}
       return null;
     } catch (e) {
-      await client.query('ROLLBACK');
+      try { await client.query('ROLLBACK'); } catch(e) {}
       throw e;
     } finally {
       client.release();
@@ -705,7 +705,7 @@ const orderRes = await client.query(
 
       const initialOrderRes = await client.query('SELECT user_id, instrument_key, collateral_currency FROM te_orders WHERE order_id = $1', [orderId]);
       if (initialOrderRes.rows.length === 0) {
-        await client.query('ROLLBACK');
+        try { await client.query('ROLLBACK'); } catch(e) {}
         return null;
       }
       const initialOrder = initialOrderRes.rows[0];
@@ -724,10 +724,10 @@ const orderRes = await client.query(
           Number(existingExec.fill_price) === fillPrice &&
           existingExec.order_id === orderId
         ) {
-          await client.query('ROLLBACK');
+          try { await client.query('ROLLBACK'); } catch(e) {}
           return null; // Already processed
         } else {
-          await client.query('ROLLBACK');
+          try { await client.query('ROLLBACK'); } catch(e) {}
           throw new Error('Conflict: execution_id already exists with different data');
         }
       }
@@ -738,13 +738,13 @@ const orderRes = await client.query(
           [options.source, options.externalExecutionId]
         );
         if (extCheck.rows.length > 0) {
-          await client.query('ROLLBACK');
+          try { await client.query('ROLLBACK'); } catch(e) {}
           return null;
         }
       }
 
       if (fillQty <= 0) {
-        await client.query('ROLLBACK');
+        try { await client.query('ROLLBACK'); } catch(e) {}
         throw new Error(`Invalid fill quantity: fillQty must be strictly positive (> 0), received ${fillQty}`);
       }
 const orderRes = await client.query(
@@ -752,13 +752,13 @@ const orderRes = await client.query(
         [orderId]
       );
       if (orderRes.rows.length === 0) {
-        await client.query('ROLLBACK');
+        try { await client.query('ROLLBACK'); } catch(e) {}
         return null;
       }
       const order = this.mapOrder(orderRes.rows[0]);
 
       if (order.status !== 'Open' && order.status !== 'PartiallyFilled') {
-        await client.query('ROLLBACK');
+        try { await client.query('ROLLBACK'); } catch(e) {}
         return null;
       }
 
@@ -901,13 +901,13 @@ const orderRes = await client.query(
 
       const requestedQty = fillQty;
       if (fillQty <= 0) {
-        await client.query('ROLLBACK');
+        try { await client.query('ROLLBACK'); } catch(e) {}
         throw new Error(`Invalid trade execution quantity: fillQty must be strictly positive (> 0), received ${fillQty}`);
       }
 
       if (order.positionEffect === 'Close') {
         if (!oldPosition || oldPosition.status !== 'Open' || oldPosition.qty <= 0) {
-          await client.query('ROLLBACK');
+          try { await client.query('ROLLBACK'); } catch(e) {}
           throw new Error('Cannot close position with zero or negative quantity');
         }
         if (fillQty > oldPosition.qty) {
@@ -919,7 +919,7 @@ const orderRes = await client.query(
         fillQty = order.remainingQty;
       }
       if (fillQty <= 0) {
-        await client.query('ROLLBACK');
+        try { await client.query('ROLLBACK'); } catch(e) {}
         throw new Error(`Invalid trade execution quantity: fillQty must be strictly positive (> 0), received ${fillQty}`);
       }
 
@@ -1073,7 +1073,7 @@ const orderRes = await client.query(
           ]
         );
       } catch (e: any) {
-        await client.query('ROLLBACK TO SAVEPOINT insert_trade_sp');
+        try { await client.query('ROLLBACK TO SAVEPOINT insert_trade_sp'); } catch(e) {}
         await client.query(
           `INSERT INTO te_trades (trade_id, order_id, user_id, instrument_key, side, qty, price, fee, realized_pnl, timestamp)
            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
@@ -1132,7 +1132,7 @@ const orderRes = await client.query(
           );
           if (res.rowCount === 0) throw new Error('Failed to insert position');
         } catch (e: any) {
-          await client.query('ROLLBACK TO SAVEPOINT insert_pos_sp');
+          try { await client.query('ROLLBACK TO SAVEPOINT insert_pos_sp'); } catch(e) {}
           const res = await client.query(
             `INSERT INTO te_positions (position_id, user_id, instrument_key, side, qty, avg_entry_price, mark_price, unrealized_pnl, realized_pnl, status, settlement_currency, pnl_currency, collateral_currency, opened_at, updated_at) 
              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
@@ -1193,7 +1193,7 @@ const orderRes = await client.query(
           );
           if (res.rowCount === 0) throw new Error('Failed to update position');
         } catch (e: any) {
-          await client.query('ROLLBACK TO SAVEPOINT update_pos_sp');
+          try { await client.query('ROLLBACK TO SAVEPOINT update_pos_sp'); } catch(e) {}
           const res = await client.query(
             `UPDATE te_positions SET side=$1, qty=$2, avg_entry_price=$3, mark_price=$4, unrealized_pnl=$5, realized_pnl=$6, status=$7, opened_at=$8, updated_at=$9 WHERE position_id=$10`,
             [
@@ -1236,7 +1236,7 @@ const orderRes = await client.query(
       const newAvailableBalance = newEquity - updatedMargin.usedMargin;
 
       if (newAvailableBalance < 0 && order.positionEffect === 'Open') {
-        await client.query('ROLLBACK TO SAVEPOINT execute_start_sp');
+        try { await client.query('ROLLBACK TO SAVEPOINT execute_start_sp'); } catch(e) {}
         
         order.status = 'Rejected';
         order.rejectionReason = `Insufficient margin: required ${updatedMargin.usedMargin.toFixed(2)}, available ${newEquity.toFixed(2)}`;
@@ -1332,7 +1332,7 @@ const orderRes = await client.query(
           ]
         );
       } catch (e: any) {
-        await client.query('ROLLBACK TO SAVEPOINT insert_exec_sp');
+        try { await client.query('ROLLBACK TO SAVEPOINT insert_exec_sp'); } catch(e) {}
         await client.query(
           `INSERT INTO te_executions (execution_id, order_id, user_id, instrument_key, side, requested_qty, fill_qty, fill_price, fee, status, created_at, processed_at, source, external_execution_id) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
           [
@@ -1379,7 +1379,7 @@ const orderRes = await client.query(
             [ev.type, order.userId, JSON.stringify(ev.payload), 'pending', currency, now]
           );
         } catch (e: any) {
-          await client.query('ROLLBACK TO SAVEPOINT insert_outbox_sp');
+          try { await client.query('ROLLBACK TO SAVEPOINT insert_outbox_sp'); } catch(e) {}
           await client.query(
             'INSERT INTO te_outbox_events (event_type, user_id, payload, status, created_at) VALUES ($1, $2, $3, $4, $5)',
             [ev.type, order.userId, JSON.stringify(ev.payload), 'pending', now]
@@ -1391,7 +1391,7 @@ const orderRes = await client.query(
       await client.query('COMMIT');
       return trade;
     } catch (e) {
-      await client.query('ROLLBACK');
+      try { await client.query('ROLLBACK'); } catch(e) {}
       throw e;
     } finally {
       client.release();
@@ -1482,7 +1482,7 @@ const orderRes = await client.query(
             ]
           );
         } catch (e: any) {
-          await client.query('ROLLBACK TO SAVEPOINT insert_outbox_mark_sp');
+          try { await client.query('ROLLBACK TO SAVEPOINT insert_outbox_mark_sp'); } catch(e) {}
           await client.query(
             'INSERT INTO te_outbox_events (event_type, user_id, payload, status, created_at) VALUES ($1, $2, $3, $4, $5)',
             ['positionUpdated', position.userId, JSON.stringify(position), 'pending', Date.now()]
@@ -1494,7 +1494,7 @@ const orderRes = await client.query(
       await client.query('COMMIT');
     } catch (e) {
       console.error('Error in updateMarkPrice', e);
-      await client.query('ROLLBACK');
+      try { await client.query('ROLLBACK'); } catch(e) {}
     } finally {
       client.release();
     }
@@ -1936,7 +1936,7 @@ const orderRes = await client.query(
       return lastTradeResult;
     } catch (e) {
       if (ownClient) {
-        await client.query('ROLLBACK');
+        try { await client.query('ROLLBACK'); } catch(e) {}
       }
       throw e;
     } finally {
@@ -2591,7 +2591,7 @@ const orderRes = await client.query(
       return results;
     } catch (e) {
       if (ownClient) {
-        await client.query('ROLLBACK');
+        try { await client.query('ROLLBACK'); } catch(e) {}
       }
       throw e;
     } finally {

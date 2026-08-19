@@ -7,7 +7,7 @@ describe('Stage 8: Socket Handler & Realtime Integration Logic', () => {
   let sequenceTracker: SequenceTracker;
   let saleTracker: SaleTracker;
 
-  const instKey = 'durov-cap:all:all:TON';
+  const instKey = 'durov-cap:all:all:Gram';
   const tf = '1m';
 
   beforeEach(() => {
@@ -101,7 +101,7 @@ describe('Stage 8: Socket Handler & Realtime Integration Logic', () => {
       collectionId: 'durov-cap',
       modelId: 'all',
       backdropId: 'all',
-      currency: 'TON',
+      currency: 'Gram',
       price: '12',
       quantity: 1,
       eventTime: 1710000080000,
@@ -174,23 +174,23 @@ describe('Stage 8: Socket Handler & Realtime Integration Logic', () => {
 
   it('5. Stage 9: Config token validation prevents delayed REST responses from leaking into current chart', () => {
     const activeConfigToken = {
-      instrumentKey: 'durov-cap:all:all:TON',
-      currency: 'TON' as const,
+      instrumentKey: 'durov-cap:all:all:Gram',
+      currency: 'Gram' as const,
       timeframe: '1h' as const,
       requestId: 5,
       subscriptionId: 'sub_5_123',
     };
 
     const oldConfigToken = {
-      instrumentKey: 'durov-cap:all:all:TON',
-      currency: 'TON' as const,
+      instrumentKey: 'durov-cap:all:all:Gram',
+      currency: 'Gram' as const,
       timeframe: '1m' as const, // old timeframe
       requestId: 4, // old requestId
       subscriptionId: 'sub_4_122',
     };
 
     const staleRestCandle: GiftCandle = {
-      instrumentKey: 'durov-cap:all:all:TON',
+      instrumentKey: 'durov-cap:all:all:Gram',
       timeframe: '1m',
       startTime: 1710000000000,
       endTime: 1710000060000,
@@ -206,7 +206,7 @@ describe('Stage 8: Socket Handler & Realtime Integration Logic', () => {
       updatedAt: 1710000060000,
     };
 
-    const newStore = new CandleStore('durov-cap:all:all:TON', '1h');
+    const newStore = new CandleStore('durov-cap:all:all:Gram', '1h');
 
     // Simulate mergeRestCandles logic for config token check:
     const mergeWithTokenCheck = (
@@ -246,7 +246,7 @@ describe('Stage 8: Socket Handler & Realtime Integration Logic', () => {
 
     // Fresh response with matching token is accepted
     const fresh1hCandle: GiftCandle = {
-      instrumentKey: 'durov-cap:all:all:TON',
+      instrumentKey: 'durov-cap:all:all:Gram',
       timeframe: '1h',
       startTime: 1710000000000,
       endTime: 1710003600000,
@@ -276,8 +276,8 @@ describe('Stage 8: Socket Handler & Realtime Integration Logic', () => {
       reqId++;
       subId++;
       return {
-        instrumentKey: 'durov-cap:all:all:TON',
-        currency: 'TON' as const,
+        instrumentKey: 'durov-cap:all:all:Gram',
+        currency: 'Gram' as const,
         timeframe: tf,
         requestId: reqId,
         subscriptionId: `sub_${subId}`,
@@ -301,28 +301,28 @@ describe('Stage 8: Socket Handler & Realtime Integration Logic', () => {
     // Socket events from previous timeframes
     const event1m = {
       type: 'candle_update',
-      instrumentKey: 'durov-cap:all:all:TON',
+      instrumentKey: 'durov-cap:all:all:Gram',
       timeframe: '1m',
       subscriptionId: 'sub_1',
       requestId: 1,
     };
     const event1h = {
       type: 'candle_update',
-      instrumentKey: 'durov-cap:all:all:TON',
+      instrumentKey: 'durov-cap:all:all:Gram',
       timeframe: '1h',
       subscriptionId: 'sub_2',
       requestId: 2,
     };
     const event1M = {
       type: 'candle_update',
-      instrumentKey: 'durov-cap:all:all:TON',
+      instrumentKey: 'durov-cap:all:all:Gram',
       timeframe: '1M',
       subscriptionId: 'sub_3',
       requestId: 3,
     };
     const event1s = {
       type: 'candle_update',
-      instrumentKey: 'durov-cap:all:all:TON',
+      instrumentKey: 'durov-cap:all:all:Gram',
       timeframe: '1s',
       subscriptionId: 'sub_4',
       requestId: 4,
@@ -334,7 +334,7 @@ describe('Stage 8: Socket Handler & Realtime Integration Logic', () => {
     expect(isEventValidForConfig(event1s, activeConfig)).toBe(true);
   });
 
-  it('7. Stage 9: Currency switch (TON -> STARS) rejects late events from previous currency', () => {
+  it('7. Stage 9: Currency switch (Gram -> STARS) rejects late events from previous currency', () => {
     const activeConfig = {
       instrumentKey: 'durov-cap:all:all:STARS',
       currency: 'STARS' as const,
@@ -349,7 +349,7 @@ describe('Stage 8: Socket Handler & Realtime Integration Logic', () => {
       return true;
     };
 
-    const tonEvent = { instrumentKey: 'durov-cap:all:all:TON', currency: 'TON' };
+    const tonEvent = { instrumentKey: 'durov-cap:all:all:Gram', currency: 'Gram' };
     const starsEvent = { instrumentKey: 'durov-cap:all:all:STARS', currency: 'STARS' };
 
     expect(isEventValid(tonEvent)).toBe(false);

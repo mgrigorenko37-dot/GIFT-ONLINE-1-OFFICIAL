@@ -9,7 +9,7 @@ import {
 } from 'lightweight-charts';
 import { io } from 'socket.io-client';
 import { useTelegramWebApp } from '../../hooks/useTelegramWebApp';
-import { formatGX } from '../../data/gifts';
+import { formatUSDT } from '../../data/gifts';
 import { useGifts } from '../../context/GiftsContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { Timeframe, Currency, buildInstrumentKey, msToSeconds } from '../../types/market';
@@ -94,7 +94,7 @@ const GXTerminalScreen = () => {
   const [mktPanelOpen, setMktPanelOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [timeframe, setTimeframe] = useState<Timeframe>('4h');
-  const [selectedCurrency, setSelectedCurrency] = useState<Currency>('TON');
+  const [selectedCurrency, setSelectedCurrency] = useState<Currency>('Gram');
   const [chartLoading, setChartLoading] = useState<boolean>(true);
   const [chartError, setChartError] = useState<string | null>(null);
   const [isChartEmpty, setIsChartEmpty] = useState<boolean>(false);
@@ -104,6 +104,20 @@ const GXTerminalScreen = () => {
   const [variants, setVariants] = useState<any[]>([]);
   const [variantLoading, setVariantLoading] = useState(false);
   const [selectedVariant, setSelectedVariant] = useState<any>(null);
+
+  const [variantFilterModel, setVariantFilterModel] = useState<string>('All');
+  const [variantFilterBackdrop, setVariantFilterBackdrop] = useState<string>('All');
+  
+  const uniqueModels = useMemo(() => ['All', ...new Set(variants.map(v => v.model_name))], [variants]);
+  const uniqueBackdrops = useMemo(() => ['All', ...new Set(variants.map(v => v.backdrop_color))], [variants]);
+  
+  const filteredVariants = useMemo(() => {
+    return variants.filter(v => 
+      (variantFilterModel === 'All' || v.model_name === variantFilterModel) &&
+      (variantFilterBackdrop === 'All' || v.backdrop_color === variantFilterBackdrop)
+    );
+  }, [variants, variantFilterModel, variantFilterBackdrop]);
+
 
   const activeInstrumentKey = useMemo(() => {
     return buildInstrumentKey({
@@ -139,6 +153,7 @@ const GXTerminalScreen = () => {
           return res.json();
         })
         .then((data) => {
+          console.log('Variants loaded:', data);
           setVariants(Array.isArray(data) ? data : []);
           setVariantLoading(false);
         })
@@ -181,7 +196,7 @@ const GXTerminalScreen = () => {
     setOrderBook({ bids: [], asks: [] });
     setRecentTrades([]);
 
-    const socket = io({ path: '/socket.io' });
+    const socket = io({ path: '/socket.io', transports: ['websocket'] });
     socketRef.current = socket;
 
     socket.on('orderBook', (book: any) => setOrderBook(book));
@@ -366,10 +381,29 @@ const GXTerminalScreen = () => {
     if (realtimeChartCandles.length === 0) {
       setIsChartEmpty(true);
       seriesRef.current.setData([]);
+      latestCandleRef.current = undefined;
     } else {
       setIsChartEmpty(false);
-      seriesRef.current.setData(realtimeChartCandles);
-      chartRef.current.timeScale().fitContent();
+      
+      // If we already have data and only the latest candle changed, use update()
+      if (
+        latestCandleRef.current &&
+        latestChartCandle &&
+        latestCandleRef.current.time === latestChartCandle.time
+      ) {
+        seriesRef.current.update(latestChartCandle);
+      } else if (
+        latestCandleRef.current &&
+        latestChartCandle &&
+        latestChartCandle.time > latestCandleRef.current.time
+      ) {
+         // New candle formed
+         seriesRef.current.update(latestChartCandle);
+      } else {
+        // Full replacement (e.g., asset changed or initial load)
+        seriesRef.current.setData(realtimeChartCandles);
+        chartRef.current.timeScale().fitContent();
+      }
       latestCandleRef.current = latestChartCandle;
     }
   }, [realtimeChartCandles, latestChartCandle]);
@@ -840,8 +874,8 @@ const GXTerminalScreen = () => {
             </span>
             <span className='pp mono'>
               {recentTrades.length > 0
-                ? formatGX(recentTrades[0].price)
-                : formatGX(activeGift?.floor || 0)}
+                ? formatUSDT(recentTrades[0].price)
+                : formatUSDT(activeGift?.floor || 0)}
             </span>
             <span className={`pc ${(activeGift?.change || 0) >= 0 ? 'chg-up' : 'chg-down'}`}>
               {(activeGift?.change || 0) >= 0 ? '+' : ''}
@@ -904,7 +938,7 @@ const GXTerminalScreen = () => {
                         </div>
                       </div>
                       <div className='right'>
-                        <span className='p'>{formatGX(gift.floor)}</span>
+                        <span className='p'>{formatUSDT(gift.floor)}</span>
                         <span className={`c ${gift.change >= 0 ? 'up' : 'down'}`}>
                           {gift.change >= 0 ? '+' : ''}
                           {gift.change}%
@@ -912,13 +946,35 @@ const GXTerminalScreen = () => {
                       </div>
                     </div>
                     {expandedGiftId === gift.id && (
+                      
                       <div className='variants-list'>
                         {variantLoading ? (
                           <div style={{ fontSize: 10, color: 'var(--muted)', padding: 4 }}>
                             Загрузка дизайнов...
                           </div>
-                        ) : variants.length > 0 ? (
-                          variants.map((v) => (
+                        ) : (
+                          <>
+                            {variants.length > 0 && (
+                              <div className='variant-filters' onClick={(e) => e.stopPropagation()} style={{ display: 'flex', gap: '8px', padding: '4px 6px', borderBottom: '1px solid var(--line)', marginBottom: '4px' }}>
+                                <select 
+                                  value={variantFilterModel} 
+                                  onChange={e => setVariantFilterModel(e.target.value)}
+                                  style={{ background: 'var(--panel)', color: 'var(--text)', border: '1px solid var(--line)', borderRadius: '4px', fontSize: '11px', padding: '2px 4px', flex: 1 }}
+                                >
+                                  {uniqueModels.map(m => <option key={m} value={m}>{m === 'All' ? 'Все модели' : m}</option>)}
+                                </select>
+                                <select 
+                                  value={variantFilterBackdrop} 
+                                  onChange={e => setVariantFilterBackdrop(e.target.value)}
+                                  style={{ background: 'var(--panel)', color: 'var(--text)', border: '1px solid var(--line)', borderRadius: '4px', fontSize: '11px', padding: '2px 4px', flex: 1 }}
+                                >
+                                  {uniqueBackdrops.map(b => <option key={b} value={b}>{b === 'All' ? 'Все фоны' : b}</option>)}
+                                </select>
+                              </div>
+                            )}
+                            {filteredVariants.length > 0 ? (
+                              filteredVariants.map((v) => (
+
                             <div
                               key={v.id}
                               className={`variant-card ${selectedVariant?.id === v.id ? 'active' : ''}`}
@@ -936,8 +992,22 @@ const GXTerminalScreen = () => {
                                 ) : (
                                   <div
                                     className='variant-img'
-                                    style={{ background: v.backdrop_color }}
-                                  />
+                                    style={{ background: v.backdrop_color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px' }}
+                                  >
+                                    {gift.emoji ? (
+                                      <img
+                                        src={`https://emojik.vercel.app/s/${gift.emoji}`}
+                                        alt='emoji'
+                                        style={{ width: '16px', height: '16px' }}
+                                        onError={(e) => {
+                                          e.currentTarget.style.display = 'none';
+                                          e.currentTarget.parentElement!.innerHTML = gift.emoji || '';
+                                        }}
+                                      />
+                                    ) : (
+                                      <div className='gx-gift-box' style={{ transform: 'scale(0.5)' }} />
+                                    )}
+                                  </div>
                                 )}
                                 <div className='variant-info'>
                                   <span className='variant-name'>
@@ -951,7 +1021,7 @@ const GXTerminalScreen = () => {
                               </div>
                               <div className='variant-right'>
                                 <span className='variant-price'>
-                                  {formatGX(v.current_price_gx)}
+                                  {formatUSDT(v.current_price_gx)}
                                 </span>
                               </div>
                             </div>
@@ -960,6 +1030,8 @@ const GXTerminalScreen = () => {
                           <div style={{ fontSize: 10, color: 'var(--muted)', padding: 4 }}>
                             Нет уникальных дизайнов
                           </div>
+                        )}
+                          </>
                         )}
                       </div>
                     )}
@@ -977,8 +1049,8 @@ const GXTerminalScreen = () => {
             <div className='price-head'>
               <div className='asset-price mono'>
                 {recentTrades.length > 0
-                  ? formatGX(recentTrades[0].price)
-                  : formatGX(
+                  ? formatUSDT(recentTrades[0].price)
+                  : formatUSDT(
                       selectedVariant ? selectedVariant.current_price_gx : activeGift?.floor || 0
                     )}
               </div>
@@ -1021,11 +1093,11 @@ const GXTerminalScreen = () => {
               <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
                 <button
                   type='button'
-                  className={`tf-btn ${selectedCurrency === 'TON' ? 'active' : ''}`}
-                  onClick={() => setSelectedCurrency('TON')}
+                  className={`tf-btn ${selectedCurrency === 'Gram' ? 'active' : ''}`}
+                  onClick={() => setSelectedCurrency('Gram')}
                   style={{ padding: '2px 8px', fontSize: '11px', fontWeight: 600 }}
                 >
-                  TON
+                  Gram
                 </button>
                 <button
                   type='button'
@@ -1221,7 +1293,7 @@ const GXTerminalScreen = () => {
                             </div>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                               <span style={{ fontSize: '11px', color: '#8b949e' }}>
-                                Вход: {p.avgEntryPrice.toFixed(2)} TON
+                                Вход: {p.avgEntryPrice.toFixed(2)} Gram
                               </span>
                               <span
                                 style={{
@@ -1231,7 +1303,7 @@ const GXTerminalScreen = () => {
                                 }}
                               >
                                 {upnl > 0 ? '+' : ''}
-                                {upnl.toFixed(2)} TON
+                                {upnl.toFixed(2)} Gram
                               </span>
                             </div>
                           </div>
@@ -1270,7 +1342,7 @@ const GXTerminalScreen = () => {
                           </span>
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                          <span>{t.price} TON</span>
+                          <span>{t.price} Gram</span>
                           {t.realizedPnl !== undefined && (
                             <span
                               style={{
@@ -1280,7 +1352,7 @@ const GXTerminalScreen = () => {
                               }}
                             >
                               {t.realizedPnl > 0 ? '+' : ''}
-                              {t.realizedPnl.toFixed(2)} TON
+                              {t.realizedPnl.toFixed(2)} Gram
                             </span>
                           )}
                         </div>
@@ -1306,7 +1378,7 @@ const GXTerminalScreen = () => {
                       {o.side === 'buy' ? 'Покупка' : 'Продажа'} {o.amount} {o.giftName}
                     </span>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                      <span>{o.price} TON</span>
+                      <span>{o.price} Gram</span>
                       {o.status === 'open' && (
                         <button
                           onClick={() => cancelOrder(o.id)}
@@ -1361,8 +1433,8 @@ const GXTerminalScreen = () => {
               <div className='ob-mid'>
                 <span className='p'>
                   {recentTrades.length > 0
-                    ? formatGX(recentTrades[0].price)
-                    : formatGX(activeGift?.floor || 0)}
+                    ? formatUSDT(recentTrades[0].price)
+                    : formatUSDT(activeGift?.floor || 0)}
                 </span>
                 <span className='s'>
                   Спред{' '}
@@ -1428,17 +1500,17 @@ const GXTerminalScreen = () => {
                         </div>
                         <div className='sum-row'>
                           <span>Цена входа</span>
-                          <b>{activePosition?.avgEntryPrice?.toFixed(2)} TON</b>
+                          <b>{activePosition?.avgEntryPrice?.toFixed(2)} Gram</b>
                         </div>
                         <div className='sum-row'>
                           <span>Текущая цена</span>
-                          <b>{curPrice.toFixed(2)} TON</b>
+                          <b>{curPrice.toFixed(2)} Gram</b>
                         </div>
                         <div className='sum-row'>
                           <span>Ожидаемый PnL</span>
                           <b style={{ color: totalPnl >= 0 ? '#10b981' : '#f43f5e' }}>
                             {totalPnl > 0 ? '+' : ''}
-                            {totalPnl.toFixed(2)} TON
+                            {totalPnl.toFixed(2)} Gram
                           </b>
                         </div>
                         <div className='sum-row'>
@@ -1540,11 +1612,11 @@ const GXTerminalScreen = () => {
                           </div>
                           <div className='sum-row'>
                             <span>Вход</span>
-                            <b>{activePosition.avgEntryPrice?.toFixed(2)} TON</b>
+                            <b>{activePosition.avgEntryPrice?.toFixed(2)} Gram</b>
                           </div>
                           <div className='sum-row'>
                             <span>Текущая</span>
-                            <b>{markPrice.toFixed(2)} TON</b>
+                            <b>{markPrice.toFixed(2)} Gram</b>
                           </div>
                           {(() => {
                             const dynamicPnl =
@@ -1559,7 +1631,7 @@ const GXTerminalScreen = () => {
                                 <span>Unrealized PnL</span>
                                 <b style={{ color: dynamicPnl >= 0 ? '#10b981' : '#f43f5e' }}>
                                   {dynamicPnl > 0 ? '+' : ''}
-                                  {dynamicPnl.toFixed(2)} TON ({pnlPct.toFixed(2)}%)
+                                  {dynamicPnl.toFixed(2)} Gram ({pnlPct.toFixed(2)}%)
                                 </b>
                               </div>
                             );
@@ -1683,13 +1755,13 @@ const GXTerminalScreen = () => {
                     <div className='summary'>
                       <div className='sum-row'>
                         <span>Баланс</span>
-                        <b>{formatGX(balance)} TON</b>
+                        <b>{formatUSDT(balance)} Gram</b>
                       </div>
                       <div className='sum-row'>
                         <span>Доступно</span>
                         <b>
                           {!activePosition
-                            ? formatGX(availableBalance) + ' TON'
+                            ? formatUSDT(availableBalance) + ' Gram'
                             : activePosition.qty + ' GIFT'}
                         </b>
                       </div>
@@ -1699,7 +1771,7 @@ const GXTerminalScreen = () => {
                       </div>
                       <div className='sum-row'>
                         <span>Итого</span>
-                        <b>{formatGX((Number(price) || curPrice) * (Number(amount) || 0))} TON</b>
+                        <b>{formatUSDT((Number(price) || curPrice) * (Number(amount) || 0))} Gram</b>
                       </div>
                     </div>
 

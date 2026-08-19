@@ -4,7 +4,12 @@
   "private": true,
   "dependencies": {
     "@socket.io/redis-adapter": "^8.3.0",
+    "@ton/core": "^0.63.1",
+    "@ton/crypto": "^3.3.0",
+    "@ton/ton": "^16.3.0",
+    "@tonconnect/ui-react": "^3.0.2",
     "apexcharts": "^5.15.0",
+    "buffer": "^6.0.3",
     "cors": "^2.8.6",
     "decimal.js": "^10.6.0",
     "express": "^5.2.1",
@@ -69,6 +74,8 @@
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.61.0",
     "vite": "^6.0.0",
+    "vite-plugin-node-polyfills": "^0.28.0",
+    "vite-plugin-static-copy": "^4.1.1",
     "vitest": "^4.1.10"
   }
 }
