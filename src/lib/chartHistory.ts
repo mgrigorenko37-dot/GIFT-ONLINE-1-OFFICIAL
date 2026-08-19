@@ -44,11 +44,11 @@ export function processCandlesForChart(
       continue;
     }
 
-    // Check string prices
-    const o = parseFloat(c.open);
-    const h = parseFloat(c.high);
-    const l = parseFloat(c.low);
-    const cl = parseFloat(c.close);
+    // Check prices
+    const o = Number(c.open);
+    const h = Number(c.high);
+    const l = Number(c.low);
+    const cl = Number(c.close);
 
     if (isNaN(o) || isNaN(h) || isNaN(l) || isNaN(cl)) {
       continue;
@@ -76,17 +76,17 @@ export function processCandlesForChart(
   }
 
   // Sort by startTime ASC
-  const sorted = Array.from(map.values()).sort((a, b) => a.startTime - b.startTime);
+  const sorted = Array.from(map.values()).sort((a, b) => (a.startTime ?? 0) - (b.startTime ?? 0));
 
   // Convert to Lightweight Charts format
   return sorted.map((c) => {
-    const timeInSeconds = msToSeconds(c.startTime) as UTCTimestamp;
+    const timeInSeconds = msToSeconds(c.startTime ?? 0) as UTCTimestamp;
     return {
       time: timeInSeconds,
-      open: parseFloat(c.open),
-      high: parseFloat(c.high),
-      low: parseFloat(c.low),
-      close: parseFloat(c.close),
+      open: Number(c.open),
+      high: Number(c.high),
+      low: Number(c.low),
+      close: Number(c.close),
     };
   });
 }

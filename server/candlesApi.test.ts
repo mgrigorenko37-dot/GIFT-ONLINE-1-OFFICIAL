@@ -8,7 +8,7 @@ function assert(condition: boolean, message: string) {
   }
 }
 
-function mockApiCall(query: Record<string, any>) {
+async function mockApiCall(query: Record<string, any>) {
   let statusCode = 200;
   let jsonBody: any = null;
 
@@ -24,12 +24,12 @@ function mockApiCall(query: Record<string, any>) {
     },
   };
 
-  handleGetCandles(req, res);
+  await handleGetCandles(req, res);
   return { status: statusCode, body: jsonBody };
 }
 
 describe('Stage 5: 33 REST API Candle History Scenarios', () => {
-  test('Runs all 33 REST API Candle History Scenarios', () => {
+  test('Runs all 33 REST API Candle History Scenarios', async () => {
     // Scenario 1: Successful request 1s
     {
       clearMarketState();
@@ -42,7 +42,7 @@ describe('Stage 5: 33 REST API Candle History Scenarios', () => {
         eventTime: 1710000000000,
         status: 'completed',
       });
-      const res = mockApiCall({ instrumentKey: 'c1:all:all:TON', timeframe: '1s' });
+      const res = await mockApiCall({ instrumentKey: 'c1:all:all:TON', timeframe: '1s' });
       assert(res.status === 200, 'Scenario 1: HTTP status 200');
       assert(res.body.candles.length === 1, 'Scenario 1: returns 1s candle');
       assert(res.body.timeframe === '1s', 'Scenario 1: timeframe is 1s');
@@ -61,7 +61,7 @@ describe('Stage 5: 33 REST API Candle History Scenarios', () => {
         eventTime: 1710000000000,
         status: 'completed',
       });
-      const res = mockApiCall({ instrumentKey: 'c1:all:all:TON', timeframe: '1m' });
+      const res = await mockApiCall({ instrumentKey: 'c1:all:all:TON', timeframe: '1m' });
       assert(res.status === 200, 'Scenario 2: HTTP status 200');
       assert(res.body.timeframe === '1m', 'Scenario 2: timeframe is 1m');
       console.log('✓ Scenario 2 passed: Successful request 1m');
@@ -79,7 +79,7 @@ describe('Stage 5: 33 REST API Candle History Scenarios', () => {
         eventTime: 1710000000000,
         status: 'completed',
       });
-      const res = mockApiCall({ instrumentKey: 'c1:all:all:TON', timeframe: '5m' });
+      const res = await mockApiCall({ instrumentKey: 'c1:all:all:TON', timeframe: '5m' });
       assert(res.status === 200, 'Scenario 3: HTTP status 200');
       assert(res.body.timeframe === '5m', 'Scenario 3: timeframe is 5m');
       console.log('✓ Scenario 3 passed: Successful request 5m');
@@ -97,7 +97,7 @@ describe('Stage 5: 33 REST API Candle History Scenarios', () => {
         eventTime: 1710000000000,
         status: 'completed',
       });
-      const res = mockApiCall({ instrumentKey: 'c1:all:all:TON', timeframe: '15m' });
+      const res = await mockApiCall({ instrumentKey: 'c1:all:all:TON', timeframe: '15m' });
       assert(res.status === 200, 'Scenario 4: HTTP status 200');
       assert(res.body.timeframe === '15m', 'Scenario 4: timeframe is 15m');
       console.log('✓ Scenario 4 passed: Successful request 15m');
@@ -115,7 +115,7 @@ describe('Stage 5: 33 REST API Candle History Scenarios', () => {
         eventTime: 1710000000000,
         status: 'completed',
       });
-      const res = mockApiCall({ instrumentKey: 'c1:all:all:TON', timeframe: '1h' });
+      const res = await mockApiCall({ instrumentKey: 'c1:all:all:TON', timeframe: '1h' });
       assert(res.status === 200, 'Scenario 5: HTTP status 200');
       assert(res.body.timeframe === '1h', 'Scenario 5: timeframe is 1h');
       console.log('✓ Scenario 5 passed: Successful request 1h');
@@ -133,7 +133,7 @@ describe('Stage 5: 33 REST API Candle History Scenarios', () => {
         eventTime: 1710000000000,
         status: 'completed',
       });
-      const res = mockApiCall({ instrumentKey: 'c1:all:all:TON', timeframe: '4h' });
+      const res = await mockApiCall({ instrumentKey: 'c1:all:all:TON', timeframe: '4h' });
       assert(res.status === 200, 'Scenario 6: HTTP status 200');
       assert(res.body.timeframe === '4h', 'Scenario 6: timeframe is 4h');
       console.log('✓ Scenario 6 passed: Successful request 4h');
@@ -151,7 +151,7 @@ describe('Stage 5: 33 REST API Candle History Scenarios', () => {
         eventTime: 1710000000000,
         status: 'completed',
       });
-      const res = mockApiCall({ instrumentKey: 'c1:all:all:TON', timeframe: '1d' });
+      const res = await mockApiCall({ instrumentKey: 'c1:all:all:TON', timeframe: '1d' });
       assert(res.status === 200, 'Scenario 7: HTTP status 200');
       assert(res.body.timeframe === '1d', 'Scenario 7: timeframe is 1d');
       console.log('✓ Scenario 7 passed: Successful request 1d');
@@ -169,7 +169,7 @@ describe('Stage 5: 33 REST API Candle History Scenarios', () => {
         eventTime: 1710000000000,
         status: 'completed',
       });
-      const res = mockApiCall({ instrumentKey: 'c1:all:all:TON', timeframe: '1w' });
+      const res = await mockApiCall({ instrumentKey: 'c1:all:all:TON', timeframe: '1w' });
       assert(res.status === 200, 'Scenario 8: HTTP status 200');
       assert(res.body.timeframe === '1w', 'Scenario 8: timeframe is 1w');
       console.log('✓ Scenario 8 passed: Successful request 1w');
@@ -187,7 +187,7 @@ describe('Stage 5: 33 REST API Candle History Scenarios', () => {
         eventTime: 1710000000000,
         status: 'completed',
       });
-      const res = mockApiCall({ instrumentKey: 'c1:all:all:TON', timeframe: '1M' });
+      const res = await mockApiCall({ instrumentKey: 'c1:all:all:TON', timeframe: '1M' });
       assert(res.status === 200, 'Scenario 9: HTTP status 200');
       assert(res.body.timeframe === '1M', 'Scenario 9: timeframe is 1M');
       console.log('✓ Scenario 9 passed: Successful request 1M');
@@ -214,8 +214,8 @@ describe('Stage 5: 33 REST API Candle History Scenarios', () => {
         eventTime: 1710000120000,
         status: 'completed',
       }); // +2m
-      const res1m = mockApiCall({ instrumentKey: 'c1:all:all:TON', timeframe: '1m' });
-      const res1M = mockApiCall({ instrumentKey: 'c1:all:all:TON', timeframe: '1M' });
+      const res1m = await mockApiCall({ instrumentKey: 'c1:all:all:TON', timeframe: '1m' });
+      const res1M = await mockApiCall({ instrumentKey: 'c1:all:all:TON', timeframe: '1M' });
       assert(res1m.body.candles.length === 2, 'Scenario 10: 1m has 2 candles');
       assert(res1M.body.candles.length === 1, 'Scenario 10: 1M has 1 candle');
       console.log('✓ Scenario 10 passed: 1m and 1M return different series');
@@ -242,8 +242,8 @@ describe('Stage 5: 33 REST API Candle History Scenarios', () => {
         eventTime: 1710000000000,
         status: 'completed',
       });
-      const resTon = mockApiCall({ instrumentKey: 'c1:all:all:TON', timeframe: '1m' });
-      const resStars = mockApiCall({ instrumentKey: 'c1:all:all:STARS', timeframe: '1m' });
+      const resTon = await mockApiCall({ instrumentKey: 'c1:all:all:TON', timeframe: '1m' });
+      const resStars = await mockApiCall({ instrumentKey: 'c1:all:all:STARS', timeframe: '1m' });
       assert(resTon.body.candles[0].close === '10', 'Scenario 11: TON close is 10');
       assert(resStars.body.candles[0].close === '500', 'Scenario 11: STARS close is 500');
       console.log('✓ Scenario 11 passed: TON and STARS return different series');
@@ -270,8 +270,8 @@ describe('Stage 5: 33 REST API Candle History Scenarios', () => {
         eventTime: 1710000000000,
         status: 'completed',
       });
-      const resC1 = mockApiCall({ instrumentKey: 'c1:all:all:TON', timeframe: '1m' });
-      const resC2 = mockApiCall({ instrumentKey: 'c2:all:all:TON', timeframe: '1m' });
+      const resC1 = await mockApiCall({ instrumentKey: 'c1:all:all:TON', timeframe: '1m' });
+      const resC2 = await mockApiCall({ instrumentKey: 'c2:all:all:TON', timeframe: '1m' });
       assert(resC1.body.candles[0].close === '10', 'Scenario 12: c1 close is 10');
       assert(resC2.body.candles[0].close === '20', 'Scenario 12: c2 close is 20');
       console.log('✓ Scenario 12 passed: Different collections isolated');
@@ -300,8 +300,8 @@ describe('Stage 5: 33 REST API Candle History Scenarios', () => {
         eventTime: 1710000000000,
         status: 'completed',
       });
-      const resM1 = mockApiCall({ instrumentKey: 'c1:m1:all:TON', timeframe: '1m' });
-      const resM2 = mockApiCall({ instrumentKey: 'c1:m2:all:TON', timeframe: '1m' });
+      const resM1 = await mockApiCall({ instrumentKey: 'c1:m1:all:TON', timeframe: '1m' });
+      const resM2 = await mockApiCall({ instrumentKey: 'c1:m2:all:TON', timeframe: '1m' });
       assert(resM1.body.candles[0].close === '10', 'Scenario 13: m1 close is 10');
       assert(resM2.body.candles[0].close === '30', 'Scenario 13: m2 close is 30');
       console.log('✓ Scenario 13 passed: Different modelId isolated');
@@ -330,8 +330,8 @@ describe('Stage 5: 33 REST API Candle History Scenarios', () => {
         eventTime: 1710000000000,
         status: 'completed',
       });
-      const resB1 = mockApiCall({ instrumentKey: 'c1:all:b1:TON', timeframe: '1m' });
-      const resB2 = mockApiCall({ instrumentKey: 'c1:all:b2:TON', timeframe: '1m' });
+      const resB1 = await mockApiCall({ instrumentKey: 'c1:all:b1:TON', timeframe: '1m' });
+      const resB2 = await mockApiCall({ instrumentKey: 'c1:all:b2:TON', timeframe: '1m' });
       assert(resB1.body.candles[0].close === '10', 'Scenario 14: b1 close is 10');
       assert(resB2.body.candles[0].close === '40', 'Scenario 14: b2 close is 40');
       console.log('✓ Scenario 14 passed: Different backdropId isolated');
@@ -349,7 +349,7 @@ describe('Stage 5: 33 REST API Candle History Scenarios', () => {
         eventTime: 1710000000000,
         status: 'completed',
       });
-      const res = mockApiCall({
+      const res = await mockApiCall({
         instrumentKey: 'c1:all:all:TON',
         timeframe: '1m',
         from: 1710000000000,
@@ -370,7 +370,7 @@ describe('Stage 5: 33 REST API Candle History Scenarios', () => {
         eventTime: 1710000000000,
         status: 'completed',
       });
-      const res = mockApiCall({
+      const res = await mockApiCall({
         instrumentKey: 'c1:all:all:TON',
         timeframe: '1m',
         to: 1710000000000,
@@ -391,7 +391,7 @@ describe('Stage 5: 33 REST API Candle History Scenarios', () => {
         eventTime: 1710000000000,
         status: 'completed',
       });
-      const res = mockApiCall({
+      const res = await mockApiCall({
         instrumentKey: 'c1:all:all:TON',
         timeframe: '1m',
         from: 1710000000000,
@@ -404,7 +404,7 @@ describe('Stage 5: 33 REST API Candle History Scenarios', () => {
 
     // Scenario 18: from > to rejected
     {
-      const res = mockApiCall({
+      const res = await mockApiCall({
         instrumentKey: 'c1:all:all:TON',
         timeframe: '1m',
         from: 1710000000000,
@@ -416,28 +416,28 @@ describe('Stage 5: 33 REST API Candle History Scenarios', () => {
 
     // Scenario 19: Invalid timeframe rejected
     {
-      const res = mockApiCall({ instrumentKey: 'c1:all:all:TON', timeframe: '10m' });
+      const res = await mockApiCall({ instrumentKey: 'c1:all:all:TON', timeframe: '10m' });
       assert(res.status === 400, 'Scenario 19: Status 400 for invalid timeframe 10m');
       console.log('✓ Scenario 19 passed: Invalid timeframe rejected');
     }
 
     // Scenario 20: Invalid currency rejected
     {
-      const res = mockApiCall({ collectionId: 'c1', currency: 'USD', timeframe: '1m' });
+      const res = await mockApiCall({ collectionId: 'c1', currency: 'USD', timeframe: '1m' });
       assert(res.status === 400, 'Scenario 20: Status 400 for invalid currency USD');
       console.log('✓ Scenario 20 passed: Invalid currency rejected');
     }
 
     // Scenario 21: Invalid instrumentKey rejected
     {
-      const res = mockApiCall({ instrumentKey: 'invalid_key_without_colons', timeframe: '1m' });
+      const res = await mockApiCall({ instrumentKey: 'invalid_key_without_colons', timeframe: '1m' });
       assert(res.status === 400, 'Scenario 21: Status 400 for invalid instrumentKey format');
       console.log('✓ Scenario 21 passed: Invalid instrumentKey rejected');
     }
 
     // Scenario 22: Timestamp in seconds rejected
     {
-      const res = mockApiCall({
+      const res = await mockApiCall({
         instrumentKey: 'c1:all:all:TON',
         timeframe: '1m',
         from: 1710000000,
@@ -448,7 +448,7 @@ describe('Stage 5: 33 REST API Candle History Scenarios', () => {
 
     // Scenario 23: Negative timestamp rejected
     {
-      const res = mockApiCall({ instrumentKey: 'c1:all:all:TON', timeframe: '1m', from: -100 });
+      const res = await mockApiCall({ instrumentKey: 'c1:all:all:TON', timeframe: '1m', from: -100 });
       assert(res.status === 400, 'Scenario 23: Status 400 for negative timestamp');
       console.log('✓ Scenario 23 passed: Negative timestamp rejected');
     }
@@ -483,7 +483,7 @@ describe('Stage 5: 33 REST API Candle History Scenarios', () => {
         eventTime: 1710000120000,
         status: 'completed',
       });
-      const res = mockApiCall({ instrumentKey: 'c1:all:all:TON', timeframe: '1m', limit: 2 });
+      const res = await mockApiCall({ instrumentKey: 'c1:all:all:TON', timeframe: '1m', limit: 2 });
       assert(res.body.candles.length === 2, 'Scenario 24: limit 2 restricts candle count to 2');
       assert(res.body.hasMore === true, 'Scenario 24: hasMore is true');
       console.log('✓ Scenario 24 passed: limit restricts candle count');
@@ -510,7 +510,7 @@ describe('Stage 5: 33 REST API Candle History Scenarios', () => {
         eventTime: 1710000000000,
         status: 'completed',
       });
-      const res = mockApiCall({ instrumentKey: 'c1:all:all:TON', timeframe: '1m' });
+      const res = await mockApiCall({ instrumentKey: 'c1:all:all:TON', timeframe: '1m' });
       assert(
         res.body.candles[0].startTime < res.body.candles[1].startTime,
         'Scenario 25: Sorted ASC'
@@ -539,7 +539,7 @@ describe('Stage 5: 33 REST API Candle History Scenarios', () => {
         eventTime: 1710000010000,
         status: 'completed',
       });
-      const res = mockApiCall({ instrumentKey: 'c1:all:all:TON', timeframe: '1m' });
+      const res = await mockApiCall({ instrumentKey: 'c1:all:all:TON', timeframe: '1m' });
       assert(res.body.candles.length === 1, 'Scenario 26: Only 1 candle for same interval');
       console.log('✓ Scenario 26 passed: Duplicates absent');
     }
@@ -547,7 +547,7 @@ describe('Stage 5: 33 REST API Candle History Scenarios', () => {
     // Scenario 27: Empty history does not cause 500
     {
       clearMarketState();
-      const res = mockApiCall({ instrumentKey: 'c1:all:all:TON', timeframe: '1m' });
+      const res = await mockApiCall({ instrumentKey: 'c1:all:all:TON', timeframe: '1m' });
       assert(res.status === 200, 'Scenario 27: Status 200 for empty history');
       assert(
         Array.isArray(res.body.candles) && res.body.candles.length === 0,
@@ -568,7 +568,7 @@ describe('Stage 5: 33 REST API Candle History Scenarios', () => {
         eventTime: Date.now(),
         status: 'completed',
       });
-      const res = mockApiCall({ instrumentKey: 'c1:all:all:TON', timeframe: '1m' });
+      const res = await mockApiCall({ instrumentKey: 'c1:all:all:TON', timeframe: '1m' });
       assert(res.body.candles.length === 1, 'Scenario 28: Active candle returned');
       assert(
         res.body.candles[0].confirmed === false,
@@ -607,7 +607,7 @@ describe('Stage 5: 33 REST API Candle History Scenarios', () => {
         eventTime: 1710000020000,
         status: 'completed',
       }); // late in first candle
-      const res = mockApiCall({ instrumentKey: 'c1:all:all:TON', timeframe: '1m' });
+      const res = await mockApiCall({ instrumentKey: 'c1:all:all:TON', timeframe: '1m' });
       assert(
         res.body.candles[0].high === '150',
         'Scenario 29: Closed candle updated with new high'
@@ -628,7 +628,7 @@ describe('Stage 5: 33 REST API Candle History Scenarios', () => {
         eventTime: 1710000000000,
         status: 'completed',
       });
-      const res = mockApiCall({ instrumentKey: 'c1:all:all:TON', timeframe: '1m' });
+      const res = await mockApiCall({ instrumentKey: 'c1:all:all:TON', timeframe: '1m' });
       const c = res.body.candles[0];
       assert(typeof c.open === 'string' && c.open === '0.1', "Scenario 30: open is string '0.1'");
       assert(
@@ -650,7 +650,7 @@ describe('Stage 5: 33 REST API Candle History Scenarios', () => {
         eventTime: 1710000000000,
         status: 'completed',
       });
-      const res = mockApiCall({ instrumentKey: 'c1:all:all:TON', timeframe: '1m' });
+      const res = await mockApiCall({ instrumentKey: 'c1:all:all:TON', timeframe: '1m' });
       const str = JSON.stringify(res.body);
       assert(!str.includes('NaN'), 'Scenario 31: No NaN');
       assert(!str.includes('Infinity'), 'Scenario 31: No Infinity');
@@ -669,7 +669,7 @@ describe('Stage 5: 33 REST API Candle History Scenarios', () => {
         eventTime: 1710000000000,
         status: 'completed',
       });
-      const res = mockApiCall({ instrumentKey: 'c1:all:all:TON', timeframe: '1m' });
+      const res = await mockApiCall({ instrumentKey: 'c1:all:all:TON', timeframe: '1m' });
       assert(res.body.candles[0].revision === 1, 'Scenario 32: revision is 1');
       console.log('✓ Scenario 32 passed: revision returned correctly');
     }
@@ -690,7 +690,7 @@ describe('Stage 5: 33 REST API Candle History Scenarios', () => {
       }
 
       // Page 1: limit 2
-      const p1 = mockApiCall({ instrumentKey: 'c1:all:all:TON', timeframe: '1m', limit: 2 });
+      const p1 = await mockApiCall({ instrumentKey: 'c1:all:all:TON', timeframe: '1m', limit: 2 });
       assert(p1.body.candles.length === 2, 'Scenario 33: Page 1 length is 2');
       assert(p1.body.hasMore === true, 'Scenario 33: Page 1 hasMore is true');
       assert(
@@ -699,7 +699,7 @@ describe('Stage 5: 33 REST API Candle History Scenarios', () => {
       );
 
       // Page 2: use cursor from Page 1
-      const p2 = mockApiCall({
+      const p2 = await mockApiCall({
         instrumentKey: 'c1:all:all:TON',
         timeframe: '1m',
         limit: 2,
@@ -716,7 +716,7 @@ describe('Stage 5: 33 REST API Candle History Scenarios', () => {
       );
 
       // Page 3: use cursor from Page 2
-      const p3 = mockApiCall({
+      const p3 = await mockApiCall({
         instrumentKey: 'c1:all:all:TON',
         timeframe: '1m',
         limit: 2,

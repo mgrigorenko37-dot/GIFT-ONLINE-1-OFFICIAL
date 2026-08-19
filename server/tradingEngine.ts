@@ -1,6 +1,6 @@
 import { SchedulerLease } from './schedulerLease';
 import { parseInstrumentKey } from '../src/types/market';
-  import { gifts } from '../src/data/gifts';
+import { MOCK_GIFTS_FIXTURE } from './mocks/giftsFixture';
 import * as crypto from 'crypto';
 import { EventEmitter } from 'events';
 import { Pool } from 'pg';
@@ -60,6 +60,7 @@ export interface Trade {
   fee: number;
   feeCurrency: string;
   realizedPnl?: number;
+  positionId?: string;
   pnlCurrency: string;
   settlementCurrency: string;
   timestamp: number;
@@ -176,7 +177,7 @@ defineInstrument('TON-USDT', 'TON');
 defineInstrument('STARS', 'STARS');
 defineInstrument('STARS-USDT', 'STARS');
 
-for (const gift of gifts) {
+for (const gift of MOCK_GIFTS_FIXTURE) {
   defineInstrument(gift.id, 'TON');
   defineInstrument(`${gift.id}:all:all:TON`, 'TON');
 }
@@ -1733,7 +1734,7 @@ const orderRes = await client.query(
 
         const tradeSide = pos.side === 'Long' ? 'Sell' : 'Buy';
 
-        const liqOrderId = 'ord_liq_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
+        const liqOrderId = 'ord_liq_' + crypto.randomUUID();
 
         await client.query(
           `INSERT INTO te_orders (order_id, user_id, instrument_key, side, order_type, qty, price, reduce_only, position_effect, status, executed_qty, remaining_qty, avg_fill_price, fee, collateral_currency, created_at, updated_at)
@@ -1760,7 +1761,7 @@ const orderRes = await client.query(
         );
 
         // 12. Записать Trade с reason=LIQUIDATION.
-        const tradeId = (i === 0 && passedTradeId) ? passedTradeId : ('t_liq_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5));
+        const tradeId = (i === 0 && passedTradeId) ? passedTradeId : ('t_liq_' + crypto.randomUUID());
         const trade = {
           tradeId,
           orderId: liqOrderId,
@@ -1791,7 +1792,7 @@ const orderRes = await client.query(
         lastTradeResult = trade;
 
         // 14. Записать execution, если liquidation является execution-операцией.
-        const executionId = (i === 0 && passedExecutionId) ? passedExecutionId : ('exec_liq_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5));
+        const executionId = (i === 0 && passedExecutionId) ? passedExecutionId : ('exec_liq_' + crypto.randomUUID());
         await client.query(
           `INSERT INTO te_executions (execution_id, order_id, user_id, instrument_key, side, requested_qty, fill_qty, fill_price, fee, settlement_currency, fee_currency, pnl_currency, status, created_at, processed_at, source, external_execution_id) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)`,
           [

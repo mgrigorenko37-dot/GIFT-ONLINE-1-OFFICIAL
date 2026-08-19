@@ -30,14 +30,19 @@ export const mapTelegramGift = (tgGift: any) => {
   else if (tgGift.total_count <= 10000) rarity = 'Epic';
   else if (tgGift.total_count <= 50000) rarity = 'Rare';
 
+  const rawId = String(mapped?.id || tgGift.id || emoji || 'gift');
+  const seed = rawId.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+  const change = parseFloat((((seed % 100) / 10) - 5).toFixed(2));
+  const volume = `${(seed % 150) + 10}K`;
+
   return {
     id: mapped?.id || tgGift.id || `unknown-${emoji || 'gift'}`,
     name: mapped?.name || (emoji ? `${emoji} Gift` : 'Unknown Gift'),
     collection: 'Telegram Gifts',
     rarity,
     floor: tgGift.star_count || 0,
-    change: parseFloat((Math.random() * 10 - 5).toFixed(2)),
-    volume: `${Math.floor(Math.random() * 200)}K`,
+    change,
+    volume,
     className: mapped?.className || 'gift-default',
     telegramId: tgGift.id, // Keep the real ID for API actions if needed
   };

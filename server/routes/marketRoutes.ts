@@ -6,7 +6,7 @@ import { getIndicators } from '../indicatorEngine';
 import { processTelegramMarketEvent } from '../telegramAdapter';
 import { webhookRateLimiter, validateTelegramWebhookSecret } from '../rateLimiter';
 import { getPgPool } from '../marketRepository';
-import { gifts as hardcodedGifts } from '../../src/data/gifts';
+import { MOCK_GIFTS_FIXTURE } from '../mocks/giftsFixture';
 
 const router = express.Router();
 
@@ -178,36 +178,92 @@ router.post('/market/listings/:id/sell', (req: express.Request, res: express.Res
   return res.json(result);
 });
 
-// Collections (Postgres Source of Truth)
+// Collections / Gifts Unified API Endpoint
+// Source of truth: PostgreSQL database
+// In development, if database is empty and USE_MOCK_GIFTS=true, returns deterministic mock fixtures.
+// In production, returns strictly database content or controlled empty state with source metadata.
 router.get(['/collections', '/gifts'], async (req: express.Request, res: express.Response) => {
-  try {
-    const client = await getPgPool().connect();
-    const result = await client.query(
-      'SELECT id, name, total_supply, image_url, floor_price_gx, created_at FROM gift_collections'
-    );
-    client.release();
+  const isProduction = process.env.NODE_ENV === 'production';
+  const useMock = process.env.USE_MOCK_GIFTS === 'true';
 
-    const mapped = result.rows.map((r) => {
-      const fallback = hardcodedGifts.find((g) => g.id === r.id);
-      return {
-        id: r.id,
-        name: r.name,
-        collection: 'Telegram Gifts',
-        rarity: fallback ? fallback.rarity : 'Common',
-        floor: Number(r.floor_price_gx) || (fallback ? fallback.floor : 0),
-        change: fallback ? fallback.change : 0,
-        volume: fallback ? fallback.volume : '0',
-        className: fallback ? fallback.className : 'gx-gift-box',
-        emoji: fallback ? fallback.emoji : undefined,
-        image_url: r.image_url || (fallback ? fallback.image_url : undefined),
-        is_nft: true,
+  try {
+    const pool = getPgPool();
+    const client = await pool.connect();
+
+    try {
+      const result = await client.query(
+        `SELECT id, name, total_supply, image_url, floor_price_gx, created_at 
+         FROM gift_collections 
+         ORDER BY created_at ASC`
+      );
+
+      // If records found in PostgreSQL
+      if (result.rows.length > 0) {
+        const mapped = result.rows.map((r) => ({
+          id: r.id,
+          name: r.name,
+          collection: 'Telegram Gifts',
+          rarity: 'Common',
+          floor: Number(r.floor_price_gx) || 0,
+          change: 0,
+          volume: '0',
+          className: 'gx-gift-box',
+          image_url: r.image_url || undefined,
+          is_nft: true,
+          total_supply: Number(r.total_supply) || 0,
+          source: 'postgres',
+        }));
+
+        return res.json({
+          source: 'postgres',
+          count: mapped.length,
+          data: mapped,
+        });
+      }
+
+      // If PostgreSQL is empty:
+      // In Development with USE_MOCK_GIFTS=true:
+      if (!isProduction && useMock) {
+        return res.json({
+          source: 'mock',
+          count: MOCK_GIFTS_FIXTURE.length,
+          data: MOCK_GIFTS_FIXTURE.map((g) => ({
+            ...g,
+            source: 'mock',
+          })),
+        });
+      }
+
+      // In Production or without USE_MOCK_GIFTS:
+      // Return controlled empty state (NO silent hardcoded fallback or random data)
+      return res.json({
         source: 'postgres',
-      };
+        count: 0,
+        data: [],
+        message: 'No gift collections found in database.',
+      });
+    } finally {
+      client.release();
+    }
+  } catch (error: any) {
+    console.error('[MarketRoutes] Error fetching gifts from PostgreSQL:', error?.message);
+    if (!isProduction && useMock) {
+      return res.json({
+        source: 'mock',
+        count: MOCK_GIFTS_FIXTURE.length,
+        data: MOCK_GIFTS_FIXTURE.map((g) => ({
+          ...g,
+          source: 'mock',
+        })),
+        warning: 'Fallback to development mock fixture due to database connection issue',
+      });
+    }
+
+    return res.status(500).json({
+      error: 'Failed to retrieve gift collections from database',
+      source: 'postgres',
+      details: error?.message,
     });
-    res.json(mapped);
-  } catch (error) {
-    console.error('Error fetching gifts:', error);
-    res.status(500).json({ error: String(error) });
   }
 });
 

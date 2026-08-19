@@ -94,7 +94,9 @@ export class CandleStore {
    * Returns all candles sorted by startTime ASC.
    */
   public getSortedCandles(): GiftCandle[] {
-    return Array.from(this.candlesByStartTime.values()).sort((a, b) => a.startTime - b.startTime);
+    return Array.from(this.candlesByStartTime.values()).sort(
+      (a, b) => (a.startTime ?? a.time ?? 0) - (b.startTime ?? b.time ?? 0)
+    );
   }
 
   /**
@@ -104,10 +106,10 @@ export class CandleStore {
     const sorted = this.getSortedCandles();
     return sorted
       .filter((c) => {
-        const o = parseFloat(c.open);
-        const h = parseFloat(c.high);
-        const l = parseFloat(c.low);
-        const cl = parseFloat(c.close);
+        const o = Number(c.open);
+        const h = Number(c.high);
+        const l = Number(c.low);
+        const cl = Number(c.close);
         if (isNaN(o) || isNaN(h) || isNaN(l) || isNaN(cl)) return false;
         // Skip OHLC=0 without tradeCount
         if (o === 0 && h === 0 && l === 0 && cl === 0 && (!c.tradeCount || c.tradeCount === 0))
@@ -115,11 +117,11 @@ export class CandleStore {
         return true;
       })
       .map((c) => ({
-        time: msToSeconds(c.startTime) as any,
-        open: parseFloat(c.open),
-        high: parseFloat(c.high),
-        low: parseFloat(c.low),
-        close: parseFloat(c.close),
+        time: msToSeconds(c.startTime ?? c.time ?? 0) as any,
+        open: Number(c.open),
+        high: Number(c.high),
+        low: Number(c.low),
+        close: Number(c.close),
       }));
   }
 

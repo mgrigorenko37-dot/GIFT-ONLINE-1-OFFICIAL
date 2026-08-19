@@ -1,4 +1,5 @@
 import { Pool, PoolClient } from 'pg';
+import crypto from 'crypto';
 
 export class SchedulerLease {
   private pool: Pool;
@@ -6,7 +7,7 @@ export class SchedulerLease {
 
   constructor(pool: Pool, workerId?: string) {
     this.pool = pool;
-    this.workerId = workerId || 'worker_' + process.pid + '_' + Math.random().toString(36).substr(2, 5);
+    this.workerId = workerId || `worker_${process.pid}_${crypto.randomUUID().substring(0, 8)}`;
   }
 
   // Use PostgreSQL advisory locks for distributed locking since DDL is restricted here.

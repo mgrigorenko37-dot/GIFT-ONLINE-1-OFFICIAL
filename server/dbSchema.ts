@@ -134,11 +134,39 @@ export async function initDbSchema(pool: Pool) {
         amount NUMERIC NOT NULL,
         currency VARCHAR(32) NOT NULL DEFAULT 'TON',
         address VARCHAR(255) NOT NULL,
-        status VARCHAR(32) NOT NULL DEFAULT 'PENDING',
+        status VARCHAR(32) NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING', 'PROCESSING', 'RETRYING', 'COMPLETED', 'FAILED')),
         tx_hash VARCHAR(255),
         failure_reason TEXT,
+        attempts INT NOT NULL DEFAULT 0,
+        next_attempt_at BIGINT,
+        locked_at BIGINT,
+        processed_at BIGINT,
+        worker_id VARCHAR(255),
+        funds_released_at BIGINT,
+        funds_released BOOLEAN NOT NULL DEFAULT FALSE,
         created_at BIGINT NOT NULL,
         updated_at BIGINT NOT NULL
+      )`,
+      `ALTER TABLE te_withdrawals ADD COLUMN IF NOT EXISTS attempts INT NOT NULL DEFAULT 0`,
+      `ALTER TABLE te_withdrawals ADD COLUMN IF NOT EXISTS next_attempt_at BIGINT`,
+      `ALTER TABLE te_withdrawals ADD COLUMN IF NOT EXISTS locked_at BIGINT`,
+      `ALTER TABLE te_withdrawals ADD COLUMN IF NOT EXISTS processed_at BIGINT`,
+      `ALTER TABLE te_withdrawals ADD COLUMN IF NOT EXISTS worker_id VARCHAR(255)`,
+      `ALTER TABLE te_withdrawals ADD COLUMN IF NOT EXISTS funds_released_at BIGINT`,
+      `ALTER TABLE te_withdrawals ADD COLUMN IF NOT EXISTS funds_released BOOLEAN NOT NULL DEFAULT FALSE`,
+      `CREATE TABLE IF NOT EXISTS te_financial_audits (
+        id SERIAL PRIMARY KEY,
+        event_type VARCHAR(100) NOT NULL,
+        user_id VARCHAR(255) NOT NULL,
+        reference_id VARCHAR(255) NOT NULL,
+        currency VARCHAR(32) NOT NULL,
+        amount NUMERIC NOT NULL,
+        available_before NUMERIC NOT NULL,
+        available_after NUMERIC NOT NULL,
+        locked_before NUMERIC NOT NULL,
+        locked_after NUMERIC NOT NULL,
+        metadata TEXT,
+        created_at BIGINT NOT NULL
       )`,
       `CREATE TABLE IF NOT EXISTS te_funding_payments (
         funding_id VARCHAR(255) PRIMARY KEY,
@@ -184,6 +212,39 @@ export async function initDbSchema(pool: Pool) {
         created_at BIGINT NOT NULL
       )`,
       `CREATE INDEX IF NOT EXISTS te_pos_snap_pos_time_idx ON te_position_snapshots(position_id, valid_from, valid_to)`,
+      `CREATE TABLE IF NOT EXISTS te_invoices (
+        id VARCHAR(255) PRIMARY KEY,
+        user_id VARCHAR(255) NOT NULL,
+        stars_amount NUMERIC NOT NULL,
+        currency VARCHAR(32) NOT NULL DEFAULT 'XTR',
+        payload TEXT NOT NULL,
+        nonce VARCHAR(255) NOT NULL,
+        idempotency_key VARCHAR(255),
+        status VARCHAR(32) NOT NULL DEFAULT 'PENDING',
+        invoice_link TEXT,
+        telegram_payment_charge_id VARCHAR(255),
+        telegram_provider_charge_id VARCHAR(255),
+        failure_reason TEXT,
+        created_at BIGINT NOT NULL,
+        paid_at BIGINT,
+        updated_at BIGINT
+      )`,
+      `CREATE UNIQUE INDEX IF NOT EXISTS idx_te_invoices_nonce_unique ON te_invoices(nonce)`,
+      `CREATE UNIQUE INDEX IF NOT EXISTS idx_te_invoices_idem_user_unique ON te_invoices(idempotency_key, user_id) WHERE idempotency_key IS NOT NULL`,
+      `CREATE TABLE IF NOT EXISTS te_payments (
+        id VARCHAR(255) PRIMARY KEY,
+        invoice_id VARCHAR(255) REFERENCES te_invoices(id),
+        user_id VARCHAR(255) NOT NULL,
+        amount NUMERIC NOT NULL,
+        currency VARCHAR(32) NOT NULL,
+        telegram_payment_charge_id VARCHAR(255) NOT NULL,
+        telegram_provider_charge_id VARCHAR(255),
+        status VARCHAR(32) NOT NULL DEFAULT 'COMPLETED',
+        created_at BIGINT NOT NULL,
+        CONSTRAINT te_payments_charge_id_unique UNIQUE(telegram_payment_charge_id)
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_te_payments_user_id ON te_payments(user_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_te_invoices_user_id ON te_invoices(user_id)`,
       `CREATE TABLE IF NOT EXISTS gift_collections (
         id VARCHAR(255) PRIMARY KEY,
         name TEXT NOT NULL,
@@ -202,7 +263,10 @@ export async function initDbSchema(pool: Pool) {
         current_price_gx NUMERIC,
         image_url TEXT,
         last_synced_at TIMESTAMPTZ DEFAULT now()
-      )`
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_gift_variants_collection ON gift_variants(collection_id)`,
+      `CREATE UNIQUE INDEX IF NOT EXISTS idx_gift_collections_id_unique ON gift_collections(id)`,
+      `CREATE UNIQUE INDEX IF NOT EXISTS idx_gift_variants_id_unique ON gift_variants(id)`
     ];
 
     for (const sql of tables) {

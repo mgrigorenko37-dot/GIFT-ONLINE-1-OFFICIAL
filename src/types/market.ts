@@ -1,4 +1,3 @@
-
 /**
  * Unified Market Data Types and Instrument Key Utilities
  */
@@ -17,6 +16,8 @@ export const VALID_TIMEFRAMES: Timeframe[] = [
   '1w',
   '1M',
 ];
+
+export const VALID_CURRENCIES = new Set<string>(['TON', 'STARS', 'Gram']);
 
 export interface GiftSale {
   id: string;
@@ -38,6 +39,7 @@ export interface GiftSale {
   status: string;
   isMock?: boolean;
   isSimulation?: boolean;
+  transactionHash?: string;
 }
 
 export interface GiftCandle {
@@ -45,32 +47,43 @@ export interface GiftCandle {
   timeframe: Timeframe;
   startTime: number;
   endTime: number;
-  open: number;
-  high: number;
-  low: number;
-  close: number;
-  volume: number;
-  quoteVolume: number;
-  sumQuote: number;
-  sumQuantity: number;
-  itemCount: number;
-  tradeCount: number;
+  time?: number;
+  open: number | string;
+  high: number | string;
+  low: number | string;
+  close: number | string;
+  volume: number | string;
+  quoteVolume?: number | string;
+  sumQuote?: number | string;
+  sumQuantity?: number | string;
+  itemCount?: number | string;
+  tradeCount?: number;
   firstSaleId?: string;
+  firstSaleTime?: number;
   lastSaleId?: string;
-  confirmed: boolean;
-  revision: number;
-  updatedAt: number;
+  lastSaleTime?: number;
+  confirmed?: boolean;
+  revision?: number;
+  updatedAt?: number;
 }
 
 export interface ParsedInstrumentKey {
   collectionId: string;
-  modelId: string;
-  backdropId: string;
+  modelId?: string;
+  backdropId?: string;
   currency: Currency;
 }
 
 export function buildInstrumentKey(parsed: ParsedInstrumentKey): string {
-  return `${parsed.collectionId}:${parsed.modelId}:${parsed.backdropId}:${parsed.currency}`;
+  if (!parsed || !parsed.collectionId || typeof parsed.collectionId !== 'string' || !parsed.collectionId.trim()) {
+    throw new Error('collectionId must be a non-empty string');
+  }
+  if (!parsed.currency || !VALID_CURRENCIES.has(parsed.currency)) {
+    throw new Error(`Invalid currency: ${parsed.currency}`);
+  }
+  const model = parsed.modelId !== undefined && parsed.modelId !== '' ? parsed.modelId : 'all';
+  const backdrop = parsed.backdropId !== undefined && parsed.backdropId !== '' ? parsed.backdropId : 'all';
+  return `${parsed.collectionId}:${model}:${backdrop}:${parsed.currency}`;
 }
 
 export function parseInstrumentKey(instrumentKey: string): ParsedInstrumentKey {
@@ -81,17 +94,17 @@ export function parseInstrumentKey(instrumentKey: string): ParsedInstrumentKey {
   if (parts.length !== 4) {
     return {
       collectionId: instrumentKey,
-      modelId: 'classic',
-      backdropId: 'default',
+      modelId: 'all',
+      backdropId: 'all',
       currency: 'TON',
     };
   }
   const [rawCollection, rawModel, rawBackdrop, rawCurrency] = parts;
   return {
     collectionId: rawCollection,
-    modelId: rawModel,
-    backdropId: rawBackdrop,
-    currency: rawCurrency as Currency,
+    modelId: rawModel || 'all',
+    backdropId: rawBackdrop || 'all',
+    currency: (rawCurrency as Currency) || 'TON',
   };
 }
 
@@ -109,11 +122,33 @@ export function normalizeInstrumentKey(
       return trimmed;
     }
   }
-  return trimmed;
+  return buildInstrumentKey({
+    collectionId: trimmed,
+    modelId: 'all',
+    backdropId: 'all',
+    currency: defaultCurrency,
+  });
 }
 
 export function msToSeconds(ms: number): number {
   return Math.floor(ms / 1000);
+}
+
+export type ListingStatus = 'active' | 'sold' | 'cancelled' | 'expired';
+
+export interface GiftListing {
+  listingId: string;
+  instrumentKey: string;
+  collectionId: string;
+  modelId: string;
+  backdropId: string;
+  giftId?: string;
+  price: string;
+  currency: Currency;
+  sellerId?: string;
+  status: ListingStatus;
+  createdAt: number;
+  updatedAt: number;
 }
 
 export function secondsToMs(seconds: number): number {

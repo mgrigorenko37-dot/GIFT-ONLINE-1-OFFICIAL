@@ -91,11 +91,12 @@ export async function matchOrder(newOrder: Order) {
     const oppositeSide = newOrder.side === 'BUY' ? 'SELL' : 'BUY';
     
     // Fetch matching orders with Row-level lock (FOR UPDATE)
+    const limitCondition = newOrder.type === 'LIMIT' ? `AND price ${operator} $3` : '';
     const matchingQuery = `
       SELECT id, user_id, price, amount, filled_amount, status 
       FROM order_book
       WHERE asset_id = $1 AND side = $2 AND status IN ('OPEN', 'PARTIAL')
-      ${newOrder.type === 'LIMIT' ? \`AND price \${operator} $3\` : ''}
+      ${limitCondition}
       ORDER BY price ${sortOrder}, created_at ASC
       FOR UPDATE
     `;

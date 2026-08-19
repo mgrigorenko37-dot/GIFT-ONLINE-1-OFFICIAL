@@ -1,6 +1,7 @@
 import { GiftSale, GiftCandle, Timeframe } from './chartEngine';
 import fs from 'fs';
 import path from 'path';
+import crypto from 'crypto';
 import { Pool, PoolConfig } from 'pg';
 
 declare global {
@@ -268,7 +269,7 @@ export class FilePersistentMarketRepository implements IMarketRepository {
     const release = await this.acquireWriteLock();
     try {
       const data = JSON.stringify(snapshot, null, 2);
-      const tmpPath = `${this.filePath}.${Date.now()}.${Math.random().toString(36).substring(2, 7)}.tmp`;
+      const tmpPath = `${this.filePath}.${Date.now()}.${crypto.randomUUID().substring(0, 8)}.tmp`;
 
       // Create backup if previous valid file exists
       if (fs.existsSync(this.filePath)) {

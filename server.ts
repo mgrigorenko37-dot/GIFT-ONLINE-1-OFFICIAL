@@ -15,6 +15,7 @@ import { initRealtimeManager } from './server/realtimeManager';
 import { closeRedisConnections } from './server/redisManager';
 import { initOutboxWorker, stopOutboxWorker } from './server/outboxWorker';
 import { startTradingOutboxWorker, stopTradingOutboxWorker } from './server/tradingOutboxWorker';
+import { startWithdrawalWorker, stopWithdrawalWorker } from './server/withdrawalWorker';
 import { TonScanner } from './server/tonScanner';
 import { startGiftSyncWorker } from './server/giftSyncWorker';
 import { simulateSales } from './server/mockMinter';
@@ -93,9 +94,10 @@ export async function stopServerGracefully(signal = 'SIGTERM'): Promise<void> {
   try {
     stopOutboxWorker();
     stopTradingOutboxWorker();
-    console.log('[Server] OutboxWorker stopped.');
+    stopWithdrawalWorker();
+    console.log('[Server] OutboxWorker and WithdrawalWorker stopped.');
   } catch (e) {
-    console.error('[Server] Error stopping OutboxWorker:', e);
+    console.error('[Server] Error stopping OutboxWorker/WithdrawalWorker:', e);
   }
 
   if (ioRef) {
@@ -171,6 +173,7 @@ async function startServer() {
   // Background Workers
   if (process.env.SQL_HOST) {
     startTradingOutboxWorker(getPgPool(), io);
+    startWithdrawalWorker(getPgPool());
     const tonScanner = new TonScanner(getPgPool());
     tonScanner.start();
   }

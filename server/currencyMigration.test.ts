@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import { Pool } from 'pg';
 import { resolveInstrumentCurrency, migrateBalancesAndCurrencies } from './currencyMigration';
 import { PostgresTradingEngine } from './tradingEngine';
-import { initDbSchema } from '../server';
+import { initDbSchema } from './dbSchema';
 
 describe('Safe te_balances & Currency Migration', () => {
   let pool: Pool;

@@ -1,5 +1,6 @@
 import { Pool, PoolClient } from 'pg';
-import { gifts } from '../src/data/gifts';
+import crypto from 'crypto';
+import { MOCK_GIFTS_FIXTURE } from './mocks/giftsFixture';
 
 export interface CurrencyResolutionResult {
   currency: string | null;
@@ -40,7 +41,7 @@ export function resolveInstrumentCurrency(
   }
 
   // Known Telegram Gift IDs
-  for (const gift of gifts) {
+  for (const gift of MOCK_GIFTS_FIXTURE) {
     if (key === gift.id || key === `${gift.id}:all:all:TON`) {
       return { currency: 'TON', isUnresolvable: false };
     }
@@ -119,7 +120,7 @@ export async function migrateBalancesAndCurrencies(
 
     // Helper to safely execute queries with savepoints
     const safeQuery = async (queryText: string, params: any[] = []) => {
-      const spName = 'sp_' + Math.random().toString(36).substring(2, 9);
+      const spName = 'sp_' + crypto.randomBytes(8).toString('hex');
       await client.query(`SAVEPOINT ${spName}`);
       try {
         const res = await client.query(queryText, params);

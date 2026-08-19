@@ -230,17 +230,17 @@ export function updateCandle(candle: GiftCandle, sale: GiftSale): GiftCandle {
   }
 
   // 5. Volume & Quote Volume updates (Decimal arithmetic)
-  const newVolDec = new Decimal(newCandle.volume).plus(qDec);
-  const newQuoteVolDec = new Decimal(newCandle.quoteVolume).plus(quoteDec);
+  const newVolDec = new Decimal(newCandle.volume || '0').plus(qDec);
+  const newQuoteVolDec = new Decimal(newCandle.quoteVolume || '0').plus(quoteDec);
 
   newCandle.volume = newVolDec.toString();
   newCandle.quoteVolume = newQuoteVolDec.toString();
-  newCandle.tradeCount += 1;
+  newCandle.tradeCount = (newCandle.tradeCount ?? 0) + 1;
   newCandle.itemCount = newCandle.volume;
   newCandle.sumQuote = newCandle.quoteVolume;
   newCandle.sumQuantity = newCandle.volume;
 
-  newCandle.revision += 1;
+  newCandle.revision = (newCandle.revision ?? 0) + 1;
   newCandle.updatedAt = Date.now();
 
   return newCandle;

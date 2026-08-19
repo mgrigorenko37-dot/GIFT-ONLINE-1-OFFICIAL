@@ -73,8 +73,8 @@ export function onSaleAccepted(listener: SaleAcceptedListener) {
 export function clearMarketState(clearRepo = true) {
   allSales.length = 0;
   processedSaleIds.clear();
-  for (const k in activeCandles) delete activeCandles[k];
-  for (const k in closedCandles) delete closedCandles[k];
+  for (const k of Object.keys(activeCandles)) delete activeCandles[k];
+  for (const k of Object.keys(closedCandles)) delete closedCandles[k];
   if (clearRepo && activeRepository && typeof activeRepository.clear === 'function') {
     activeRepository.clear();
   }
@@ -154,8 +154,11 @@ export function getMarketCandlesHistory(
 
   const hasMore = all.length > limit;
   const candles = all.slice(0, limit);
+  const lastCandle = candles.length > 0 ? candles[candles.length - 1] : undefined;
   const nextCursor =
-    hasMore && candles.length > 0 ? candles[candles.length - 1].startTime.toString() : null;
+    hasMore && lastCandle && lastCandle.startTime !== undefined
+      ? lastCandle.startTime.toString()
+      : null;
 
   return {
     instrumentKey: normKey,
@@ -544,7 +547,7 @@ export function restoreMarketState(
         const c = snapshot.activeCandles[instKey][tf];
         if (
           c &&
-          c.tradeCount > 0 &&
+          (c.tradeCount ?? 0) > 0 &&
           c.open &&
           c.high &&
           c.low &&
@@ -568,7 +571,7 @@ export function restoreMarketState(
         for (const c of rawList) {
           if (
             c &&
-            c.tradeCount > 0 &&
+            (c.tradeCount ?? 0) > 0 &&
             c.open &&
             c.high &&
             c.low &&

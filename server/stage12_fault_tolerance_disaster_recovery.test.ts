@@ -327,7 +327,7 @@ describe('Stage 12: Fault Tolerance & Disaster Recovery Tests', () => {
 
     const candle1m_sale2 = sale2.candles!.find((c) => c.timeframe === '1m');
     expect(candle1m_sale2).toBeDefined();
-    expect(candle1m_sale2!.revision).toBeGreaterThan(candle1m_sale1!.revision);
+    expect(Number(candle1m_sale2!.revision)).toBeGreaterThan(Number(candle1m_sale1!.revision));
   });
 
   it('8. Service Re-Enable Recovery Order (DB -> Redis -> Backend -> Clients)', () => {

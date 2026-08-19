@@ -7,6 +7,7 @@ interface DepositModalProps {
   onClose: () => void;
   amount: string;
   gxPreview: number;
+  method?: 'gram' | 'stars';
 }
 
 export const DepositModal: React.FC<DepositModalProps> = ({
@@ -14,6 +15,7 @@ export const DepositModal: React.FC<DepositModalProps> = ({
   onClose,
   amount,
   gxPreview,
+  method = 'gram',
 }) => {
   const [status, setStatus] = useState<'confirm' | 'processing' | 'success' | 'error'>('confirm');
   const { openInvoice } = useTelegramWebApp();

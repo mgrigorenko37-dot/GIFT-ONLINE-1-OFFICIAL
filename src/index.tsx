@@ -42,7 +42,7 @@ const manifestUrl = 'https://ton-connect.github.io/demo-dapp/tonconnect-manifest
 
 const root = ReactDOM.createRoot(document.getElementById('root') as HTMLElement);
 root.render(
-  <TonConnectUIProvider manifestUrl={manifestUrl} enableWalletsContinuousSession={true}>
+  <TonConnectUIProvider manifestUrl={manifestUrl}>
     <BrowserRouter>
       <App />
     </BrowserRouter>

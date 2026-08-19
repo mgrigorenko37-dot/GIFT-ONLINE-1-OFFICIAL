@@ -2,7 +2,7 @@
 import { describe, it, expect, beforeEach, afterEach, afterAll, beforeAll } from 'vitest';
 import { PostgresTradingEngine, Order, FundingWorker } from '../server/tradingEngine';
 import { Pool } from 'pg';
-import { initDbSchema } from '../server';
+import { initDbSchema } from '../server/dbSchema';
 
 describe('Postgres Margin and Isolation Tests', () => {
   let pool: Pool;
@@ -1083,7 +1083,7 @@ describe('Postgres Margin and Isolation Tests', () => {
     );
 
     const execId1 = 'exec_fee_b_1_' + Date.now();
-    const trade1 = await engine.executeTrade(ordId1, 16, 1.0, { executionId: execId1 });
+    const trade1 = await engine.executeTrade(ordId1, 16, 1.0, execId1);
     expect(trade1).not.toBeNull();
 
     // Trade Fee = 16 * 1.0 * 0.0025 = 0.04 TON
@@ -1148,7 +1148,7 @@ describe('Postgres Margin and Isolation Tests', () => {
     expect(balAfterRepeatLiq.available).toBeCloseTo(0.135);
 
     // --- STEP 4: Idempotency - Retry with Same ExecutionId ---
-    const retryTrade = await engine.executeTrade(ordId1, 16, 1.0, { executionId: execId1 });
+    const retryTrade = await engine.executeTrade(ordId1, 16, 1.0, execId1);
     const balAfterRetry = await getBalance(userId, 'TON');
     expect(balAfterRetry.fees).toBeCloseTo(0.08);
     expect(balAfterRetry.available).toBeCloseTo(0.135);
@@ -1161,7 +1161,7 @@ describe('Postgres Margin and Isolation Tests', () => {
       [ordIdStars, userId, 'STARS-USD', 'Buy', 'Limit', 200, 1.0, false, 'Open', 'Open', 0, 200, 0, 0, 'STARS', nowMs, nowMs]
     );
     const execIdStars = 'exec_stars_1_' + Date.now();
-    const tradeStars = await engine.executeTrade(ordIdStars, 200, 1.0, { executionId: execIdStars });
+    const tradeStars = await engine.executeTrade(ordIdStars, 200, 1.0, execIdStars);
     expect(tradeStars).not.toBeNull();
 
     // STARS trade fee = 200 * 1.0 * 0.0025 = 0.50 STARS
@@ -1212,7 +1212,7 @@ describe('Postgres Margin and Isolation Tests', () => {
     );
 
     const execOpenId = 'exec_qty_open_' + Date.now();
-    const openTrade = await engine.executeTrade(openOrdId, initialPosSize, 10.0, { executionId: execOpenId });
+    const openTrade = await engine.executeTrade(openOrdId, initialPosSize, 10.0, execOpenId);
     expect(openTrade?.qty).toBe(initialPosSize);
 
     // Verify initial open position qty = 5

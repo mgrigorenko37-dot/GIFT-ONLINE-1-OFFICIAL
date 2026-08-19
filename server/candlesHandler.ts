@@ -36,6 +36,9 @@ export async function handleGetCandles(req: Request, res: Response) {
     // 2. InstrumentKey and Parameters Resolution & Consistency Check
     let normKey = '';
     if (rawKey) {
+      if (rawKey.split(':').length !== 4) {
+        return res.status(400).json({ error: 'Invalid instrumentKey format. Expected collection:model:backdrop:currency' });
+      }
       // Validate format of rawKey
       let parsed;
       try {
@@ -168,20 +171,6 @@ export async function handleGetCandles(req: Request, res: Response) {
     }
 
     // 6. Fetch Candle History
-
-    const { getMarketRepository } = await import('./marketState');
-    const activeRepository = getMarketRepository();
-    let repoCandles = [];
-    if (activeRepository && typeof activeRepository.getCandles === 'function') {
-      try {
-        const repoRes = await activeRepository.getCandles(normKey, timeframe, { from, to, limit });
-        if (Array.isArray(repoRes)) repoCandles = repoRes;
-        console.log('Fetched from DB for', normKey, 'got rows:', repoRes?.length);
-      } catch (err) {
-        console.error('Failed to fetch from DB', err);
-      }
-    }
-
     const history = getMarketCandlesHistory(normKey, timeframe, {
       from,
       to,
@@ -189,31 +178,6 @@ export async function handleGetCandles(req: Request, res: Response) {
       cursor,
     });
 
-    // Merge repo candles with active/closed in-memory candles
-    const candleMap = new Map();
-    const effectiveFrom = from !== undefined ? from : 0;
-    const effectiveTo = to !== undefined ? to : Number.MAX_SAFE_INTEGER;
-    for (const c of repoCandles) {
-      if (c.startTime >= effectiveFrom && c.startTime < effectiveTo) {
-        candleMap.set(c.startTime, c);
-      }
-    }
-    for (const c of history.candles) {
-      candleMap.set(c.startTime, c);
-    }
-    
-    const mergedCandles = Array.from(candleMap.values()).sort((a, b) => a.startTime - b.startTime);
-    history.candles = mergedCandles;
-
-    
-    history.debug = {
-        repoCandlesLength: repoCandles.length,
-        from,
-        to,
-        limit,
-        normKey,
-        timeframe
-    };
     return res.json(history);
 
   } catch (error: any) {

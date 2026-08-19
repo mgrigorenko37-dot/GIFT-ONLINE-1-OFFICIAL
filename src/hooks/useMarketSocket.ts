@@ -9,12 +9,23 @@ let sharedSocket: Socket | null = null;
 export function getMarketSocket(): Socket {
   if (!sharedSocket) {
     const origin = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000';
+    const initData = typeof window !== 'undefined' ? window.Telegram?.WebApp?.initData : '';
+    
     sharedSocket = io(origin, {
       transports: ['websocket'],
       autoConnect: true,
       reconnection: true,
       reconnectionAttempts: Infinity,
       reconnectionDelay: 1000,
+      auth: (cb) => {
+        const latestInitData = typeof window !== 'undefined' ? window.Telegram?.WebApp?.initData : '';
+        if (latestInitData) {
+          cb({ initData: latestInitData });
+        } else {
+          // Explicit DEMO_AUTH mode for sandboxed browser preview outside Telegram Mini App
+          cb({ demoAuth: true });
+        }
+      },
     });
   }
   return sharedSocket;
@@ -248,135 +259,71 @@ export function useMarketSocket({
           setLastSequence(seq);
           setHasSequenceGap(false);
 
-          const store = candleStoreRef.current;
-          const sales = saleTrackerRef.current;
-
-          // Process snapshot timeframes
-          if (Array.isArray(event.timeframes)) {
-            const tfData = event.timeframes.find(
-              (t: any) => t.timeframe === currentConfig.timeframe
-            );
-            if (tfData) {
-              if (Array.isArray(tfData.closedCandles)) {
-                store.mergeCandles(
-                  tfData.closedCandles.filter(
-                    (c: GiftCandle) =>
-                      (!c.instrumentKey || c.instrumentKey === currentConfig.instrumentKey) &&
-                      (!c.timeframe || c.timeframe === currentConfig.timeframe)
-                  )
-                );
-              }
-              if (tfData.activeCandle) {
-                if (
-                  (!tfData.activeCandle.instrumentKey ||
-                    tfData.activeCandle.instrumentKey === currentConfig.instrumentKey) &&
-                  (!tfData.activeCandle.timeframe ||
-                    tfData.activeCandle.timeframe === currentConfig.timeframe)
-                ) {
-                  store.applyCandle(tfData.activeCandle);
-                }
-              }
-              if (Array.isArray(tfData.candles)) {
-                store.mergeCandles(
-                  tfData.candles.filter(
-                    (c: GiftCandle) =>
-                      (!c.instrumentKey || c.instrumentKey === currentConfig.instrumentKey) &&
-                      (!c.timeframe || c.timeframe === currentConfig.timeframe)
-                  )
-                );
-              }
-            }
-          } else if (event.timeframes && typeof event.timeframes === 'object') {
-            const tfData = event.timeframes[currentConfig.timeframe];
-            if (Array.isArray(tfData)) {
-              store.mergeCandles(
-                tfData.filter(
-                  (c: GiftCandle) =>
-                    (!c.instrumentKey || c.instrumentKey === currentConfig.instrumentKey) &&
-                    (!c.timeframe || c.timeframe === currentConfig.timeframe)
-                )
-              );
-            } else if (tfData && typeof tfData === 'object') {
-              if (Array.isArray(tfData.closedCandles)) {
-                store.mergeCandles(
-                  tfData.closedCandles.filter(
-                    (c: GiftCandle) =>
-                      (!c.instrumentKey || c.instrumentKey === currentConfig.instrumentKey) &&
-                      (!c.timeframe || c.timeframe === currentConfig.timeframe)
-                  )
-                );
-              }
-              if (tfData.activeCandle) {
-                if (
-                  (!tfData.activeCandle.instrumentKey ||
-                    tfData.activeCandle.instrumentKey === currentConfig.instrumentKey) &&
-                  (!tfData.activeCandle.timeframe ||
-                    tfData.activeCandle.timeframe === currentConfig.timeframe)
-                ) {
-                  store.applyCandle(tfData.activeCandle);
-                }
-              }
-            }
-          }
-
           if (Array.isArray(event.recentSales)) {
-            sales.mergeSales(
-              event.recentSales.filter(
-                (s: GiftSale) => !s.instrumentKey || s.instrumentKey === currentConfig.instrumentKey
-              )
-            );
+            saleTrackerRef.current.mergeSales(event.recentSales);
+            setRecentSales(saleTrackerRef.current.getRecentSales());
           }
 
-          setCandles(store.getSortedCandles());
-          setRecentSales(sales.getRecentSales());
-        }
-        return;
-      }
-
-      if (event.type === 'candle_update' || event.type === 'candle_closed') {
-        // Validate timeframe isolation
-        if (event.timeframe && event.timeframe !== currentConfig.timeframe) {
-          return;
-        }
-
-        const seqRes = sequenceTrackerRef.current.processSequence(seq, false);
-        if (seqRes.gap) {
-          setHasSequenceGap(true);
-          // Request snapshot / resync for current active config
-          sendSubscribe(currentConfig);
-          return;
-        }
-
-        if (!seqRes.ok) {
-          // Stale or duplicate sequence
-          return;
-        }
-
-        setLastSequence(seq);
-
-        const store = candleStoreRef.current;
-        const applyRes = store.applyCandle(event.candle);
-
-        if (applyRes.updated) {
-          setCandles(store.getSortedCandles());
-          setLatestEventCandle(event.candle);
+          if (event.timeframes && typeof event.timeframes === 'object') {
+            const tfCandles = event.timeframes[currentConfig.timeframe];
+            if (Array.isArray(tfCandles)) {
+              candleStoreRef.current.mergeCandles(tfCandles);
+              setCandles(candleStoreRef.current.getSortedCandles());
+            }
+          }
         }
         return;
       }
 
       if (event.type === 'sale') {
-        const seqRes = sequenceTrackerRef.current.processSequence(seq, false);
+        const seqRes = sequenceTrackerRef.current.processSequence(seq);
         if (seqRes.gap) {
           setHasSequenceGap(true);
-          sendSubscribe(currentConfig);
-          return;
         }
-
         if (seqRes.ok) {
           setLastSequence(seq);
-          const sales = saleTrackerRef.current;
-          if (sales.addSale(event.sale)) {
-            setRecentSales(sales.getRecentSales());
+          if (event.sale) {
+            saleTrackerRef.current.addSale(event.sale);
+            setRecentSales(saleTrackerRef.current.getRecentSales());
+          }
+        }
+        return;
+      }
+
+      if (
+        event.type === 'candle_open' ||
+        event.type === 'candle_update' ||
+        event.type === 'candle_close'
+      ) {
+        if (event.timeframe === currentConfig.timeframe && event.candle) {
+          const seqRes = sequenceTrackerRef.current.processSequence(seq);
+          if (seqRes.gap) {
+            setHasSequenceGap(true);
+          }
+          if (seqRes.ok) {
+            setLastSequence(seq);
+            const rawCandle = event.candle;
+            const candleStart = rawCandle.startTime ?? (rawCandle.time ? rawCandle.time * 1000 : Date.now());
+            const unifiedCandle: GiftCandle = {
+              startTime: candleStart,
+              endTime: rawCandle.endTime ?? (candleStart + 60000),
+              time: rawCandle.time ?? (rawCandle.startTime ? Math.floor(rawCandle.startTime / 1000) : Math.floor(Date.now() / 1000)),
+              open: rawCandle.open,
+              high: rawCandle.high,
+              low: rawCandle.low,
+              close: rawCandle.close,
+              volume: rawCandle.volume,
+              instrumentKey: currentConfig.instrumentKey,
+              timeframe: currentConfig.timeframe,
+              revision: rawCandle.revision,
+              updatedAt: rawCandle.updatedAt,
+              tradeCount: rawCandle.tradeCount,
+              confirmed: rawCandle.confirmed,
+            };
+
+            candleStoreRef.current.applyCandle(unifiedCandle);
+            setCandles(candleStoreRef.current.getSortedCandles());
+            setLatestEventCandle(unifiedCandle);
           }
         }
         return;
@@ -391,13 +338,26 @@ export function useMarketSocket({
       socket.off('connect', handleConnect);
       socket.off('disconnect', handleDisconnect);
       socket.off('market_event', handleMarketEvent);
-
-      sendUnsubscribe(activeConfigRef.current);
+      if (activeConfigRef.current.instrumentKey) {
+        sendUnsubscribe(activeConfigRef.current);
+      }
     };
-  }, [instrumentKey, timeframe, enabled, sendSubscribe, sendUnsubscribe]);
+  }, [enabled, instrumentKey, timeframe, sendSubscribe, sendUnsubscribe]);
 
-  const chartCandles = candleStoreRef.current.getFormattedChartCandles();
-  const latestChartCandle = candleStoreRef.current.getLatestChartCandle();
+  // Derived formatted chart candles
+  const chartCandles: FormattedChartCandle[] = candles.map((c) => {
+    const t = c.startTime ?? c.time ?? 0;
+    return {
+      time: (t > 1e11 ? Math.floor(t / 1000) : t) as any,
+      open: Number(c.open),
+      high: Number(c.high),
+      low: Number(c.low),
+      close: Number(c.close),
+      volume: Number(c.volume || 0),
+    };
+  });
+
+  const latestChartCandle = chartCandles.length > 0 ? chartCandles[chartCandles.length - 1] : null;
 
   return {
     isConnected,

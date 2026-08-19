@@ -34,8 +34,8 @@ async function run() {
       FROM te_funding_payments
       WHERE ABS(ABS(funding_amount) - (qty * mark_price * ABS(funding_rate))) > 0.001
     `);
-    console.log(`[ASSERT] Correct funding amounts calculated: ${amountCheck.rowCount === 0 ? 'PASS' : 'FAIL'} (${amountCheck.rowCount} found)`);
-    if (amountCheck.rowCount > 0) console.log(amountCheck.rows);
+    console.log(`[ASSERT] Correct funding amounts calculated: ${(amountCheck.rowCount ?? 0) === 0 ? 'PASS' : 'FAIL'} (${amountCheck.rowCount ?? 0} found)`);
+    if ((amountCheck.rowCount ?? 0) > 0) console.log(amountCheck.rows);
 
     // 4. Currency matches
     const currCheck = await pool.query(`
