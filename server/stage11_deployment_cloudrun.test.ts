@@ -6,6 +6,7 @@ import { io as ioc, Socket as ClientSocket } from 'socket.io-client';
 import { getRedisHealthStatus } from './redisManager';
 import { resolveMarketRepository } from './marketRepository';
 import { getMarketRepository, setMarketRepository, initMarketStateRepository } from './marketState';
+import { getSocketCorsOptions } from './corsConfig';
 
 describe('Stage 11: Cloud Run & Multi-Instance Realtime Deployment Verification', () => {
   let app: express.Express;
@@ -77,7 +78,7 @@ describe('Stage 11: Cloud Run & Multi-Instance Realtime Deployment Verification'
     server = createServer(app);
     io = new SocketServer(server, {
       transports: ['websocket', 'polling'],
-      cors: { origin: '*' },
+      cors: getSocketCorsOptions(),
     });
 
     await new Promise<void>((resolve) => {

@@ -18,6 +18,7 @@ import {
   acceptCompletedSale,
 } from './marketState';
 import { InMemoryMarketRepository } from './marketRepository';
+import { getSocketCorsOptions } from './corsConfig';
 
 interface LoadMetrics {
   totalRequests: number;
@@ -102,7 +103,7 @@ describe('Stage 10: Production Load & Stress Testing Harness', () => {
     server = createServer(app);
     io = new SocketIOServer(server, {
       transports: ['websocket'],
-      cors: { origin: '*' },
+      cors: getSocketCorsOptions(),
     });
 
     initRealtimeManager(io);

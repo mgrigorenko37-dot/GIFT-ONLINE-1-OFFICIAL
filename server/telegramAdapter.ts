@@ -112,21 +112,21 @@ export function processTelegramMarketEvent(rawPayload: unknown): IngestionRespon
     return { success: false, processed: false, reason: 'validation_error: price is required' };
   }
   const priceNum = Number(priceRaw);
-  if (isNaN(priceNum) || !isFinite(priceNum) || priceNum <= 0) {
+  if (isNaN(priceNum) || !isFinite(priceNum) || priceNum <= 0 || priceNum > 1e12) {
     return {
       success: false,
       processed: false,
-      reason: 'validation_error: price must be a positive number',
+      reason: 'validation_error: price must be a positive number and not exceed 1e12',
     };
   }
 
   const qtyRaw = p.quantity !== undefined && p.quantity !== null ? p.quantity : 1;
   const qtyNum = Number(qtyRaw);
-  if (isNaN(qtyNum) || !isFinite(qtyNum) || qtyNum <= 0) {
+  if (isNaN(qtyNum) || !isFinite(qtyNum) || qtyNum <= 0 || qtyNum > 1e12) {
     return {
       success: false,
       processed: false,
-      reason: 'validation_error: quantity must be a positive number',
+      reason: 'validation_error: quantity must be a positive number and not exceed 1e12',
     };
   }
 
@@ -138,6 +138,11 @@ export function processTelegramMarketEvent(rawPayload: unknown): IngestionRespon
   // Convert 10-digit seconds timestamp to 13-digit milliseconds timestamp if needed
   if (eventTimeNum > 0 && eventTimeNum < 100000000000) {
     eventTimeNum = eventTimeNum * 1000;
+  }
+
+  // Protect against far future timestamps
+  if (eventTimeNum > Date.now() + 24 * 60 * 60 * 1000) {
+     return { success: false, processed: false, reason: 'validation_error: eventTime is too far in the future' };
   }
 
   // 6. Stable Sale ID & Transaction Hash

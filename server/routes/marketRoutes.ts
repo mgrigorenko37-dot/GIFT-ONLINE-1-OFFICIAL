@@ -10,7 +10,7 @@ import {
 import { getMarketStats } from '../marketStats';
 import { getIndicators } from '../indicatorEngine';
 import { processTelegramMarketEvent } from '../telegramAdapter';
-import { webhookRateLimiter, validateTelegramWebhookSecret } from '../rateLimiter';
+import { webhookRateLimiter, validateTelegramWebhookSecret, validateInternalWorkerAuth } from '../rateLimiter';
 import { getPgPool } from '../marketRepository';
 import { MOCK_GIFTS_FIXTURE } from '../mocks/giftsFixture';
 
@@ -27,10 +27,12 @@ router.post(
   }
 );
 
+// Internal Worker Sales Ingestion
 router.post(
   '/sales/ingest',
-  webhookRateLimiter,
-  validateTelegramWebhookSecret,
+  // Excluded from standard IP rate limiter because this is an internal server-to-server endpoint
+  // that can receive large batches of real-time market data from our workers.
+  validateInternalWorkerAuth,
   (req: express.Request, res: express.Response) => {
     const result = processTelegramMarketEvent(req.body);
     return res.status(result.success ? 200 : 400).json(result);

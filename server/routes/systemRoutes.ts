@@ -1,6 +1,7 @@
 import express from 'express';
 import { getRedisHealthStatus } from '../redisManager';
 import { getMarketRepository } from '../marketState';
+import { isPostgresConfigured } from '../dbConfig';
 
 const router = express.Router();
 
@@ -38,7 +39,7 @@ router.get('/config', (req, res) => {
 router.get(['/health', '/api/health'], (req: express.Request, res: express.Response) => {
   const redisHealth = getRedisHealthStatus();
   const repo = getMarketRepository();
-  const dbConnected = Boolean(process.env.SQL_HOST);
+  const dbConnected = isPostgresConfigured();
   const PORT = Number(process.env.PORT || 3000);
 
   res.status(200).json({
@@ -65,7 +66,7 @@ router.get(['/readiness', '/api/readiness'], (req: express.Request, res: express
   const requireRedis = process.env.REQUIRE_REDIS === 'true';
   const redisHealth = getRedisHealthStatus();
   const isProduction = process.env.NODE_ENV === 'production';
-  const hasDb = Boolean(process.env.SQL_HOST);
+  const hasDb = isPostgresConfigured();
 
   if (requireRedis && !redisHealth.isConnected) {
     return res.status(503).json({
@@ -77,7 +78,7 @@ router.get(['/readiness', '/api/readiness'], (req: express.Request, res: express
   if (isProduction && !hasDb) {
     return res.status(503).json({
       ready: false,
-      reason: 'PostgreSQL (SQL_HOST) is strictly required in production.',
+      reason: 'PostgreSQL (DATABASE_URL) is strictly required in production.',
     });
   }
 

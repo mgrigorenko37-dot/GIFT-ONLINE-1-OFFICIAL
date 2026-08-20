@@ -12,6 +12,7 @@ import {
 import { clearMarketState, acceptCompletedSale } from './marketState';
 import { CandleStore, SequenceTracker } from '../src/lib/realtimeStream';
 import { handleGetCandles } from './candlesHandler';
+import { getSocketCorsOptions } from './corsConfig';
 
 let server: http.Server;
 let ioServer: SocketIOServer;
@@ -24,7 +25,7 @@ beforeAll(async () => {
 
   server = http.createServer(app);
   ioServer = new SocketIOServer(server, {
-    cors: { origin: '*' },
+    cors: getSocketCorsOptions(),
   });
 
   ioServer.on('connection', (socket) => {

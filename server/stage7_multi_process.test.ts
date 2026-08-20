@@ -14,6 +14,7 @@ import {
 import { attachSocketListeners, clearAllSubscriptions, resetSequence } from './realtimeManager';
 import { clearMarketState, acceptCompletedSale } from './marketState';
 import { InMemoryMarketRepository } from './marketRepository';
+import { getSocketCorsOptions } from './corsConfig';
 
 // Shared Redis Bus for multi-instance IPC testing in Vitest
 class SharedRedisMock extends EventEmitter {
@@ -81,14 +82,14 @@ beforeAll(async () => {
   const appA = express();
   appA.use(express.json());
   serverA = http.createServer(appA);
-  ioA = new SocketIOServer(serverA, { cors: { origin: '*' } });
+  ioA = new SocketIOServer(serverA, { cors: getSocketCorsOptions() });
   ioA.on('connection', (s) => attachSocketListeners(s));
 
   // Create Server Instance B
   const appB = express();
   appB.use(express.json());
   serverB = http.createServer(appB);
-  ioB = new SocketIOServer(serverB, { cors: { origin: '*' } });
+  ioB = new SocketIOServer(serverB, { cors: getSocketCorsOptions() });
   ioB.on('connection', (s) => attachSocketListeners(s));
 
   await new Promise<void>((resolve) => {

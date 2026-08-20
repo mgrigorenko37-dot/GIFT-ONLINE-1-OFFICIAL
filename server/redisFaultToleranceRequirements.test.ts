@@ -333,13 +333,14 @@ describe('Redis Fault Tolerance & Multi-Instance Production Rules', () => {
     mockClient.simulateDisconnect();
 
     // Process 2 sales while Redis is down
+    const baseTime = 1710000000000;
     const sale1 = {
       id: 'sale_dup_chk_1',
       collectionId: 'gift_star',
       currency: 'TON',
       price: '10',
       quantity: '1',
-      eventTime: Date.now(),
+      eventTime: baseTime + 1000,
       status: 'completed' as const,
     };
     const sale2 = {
@@ -348,7 +349,7 @@ describe('Redis Fault Tolerance & Multi-Instance Production Rules', () => {
       currency: 'TON',
       price: '15',
       quantity: '1',
-      eventTime: Date.now() + 1000,
+      eventTime: baseTime + 2000,
       status: 'completed' as const,
     };
 

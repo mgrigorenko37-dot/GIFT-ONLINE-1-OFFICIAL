@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import express from 'express';
+import cors from 'cors';
 import { createServer, Server as HttpServer } from 'http';
 import { Server as SocketIOServer } from 'socket.io';
 import { io as SocketIOClient } from 'socket.io-client';
@@ -11,6 +12,7 @@ import {
   restApiRateLimiter,
   requestTimeoutMiddleware,
 } from './rateLimiter';
+import { getExpressCorsOptions } from './corsConfig';
 import {
   handleSubscribe,
   MAX_SUBSCRIPTIONS_PER_SOCKET,
@@ -37,7 +39,7 @@ describe('Stage 8: Security, Rate Limiting & Webhook Protection', () => {
     delete process.env.TELEGRAM_SECRET_TOKEN;
 
     app = express();
-    app.use(corsMiddleware);
+    app.use(cors(getExpressCorsOptions()));
     app.use(express.json({ limit: '100kb' }));
     app.use(requestTimeoutMiddleware(30000));
 
@@ -94,11 +96,6 @@ describe('Stage 8: Security, Rate Limiting & Webhook Protection', () => {
       server.close(() => resolve());
     });
   });
-
-  function corsMiddleware(req: any, res: any, next: any) {
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    next();
-  }
 
   it('1. Requests within rate limit pass successfully', async () => {
     const res = await fetch(`${baseUrl}/api/market/stats`);

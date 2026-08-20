@@ -5,6 +5,7 @@ import { io as ClientIO, Socket as ClientSocket } from 'socket.io-client';
 import crypto from 'crypto';
 import { setupSocketServer } from './socketServer';
 import { PostgresTradingEngine } from './tradingEngine';
+import { getSocketCorsOptions } from './corsConfig';
 
 // Helper to create genuine Telegram WebApp initData HMAC-SHA256
 function generateValidTelegramInitData(
@@ -76,7 +77,7 @@ describe('Socket.IO Strict Telegram Auth & Zero Fallback Tests', () => {
 
     httpServer = createServer();
     ioServer = new SocketIOServer(httpServer, {
-      cors: { origin: '*' },
+      cors: getSocketCorsOptions(),
     });
 
     setupSocketServer(ioServer, mockEngine);

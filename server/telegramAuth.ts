@@ -29,6 +29,8 @@ export function validateTelegramInitData(
     return { isValid: false, error: 'Empty initData' };
   }
 
+  const isProduction = process.env.NODE_ENV === 'production';
+
   try {
     const searchParams = new URLSearchParams(initData);
     const hash = searchParams.get('hash');
@@ -37,9 +39,16 @@ export function validateTelegramInitData(
       return { isValid: false, error: 'Missing hash in initData' };
     }
 
-    // In dev / preview mode where BOT_TOKEN might not be configured, allow mock/fallback safely if explicitly enabled
+    // In production, TELEGRAM_BOT_TOKEN is strictly mandatory and unverified fallback is banned
     if (!botToken) {
-      // If running without bot token in local development, parse user if present
+      if (isProduction) {
+        return {
+          isValid: false,
+          error: 'Production configuration error: TELEGRAM_BOT_TOKEN is not configured',
+        };
+      }
+
+      // Development / Test only fallback when bot token is not configured locally
       const userRaw = searchParams.get('user');
       if (userRaw) {
         try {
@@ -78,14 +87,30 @@ export function validateTelegramInitData(
       .update(dataCheckString)
       .digest('hex');
 
-    if (calculatedHash !== hash) {
+    // Constant-time comparison to prevent timing attacks
+    const calculatedBuffer = Buffer.from(calculatedHash, 'utf8');
+    const hashBuffer = Buffer.from(hash, 'utf8');
+    if (
+      calculatedBuffer.length !== hashBuffer.length ||
+      !crypto.timingSafeEqual(calculatedBuffer, hashBuffer)
+    ) {
       return { isValid: false, error: 'Invalid hash signature' };
     }
 
-    // Check auth_date for expiration (optional / max 24 hours)
+    // Check auth_date for expiration (max 7 days / 604800 seconds to protect active sessions while preventing replay attacks)
     const authDate = Number(searchParams.get('auth_date'));
-    if (authDate && Date.now() / 1000 - authDate > 86400 * 7) {
-      // 7 days window
+    if (!authDate || Number.isNaN(authDate)) {
+      return { isValid: false, error: 'Missing or invalid auth_date' };
+    }
+
+    const nowSeconds = Math.floor(Date.now() / 1000);
+    // Reject future auth_date with a 5-minute clock drift margin
+    if (authDate > nowSeconds + 300) {
+      return { isValid: false, error: 'Future auth_date rejected' };
+    }
+
+    // 7-day TTL window (86400 * 7 seconds)
+    if (nowSeconds - authDate > 86400 * 7) {
       return { isValid: false, error: 'InitData expired' };
     }
 
@@ -93,6 +118,10 @@ export function validateTelegramInitData(
     const userString = searchParams.get('user');
     if (userString) {
       user = JSON.parse(userString) as ValidatedTelegramUser;
+    }
+
+    if (!user || typeof user.id !== 'number') {
+      return { isValid: false, error: 'Missing or invalid user object in initData' };
     }
 
     return {

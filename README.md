@@ -84,16 +84,22 @@ React 19 + Vite Frontend (TradingView Charts, ApexCharts, Real-time Stream)
 
 Configure `.env` or set environment variables:
 
+**Primary (Production & Cloud Run):**
 ```env
 PORT=3000
 DATABASE_URL=postgresql://user:password@localhost:5432/gx_exchange
+ALLOWED_ORIGINS=https://exchange.example.com,https://web.telegram.org,https://webk.telegram.org,https://webz.telegram.org
+TELEGRAM_BOT_TOKEN=your_bot_token
+EXCHANGE_HOT_WALLET_ADDRESS=your_ton_hot_wallet_address
+```
+
+**Optional Local Development Fallback (only if `DATABASE_URL` is omitted):**
+```env
 SQL_HOST=localhost
 SQL_PORT=5432
 SQL_USER=postgres
 SQL_PASSWORD=secret
 SQL_DATABASE=gx_exchange
-TELEGRAM_BOT_TOKEN=your_bot_token
-EXCHANGE_HOT_WALLET_ADDRESS=your_ton_hot_wallet_address
 ```
 
 ### Running Locally

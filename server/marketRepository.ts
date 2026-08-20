@@ -3,6 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
 import { Pool, PoolConfig } from 'pg';
+import { getPostgresConfig, isPostgresConfigured } from './dbConfig';
 
 declare global {
   var _postgresPool: Pool | undefined;
@@ -398,34 +399,16 @@ export function getPgPool(): Pool {
     return global._postgresPool;
   }
 
-  if (process.env.DATABASE_URL) {
-    global._postgresPool = new Pool({
-      connectionString: process.env.DATABASE_URL,
-      max: 20,
-    });
-    global._postgresPool.on('error', (err) => {
-      console.error('Unexpected error on idle SQL pool client:', err);
-    });
-    return global._postgresPool;
+  const { isConfigured, config } = getPostgresConfig();
+  if (!isConfigured || !config) {
+    throw new Error('Neither DATABASE_URL nor SQL_HOST is configured');
   }
 
-  if (process.env.SQL_HOST) {
-    global._postgresPool = new Pool({
-      host: process.env.SQL_HOST,
-      user: process.env.SQL_USER,
-      password: process.env.SQL_PASSWORD,
-      database: process.env.SQL_DB_NAME,
-      max: 20,
-    });
-
-    global._postgresPool.on('error', (err) => {
-      console.error('Unexpected error on idle SQL pool client:', err);
-    });
-
-    return global._postgresPool;
-  }
-
-  throw new Error('Neither DATABASE_URL nor SQL_HOST is configured');
+  global._postgresPool = new Pool(config);
+  global._postgresPool.on('error', (err) => {
+    console.error('Unexpected error on idle SQL pool client:', err);
+  });
+  return global._postgresPool;
 }
 
 export class PostgresMarketRepository implements IMarketRepository {
@@ -438,12 +421,17 @@ export class PostgresMarketRepository implements IMarketRepository {
     } else if (connectionStringOrConfig) {
       this.pool = new Pool(connectionStringOrConfig);
     } else {
-      this.pool = new Pool({
-        host: process.env.SQL_HOST,
-        user: process.env.SQL_USER,
-        password: process.env.SQL_PASSWORD,
-        database: process.env.SQL_DB_NAME,
-      });
+      const { config } = getPostgresConfig();
+      if (config) {
+        this.pool = new Pool(config);
+      } else {
+        this.pool = new Pool({
+          host: process.env.SQL_HOST,
+          user: process.env.SQL_USER,
+          password: process.env.SQL_PASSWORD,
+          database: process.env.SQL_DATABASE || process.env.SQL_DB_NAME,
+        });
+      }
     }
 
     this.pool.on('error', (err) => {
@@ -1079,7 +1067,7 @@ export class PostgresMarketRepository implements IMarketRepository {
  */
 export function resolveMarketRepository(): IMarketRepository {
   const isProduction = process.env.NODE_ENV === 'production';
-  const hasDatabaseUrl = Boolean(process.env.DATABASE_URL || process.env.SQL_HOST);
+  const hasDatabaseUrl = isPostgresConfigured();
   const storageMode = process.env.STORAGE_MODE;
   const allowFileInProd = process.env.ALLOW_FILE_STORAGE_IN_PRODUCTION === 'true';
 
@@ -1095,7 +1083,7 @@ export function resolveMarketRepository(): IMarketRepository {
       console.error(errMsg);
       throw new Error(errMsg);
     }
-    console.log('Production Persistence: Initializing PostgresMarketRepository with DATABASE_URL.');
+    console.log('Production Persistence: Initializing PostgresMarketRepository with PostgreSQL configuration.');
     return new PostgresMarketRepository();
   }
 
