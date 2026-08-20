@@ -519,7 +519,7 @@ describe('GX Exchange — End-to-End Primary Financial Scenario (PostgreSQL & Mo
       expect(wdRecord.funds_released).toBe(false);
 
       // 3. Process withdrawal with WithdrawalWorker & MockTonTransferAdapter
-      const mockAdapter = new MockTonTransferAdapter(true, 'tx_hash_e2e_successful_transfer_123');
+      const mockAdapter = new MockTonTransferAdapter({ shouldFail: false });
       const worker = new WithdrawalWorker(pool, {
         adapter: mockAdapter,
         workerId: 'e2e_test_worker',
