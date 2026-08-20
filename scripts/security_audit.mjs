@@ -117,7 +117,10 @@ const financialFiles = [
   'server/invoiceService.ts',
   'server/withdrawalWorker.ts',
   'server/tonAdapter.ts',
-  'server/tradingEngine.ts',
+  'server/trading/orderManager.ts',
+  'server/trading/positionManager.ts',
+  'server/trading/liquidationManager.ts',
+  'server/trading/fundingManager.ts',
   'server/schedulerLease.ts',
 ];
 

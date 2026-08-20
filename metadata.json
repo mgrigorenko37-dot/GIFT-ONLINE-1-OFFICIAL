@@ -1,6 +1,6 @@
 {
-  "name": "TG Gift Exchange",
-  "description": "A Telegram Mini App marketplace for exchanging gifts using Telegram Stars.",
+  "name": "GX Exchange",
+  "description": "Official trading terminal and exchange for Telegram Gifts and collectibles.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

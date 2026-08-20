@@ -1,7 +1,0 @@
-const fs = require('fs');
-let code = fs.readFileSync('tests/postgresql_margin_tests.test.ts', 'utf8');
-code = code.replace(
-  "it('31. Liquidation of Short position when mark price rises above maintenance margin', async () => {\n    const userId = 'liq_user_1_1786372419';\n    await pool.query('INSERT INTO te_balances (user_id, currency, available_balance, locked_balance, realized_pnl, total_fees, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, extract(epoch from now()) * 1000, extract(epoch from now()) * 1000)', [userId, 'TON', 20, 0, 0, 0]);\n\n    const order = await engine.placeOrder({\n      userId,\n      instrumentKey: 'TON-USD',\n      side: 'Buy',",
-  "it('31. Liquidation of Short position when mark price rises above maintenance margin', async () => {\n    const userId = 'liq_user_1_1786372419';\n    await pool.query('INSERT INTO te_balances (user_id, currency, available_balance, locked_balance, realized_pnl, total_fees, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, extract(epoch from now()) * 1000, extract(epoch from now()) * 1000)', [userId, 'TON', 20, 0, 0, 0]);\n\n    const order = await engine.placeOrder({\n      userId,\n      instrumentKey: 'TON-USD',\n      side: 'Sell',"
-);
-fs.writeFileSync('tests/postgresql_margin_tests.test.ts', code);

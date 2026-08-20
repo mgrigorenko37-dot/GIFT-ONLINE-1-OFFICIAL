@@ -1,8 +1,8 @@
 # GX Exchange — Telegram Mini App for Collectible Gift Trading
 
-[![CI](https://github.com/gx-exchange/gx-exchange/actions/workflows/ci.yml/badge.svg)](https://github.com/gx-exchange/gx-exchange/actions/workflows/ci.yml)
+[![CI](https://github.com/mgrigorenko37-dot/GIFT-ONLINE-1-OFFICIAL/actions/workflows/ci.yml/badge.svg)](https://github.com/mgrigorenko37-dot/GIFT-ONLINE-1-OFFICIAL/actions/workflows/ci.yml)
 
-**GX Exchange** is a high-performance Telegram Mini App and trading terminal designed specifically for fractional and whole collectible Telegram Gifts trading. It combines modern React frontend, real-time WebSocket matching, PostgreSQL trading persistence, and robust TON blockchain integration.
+**GX Exchange** is a high-performance Telegram Mini App and trading terminal designed specifically for fractional and whole collectible Telegram Gifts trading. It combines a modern React 19 frontend, real-time WebSocket matching, PostgreSQL trading persistence, and robust TON blockchain integration.
 
 ---
 
@@ -12,7 +12,7 @@
 Telegram Mini App / Browser
         │
         ▼
-React + Vite Frontend (Tailwind CSS, Trading Terminal, Real-time Charts)
+React 19 + Vite Frontend (TradingView Charts, ApexCharts, Real-time Stream)
         │
         ├── REST API (Telegram HMAC Auth, Invoices, Withdrawals)
         │                           │
@@ -59,17 +59,17 @@ React + Vite Frontend (Tailwind CSS, Trading Terminal, Real-time Charts)
 
 6. **Interactive Terminal & Real-Time Charts**:
    - Live Order Book (pure real liquidity from Postgres).
-   - Real-time candlestick charts, recent trades, active orders, and position management.
+   - Real-time candlestick charts (TradingView Lightweight Charts & ApexCharts), recent trades, active orders, and position management.
 
 ---
 
 ## 🛠 Tech Stack
 
-- **Frontend**: React 18, Vite, TypeScript, Tailwind CSS, Lucide React, Canvas Candles.
-- **Backend**: Node.js, Express, TypeScript (`tsx`), Socket.io, `pg` (PostgreSQL client).
+- **Frontend**: React 19, Vite, TypeScript, TradingView Lightweight Charts, ApexCharts, Custom Dark Theme CSS, Material Icons.
+- **Backend**: Node.js 18+, Express 5, TypeScript (`tsx`), Socket.io, `pg` (PostgreSQL client), `decimal.js` (financial precision math).
 - **Database**: PostgreSQL with ACID transactions, Outbox Pattern, and optimistic locking.
-- **Cache & Realtime**: Redis adapter for Socket.io clustering (with fallback for standalone mode).
-- **Blockchain**: TON Blockchain integration, TonAPI v2, Telegram WebApp SDK.
+- **Cache & Realtime**: Redis adapter (`ioredis`, `@socket.io/redis-adapter`) for Socket.io clustering (with fallback for standalone mode).
+- **Blockchain**: TON Blockchain integration (`@ton/core`, `@ton/ton`, `@ton/crypto`, `@tonconnect/ui-react`), TonAPI v2, Telegram WebApp SDK.
 
 ---
 

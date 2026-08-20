@@ -390,6 +390,11 @@ describe('PostgresTradingEngine Real DB Tests', () => {
     await pool.query('DELETE FROM te_balances');
     await pool.query('DELETE FROM te_executions');
 
+    await pool.query(
+      "INSERT INTO te_balances (user_id, currency, available_balance, updated_at, created_at) VALUES ($1, 'TON', $2, $3, $3)",
+      ['user1', 10000, Date.now()]
+    );
+
     const o = await engine.placeOrder({
       userId: 'user1',
       instrumentKey: 'TON-USDT',
