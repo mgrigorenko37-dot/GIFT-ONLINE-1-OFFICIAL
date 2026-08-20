@@ -47,11 +47,15 @@ export type AuthenticatedSocketContext = AuthenticatedTelegramContext | DemoCont
 export function isTelegramContext(
   ctx: AuthenticatedSocketContext
 ): ctx is AuthenticatedTelegramContext {
-  return Boolean(ctx && ctx.type === 'telegram' && ctx.isDemo === false && typeof ctx.userId === 'string');
+  return Boolean(
+    ctx && ctx.type === 'telegram' && ctx.isDemo === false && typeof ctx.userId === 'string'
+  );
 }
 
 export function isDemoContext(ctx: AuthenticatedSocketContext): ctx is DemoContext {
-  return Boolean(ctx && ctx.type === 'demo' && ctx.isDemo === true && typeof ctx.demoId === 'string');
+  return Boolean(
+    ctx && ctx.type === 'demo' && ctx.isDemo === true && typeof ctx.demoId === 'string'
+  );
 }
 
 export async function handleGetUserOrders(

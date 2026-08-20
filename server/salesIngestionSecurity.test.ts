@@ -20,7 +20,7 @@ describe('Sales Ingestion Security & Payload Validation', () => {
       const result = processTelegramMarketEvent(req.body);
       res.status(result.success ? 200 : 400).json(result);
     });
-    
+
     clearMarketState();
   });
 
@@ -30,9 +30,7 @@ describe('Sales Ingestion Security & Payload Validation', () => {
 
   function signPayload(payload: any, timestamp: number, secret: string) {
     const payloadStr = JSON.stringify(payload);
-    return crypto.createHmac('sha256', secret)
-      .update(`${timestamp}.${payloadStr}`)
-      .digest('hex');
+    return crypto.createHmac('sha256', secret).update(`${timestamp}.${payloadStr}`).digest('hex');
   }
 
   it('1. Rejects request without authorization headers', async () => {
@@ -92,7 +90,7 @@ describe('Sales Ingestion Security & Payload Validation', () => {
       quantity: '1',
       event_time: Date.now(),
       transaction_hash: 'tx123',
-      gift_id: 'g1'
+      gift_id: 'g1',
     };
     const ts = Date.now();
     const sig = signPayload(payload, ts, SECRET);
@@ -157,7 +155,7 @@ describe('Sales Ingestion Security & Payload Validation', () => {
         price: t.price,
         quantity: t.quantity,
         event_time: Date.now(),
-        transaction_hash: 'tx123'
+        transaction_hash: 'tx123',
       };
       const ts = Date.now();
       const sig = signPayload(payload, ts, SECRET);
@@ -173,5 +171,4 @@ describe('Sales Ingestion Security & Payload Validation', () => {
       expect(res.body.reason).toContain(t.reason);
     }
   });
-
 });

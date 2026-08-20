@@ -123,14 +123,7 @@ export class PostgresTradingEngine extends EventEmitter {
     executionId?: string,
     options?: { source?: string; externalExecutionId?: string }
   ): Promise<Trade | null> {
-    return orderManager.executeTrade(
-      this.pool,
-      orderId,
-      fillQty,
-      fillPrice,
-      executionId,
-      options
-    );
+    return orderManager.executeTrade(this.pool, orderId, fillQty, fillPrice, executionId, options);
   }
 
   public async updateMarkPrice(instrumentKey: string, markPrice: number): Promise<void> {

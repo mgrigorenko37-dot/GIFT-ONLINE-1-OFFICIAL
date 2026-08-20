@@ -10,7 +10,11 @@ import {
 import { getMarketStats } from '../marketStats';
 import { getIndicators } from '../indicatorEngine';
 import { processTelegramMarketEvent } from '../telegramAdapter';
-import { webhookRateLimiter, validateTelegramWebhookSecret, validateInternalWorkerAuth } from '../rateLimiter';
+import {
+  webhookRateLimiter,
+  validateTelegramWebhookSecret,
+  validateInternalWorkerAuth,
+} from '../rateLimiter';
 import { getPgPool } from '../marketRepository';
 import { MOCK_GIFTS_FIXTURE } from '../mocks/giftsFixture';
 

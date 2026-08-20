@@ -116,12 +116,10 @@ describe('GX Exchange — End-to-End Primary Financial Scenario (PostgreSQL & Mo
 
       mockTelegramAuth(sellerId);
 
-      const res = await supertest(app)
-        .post('/api/user/wallet')
-        .send({
-          initData: 'valid_telegram_init_data_for_auth',
-          walletAddress: sellerWallet,
-        });
+      const res = await supertest(app).post('/api/user/wallet').send({
+        initData: 'valid_telegram_init_data_for_auth',
+        walletAddress: sellerWallet,
+      });
 
       expect(res.status).toBe(200);
       expect(res.body.success).toBe(true);
@@ -140,12 +138,10 @@ describe('GX Exchange — End-to-End Primary Financial Scenario (PostgreSQL & Mo
         user: undefined,
       });
 
-      const res = await supertest(app)
-        .post('/api/user/wallet')
-        .send({
-          initData: 'forged_tampered_init_data',
-          walletAddress: 'EQCD39VS5jcptHL8vMjEXrzGaRcCVYto7HUn4bpAOg8xqB2N',
-        });
+      const res = await supertest(app).post('/api/user/wallet').send({
+        initData: 'forged_tampered_init_data',
+        walletAddress: 'EQCD39VS5jcptHL8vMjEXrzGaRcCVYto7HUn4bpAOg8xqB2N',
+      });
 
       expect(res.status).toBe(401);
       expect(res.body.error).toContain('Unauthorized');
@@ -415,7 +411,11 @@ describe('GX Exchange — End-to-End Primary Financial Scenario (PostgreSQL & Mo
             newSellerAvailable.toString(),
             '0',
             '0',
-            JSON.stringify({ buyerId, grossPrice: itemPrice.toString(), fee: commission.toString() }),
+            JSON.stringify({
+              buyerId,
+              grossPrice: itemPrice.toString(),
+              fee: commission.toString(),
+            }),
             now,
           ]
         );

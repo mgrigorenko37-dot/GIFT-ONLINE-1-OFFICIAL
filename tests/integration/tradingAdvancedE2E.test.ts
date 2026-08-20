@@ -45,8 +45,10 @@ describe('Trading Advanced Flow (Margin, PnL, Liquidation, Funding, Partial)', (
       reduceOnly: false,
       qty: 2,
       price: 10,
-      currency: 'TON',
-      executionId: 'exec_sell_1'
+      settlementCurrency: 'TON',
+      collateralCurrency: 'TON',
+      feeCurrency: 'TON',
+      pnlCurrency: 'TON',
     });
     expect(sellOrder.status).toBe('Open');
 
@@ -59,10 +61,12 @@ describe('Trading Advanced Flow (Margin, PnL, Liquidation, Funding, Partial)', (
       reduceOnly: false,
       qty: 1,
       price: 10,
-      currency: 'TON',
-      executionId: 'exec_buy_1'
+      settlementCurrency: 'TON',
+      collateralCurrency: 'TON',
+      feeCurrency: 'TON',
+      pnlCurrency: 'TON',
     });
-    
+
     await engine.executeTrade(buyOrder.orderId, 1, 10, 'trade_exec_buy_1');
     await engine.executeTrade(sellOrder.orderId, 1, 10, 'trade_exec_sell_1');
 
@@ -75,7 +79,10 @@ describe('Trading Advanced Flow (Margin, PnL, Liquidation, Funding, Partial)', (
     expect(refreshedBuy?.status).toBe('Filled');
 
     // Check balances
-    const buyerBalance = await pool.query("SELECT available_balance, locked_balance FROM te_balances WHERE user_id=$1 AND currency='TON'", [buyerId]);
+    const buyerBalance = await pool.query(
+      "SELECT available_balance, locked_balance FROM te_balances WHERE user_id=$1 AND currency='TON'",
+      [buyerId]
+    );
     expect(Number(buyerBalance.rows[0].available_balance)).toBeLessThan(1000);
   });
 
@@ -88,17 +95,25 @@ describe('Trading Advanced Flow (Margin, PnL, Liquidation, Funding, Partial)', (
       reduceOnly: false,
       qty: 5,
       price: 100, // 500 TON reserved
-      currency: 'TON',
-      executionId: 'exec_buy_2'
+      settlementCurrency: 'TON',
+      collateralCurrency: 'TON',
+      feeCurrency: 'TON',
+      pnlCurrency: 'TON',
     });
 
-    let balance = await pool.query("SELECT available_balance, locked_balance FROM te_balances WHERE user_id=$1 AND currency='TON'", [buyerId]);
+    let balance = await pool.query(
+      "SELECT available_balance, locked_balance FROM te_balances WHERE user_id=$1 AND currency='TON'",
+      [buyerId]
+    );
     expect(Number(balance.rows[0].locked_balance)).toBeGreaterThanOrEqual(500);
 
     const cancelled = await engine.cancelOrder(buyOrder.orderId);
     expect(cancelled?.status).toBe('Cancelled');
 
-    balance = await pool.query("SELECT available_balance, locked_balance FROM te_balances WHERE user_id=$1 AND currency='TON'", [buyerId]);
+    balance = await pool.query(
+      "SELECT available_balance, locked_balance FROM te_balances WHERE user_id=$1 AND currency='TON'",
+      [buyerId]
+    );
     expect(Number(balance.rows[0].locked_balance)).toBe(0);
     expect(Number(balance.rows[0].available_balance)).toBe(1000); // completely restored
   });
@@ -112,8 +127,10 @@ describe('Trading Advanced Flow (Margin, PnL, Liquidation, Funding, Partial)', (
       reduceOnly: false,
       qty: 1,
       price: 10,
-      currency: 'TON',
-      executionId: 'exec_margin_1'
+      settlementCurrency: 'TON',
+      collateralCurrency: 'TON',
+      feeCurrency: 'TON',
+      pnlCurrency: 'TON',
     });
 
     const sellOrder = await engine.placeOrder({
@@ -124,16 +141,21 @@ describe('Trading Advanced Flow (Margin, PnL, Liquidation, Funding, Partial)', (
       reduceOnly: false,
       qty: 1,
       price: 10,
-      currency: 'TON',
-      executionId: 'exec_margin_sell_1'
+      settlementCurrency: 'TON',
+      collateralCurrency: 'TON',
+      feeCurrency: 'TON',
+      pnlCurrency: 'TON',
     });
 
     await engine.executeTrade(buyOrder.orderId, 1, 10, 'trade_margin_1');
     await engine.executeTrade(sellOrder.orderId, 1, 10, 'trade_margin_sell_1');
 
     await engine.updateMarkPrice('BTC/TON', 1);
-    
-    await pool.query("UPDATE te_balances SET available_balance=5 WHERE user_id=$1 AND currency='TON'", [marginTraderId]);
+
+    await pool.query(
+      "UPDATE te_balances SET available_balance=5 WHERE user_id=$1 AND currency='TON'",
+      [marginTraderId]
+    );
     await engine.updateMarkPrice('BTC/TON', 1);
 
     const liquidationResult = await engine.liquidateUser(null, marginTraderId, 'TON', 'exec_liq_1');
@@ -149,16 +171,18 @@ describe('Trading Advanced Flow (Margin, PnL, Liquidation, Funding, Partial)', (
       reduceOnly: false,
       qty: 2,
       price: 50,
-      currency: 'TON',
-      executionId: 'exec_fund_buy'
+      settlementCurrency: 'TON',
+      collateralCurrency: 'TON',
+      feeCurrency: 'TON',
+      pnlCurrency: 'TON',
     });
-    
+
     await engine.executeTrade(buyOrder.orderId, 2, 50, 'trade_fund_1');
 
     const fundingResult = await engine.applyFundingRate(null, {
       instrumentKey: 'BTC/TON',
       fundingRate: 0.01,
-      fundingTimestamp: Date.now()
+      fundingTimestamp: Date.now(),
     });
 
     expect(Array.isArray(fundingResult)).toBe(true);

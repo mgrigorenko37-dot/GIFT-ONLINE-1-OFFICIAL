@@ -429,7 +429,10 @@ export async function processSuccessfulStarsPayment(
       };
     }
 
-    if (String(invoice.user_id) !== String(userId) || Number(invoice.stars_amount) !== Number(stars)) {
+    if (
+      String(invoice.user_id) !== String(userId) ||
+      Number(invoice.stars_amount) !== Number(stars)
+    ) {
       await client.query('ROLLBACK');
       return {
         success: false,

@@ -442,9 +442,7 @@ describe('Socket.IO Strict Telegram Auth & Zero Fallback Tests', () => {
         amount: 1,
         price: 5,
       })
-    ).rejects.toThrow(
-      'Security Error: Financial operations require AuthenticatedTelegramContext.'
-    );
+    ).rejects.toThrow('Security Error: Financial operations require AuthenticatedTelegramContext.');
     await expect(handleCancelOrder(demoCtx, mockEngine, 'ord_1')).rejects.toThrow(
       'Security Error: Financial operations require AuthenticatedTelegramContext.'
     );

@@ -142,7 +142,11 @@ export function processTelegramMarketEvent(rawPayload: unknown): IngestionRespon
 
   // Protect against far future timestamps
   if (eventTimeNum > Date.now() + 24 * 60 * 60 * 1000) {
-     return { success: false, processed: false, reason: 'validation_error: eventTime is too far in the future' };
+    return {
+      success: false,
+      processed: false,
+      reason: 'validation_error: eventTime is too far in the future',
+    };
   }
 
   // 6. Stable Sale ID & Transaction Hash

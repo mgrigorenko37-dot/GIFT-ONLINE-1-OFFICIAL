@@ -106,13 +106,11 @@ describe('Dedicated Real PostgreSQL Integration Tests — Telegram Stars Payment
     });
 
     // Attempt request with a spoofed userId in request body
-    const res = await supertest(app)
-      .post('/api/create-invoice')
-      .send({
-        initData: 'valid_telegram_init_data',
-        starsAmount: 100,
-        userId: 'spoofed_hacker_user_999999', // Attacker trying to substitute userId
-      });
+    const res = await supertest(app).post('/api/create-invoice').send({
+      initData: 'valid_telegram_init_data',
+      starsAmount: 100,
+      userId: 'spoofed_hacker_user_999999', // Attacker trying to substitute userId
+    });
 
     expect(res.status).toBe(200);
     expect(res.body.success).toBe(true);
@@ -225,10 +223,9 @@ describe('Dedicated Real PostgreSQL Integration Tests — Telegram Stars Payment
         );
         dbStateInsideFetch = queryRes.rows[0];
 
-        return new Response(
-          JSON.stringify({ ok: true, result: 'https://t.me/$invoice_link' }),
-          { status: 200 }
-        );
+        return new Response(JSON.stringify({ ok: true, result: 'https://t.me/$invoice_link' }), {
+          status: 200,
+        });
       }
       return new Response(JSON.stringify({ ok: true }), { status: 200 });
     });
@@ -511,15 +508,7 @@ describe('Dedicated Real PostgreSQL Integration Tests — Telegram Stars Payment
     await pool.query(
       `INSERT INTO te_payments (id, invoice_id, user_id, amount, currency, telegram_payment_charge_id, created_at)
        VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-      [
-        `pay_1_${createUniqueUserId()}`,
-        invoiceId1,
-        userId,
-        '100',
-        'STARS',
-        chargeId,
-        now,
-      ]
+      [`pay_1_${createUniqueUserId()}`, invoiceId1, userId, '100', 'STARS', chargeId, now]
     );
 
     // Attempt second SQL insert with identical telegram_payment_charge_id
@@ -528,15 +517,7 @@ describe('Dedicated Real PostgreSQL Integration Tests — Telegram Stars Payment
       await pool.query(
         `INSERT INTO te_payments (id, invoice_id, user_id, amount, currency, telegram_payment_charge_id, created_at)
          VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-        [
-          `pay_2_${createUniqueUserId()}`,
-          invoiceId2,
-          userId,
-          '100',
-          'STARS',
-          chargeId,
-          now,
-        ]
+        [`pay_2_${createUniqueUserId()}`, invoiceId2, userId, '100', 'STARS', chargeId, now]
       );
     } catch (err: any) {
       errorCaught = err;
@@ -583,9 +564,7 @@ describe('Dedicated Real PostgreSQL Integration Tests — Telegram Stars Payment
     };
 
     // First Webhook POST
-    const res1 = await supertest(app)
-      .post('/api/telegram/payment-webhook')
-      .send(webhookBody);
+    const res1 = await supertest(app).post('/api/telegram/payment-webhook').send(webhookBody);
 
     expect(res1.status).toBe(200);
     expect(res1.body.ok).toBe(true);
@@ -595,9 +574,7 @@ describe('Dedicated Real PostgreSQL Integration Tests — Telegram Stars Payment
     expect(bal1!.available_balance.toString()).toBe('100');
 
     // Second Webhook POST (Duplicate)
-    const res2 = await supertest(app)
-      .post('/api/telegram/payment-webhook')
-      .send(webhookBody);
+    const res2 = await supertest(app).post('/api/telegram/payment-webhook').send(webhookBody);
 
     expect(res2.status).toBe(200);
     expect(res2.body.ok).toBe(true);

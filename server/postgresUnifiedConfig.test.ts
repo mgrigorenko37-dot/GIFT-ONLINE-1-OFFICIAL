@@ -1,11 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import express from 'express';
 import { createServer, Server as HttpServer } from 'http';
-import {
-  getPostgresConfig,
-  isPostgresConfigured,
-  getSanitizedDbTarget,
-} from './dbConfig';
+import { getPostgresConfig, isPostgresConfigured, getSanitizedDbTarget } from './dbConfig';
 import systemRoutes from './routes/systemRoutes';
 import { getPgPool } from './marketRepository';
 
@@ -41,7 +37,8 @@ describe('PostgreSQL Unified Configuration & Readiness Verification', () => {
   });
 
   it('1. DATABASE_URL задан: config uses DATABASE_URL as primary source', () => {
-    process.env.DATABASE_URL = 'postgresql://custom_user:secret_pass@dbhost.internal:5432/gx_prod_db';
+    process.env.DATABASE_URL =
+      'postgresql://custom_user:secret_pass@dbhost.internal:5432/gx_prod_db';
     delete process.env.SQL_HOST;
     delete process.env.SQL_PORT;
 
@@ -144,6 +141,8 @@ describe('PostgreSQL Unified Configuration & Readiness Verification', () => {
     const result = getPostgresConfig();
     expect(result.isConfigured).toBe(true);
     expect(result.source).toBe('DATABASE_URL');
-    expect(result.config?.connectionString).toBe('postgresql://primary:pass@cloudsql.internal:5432/primary_db');
+    expect(result.config?.connectionString).toBe(
+      'postgresql://primary:pass@cloudsql.internal:5432/primary_db'
+    );
   });
 });

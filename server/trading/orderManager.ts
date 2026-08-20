@@ -7,9 +7,10 @@ import { recordPositionSnapshot } from './positionManager';
 import * as crypto from 'crypto';
 
 export async function getUserOrders(pool: Pool, userId: string): Promise<Order[]> {
-  const res = await pool.query('SELECT * FROM te_orders WHERE user_id = $1 ORDER BY created_at DESC', [
-    userId,
-  ]);
+  const res = await pool.query(
+    'SELECT * FROM te_orders WHERE user_id = $1 ORDER BY created_at DESC',
+    [userId]
+  );
   return res.rows.map((r) => mapOrder(r));
 }
 
@@ -206,11 +207,7 @@ export async function placeOrder(
     }
 
     if (order.status !== 'Rejected') {
-      const updatedMargin = await calculateMargin(
-        client,
-        order.userId,
-        order.collateralCurrency
-      );
+      const updatedMargin = await calculateMargin(client, order.userId, order.collateralCurrency);
       await client.query(
         `UPDATE te_balances SET locked_balance=$1, updated_at=$2 WHERE user_id=$3 AND currency=$4`,
         [updatedMargin.usedMargin, Date.now(), order.userId, order.collateralCurrency]
@@ -249,10 +246,9 @@ export async function cancelOrder(pool: Pool, orderId: string): Promise<Order | 
       initialOrder.collateral_currency ||
       getInstrumentConfig(initialOrder.instrument_key).collateralCurrency;
     await lockMarginResources(client, initialOrder.user_id, currency);
-    const orderRes = await client.query(
-      'SELECT * FROM te_orders WHERE order_id = $1 FOR UPDATE',
-      [orderId]
-    );
+    const orderRes = await client.query('SELECT * FROM te_orders WHERE order_id = $1 FOR UPDATE', [
+      orderId,
+    ]);
     if (orderRes.rows.length === 0) {
       try {
         await client.query('ROLLBACK');
@@ -263,17 +259,14 @@ export async function cancelOrder(pool: Pool, orderId: string): Promise<Order | 
     if (order.status === 'Open' || order.status === 'PartiallyFilled') {
       order.status = 'Cancelled';
       order.updatedAt = Date.now();
-      await client.query(
-        'UPDATE te_orders SET status = $1, updated_at = $2 WHERE order_id = $3',
-        [order.status, order.updatedAt, order.orderId]
-      );
+      await client.query('UPDATE te_orders SET status = $1, updated_at = $2 WHERE order_id = $3', [
+        order.status,
+        order.updatedAt,
+        order.orderId,
+      ]);
 
       // Update locked_balance after cancellation
-      const updatedMargin = await calculateMargin(
-        client,
-        order.userId,
-        order.collateralCurrency
-      );
+      const updatedMargin = await calculateMargin(client, order.userId, order.collateralCurrency);
       await client.query(
         `UPDATE te_balances SET locked_balance=$1, updated_at=$2 WHERE user_id=$3 AND currency=$4`,
         [updatedMargin.usedMargin, order.updatedAt, order.userId, order.collateralCurrency]
@@ -383,10 +376,9 @@ export async function executeTrade(
         `Invalid fill quantity: fillQty must be strictly positive (> 0), received ${fillQty}`
       );
     }
-    const orderRes = await client.query(
-      'SELECT * FROM te_orders WHERE order_id = $1 FOR UPDATE',
-      [orderId]
-    );
+    const orderRes = await client.query('SELECT * FROM te_orders WHERE order_id = $1 FOR UPDATE', [
+      orderId,
+    ]);
     if (orderRes.rows.length === 0) {
       try {
         await client.query('ROLLBACK');

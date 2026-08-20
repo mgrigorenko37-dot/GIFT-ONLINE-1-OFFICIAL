@@ -162,8 +162,7 @@ export async function updateMarkPrice(
 
       // 3. Пересчитать unrealizedPnl.
       const pnlMultiplier = position.side === 'Long' ? 1 : -1;
-      position.unrealizedPnl =
-        (markPrice - position.avgEntryPrice) * position.qty * pnlMultiplier;
+      position.unrealizedPnl = (markPrice - position.avgEntryPrice) * position.qty * pnlMultiplier;
 
       // 4. Записать изменения в PostgreSQL BEFORE calculateMargin so it uses updated values
       await client.query(

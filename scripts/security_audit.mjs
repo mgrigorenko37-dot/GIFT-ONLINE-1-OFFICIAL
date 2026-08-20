@@ -42,12 +42,7 @@ function walkDir(dir) {
   const list = fs.readdirSync(dir);
   for (const item of list) {
     const fullPath = path.join(dir, item);
-    if (
-      item === 'node_modules' ||
-      item === 'dist' ||
-      item === 'coverage' ||
-      item === '.git'
-    ) {
+    if (item === 'node_modules' || item === 'dist' || item === 'coverage' || item === '.git') {
       continue;
     }
     const itemStat = fs.statSync(fullPath);
@@ -103,10 +98,14 @@ if (fs.existsSync('server/mockMinter.ts')) {
   const hasSafetyReject = content.includes('SAFETY REJECTION');
 
   if (!hasEnvCheck || !hasSafetyReject) {
-    console.error('❌ [SECURITY VIOLATION] server/mockMinter.ts is missing strict production safety guards!');
+    console.error(
+      '❌ [SECURITY VIOLATION] server/mockMinter.ts is missing strict production safety guards!'
+    );
     hasViolations = true;
   } else {
-    console.log('✅ server/mockMinter.ts has verified production safety guards (NODE_ENV check & rejection).');
+    console.log(
+      '✅ server/mockMinter.ts has verified production safety guards (NODE_ENV check & rejection).'
+    );
   }
 }
 
@@ -127,9 +126,14 @@ const financialFiles = [
 for (const file of financialFiles) {
   if (fs.existsSync(file)) {
     const content = fs.readFileSync(file, 'utf8');
-    const hasCrypto = content.includes('crypto.randomUUID') || content.includes('crypto.randomBytes') || content.includes('crypto.randomInt');
+    const hasCrypto =
+      content.includes('crypto.randomUUID') ||
+      content.includes('crypto.randomBytes') ||
+      content.includes('crypto.randomInt');
     if (!hasCrypto) {
-      console.error(`❌ [SECURITY VIOLATION] ${file} does not use crypto module for random ID generation!`);
+      console.error(
+        `❌ [SECURITY VIOLATION] ${file} does not use crypto module for random ID generation!`
+      );
       hasViolations = true;
     } else {
       console.log(`✅ ${file} uses cryptographically secure random generator.`);
@@ -154,13 +158,19 @@ for (const target of existingTargets) {
     const content = fs.readFileSync(file, 'utf8');
     const lines = content.split('\n');
     lines.forEach((line, idx) => {
-      if (line.includes('console.log') || line.includes('console.error') || line.includes('console.warn')) {
+      if (
+        line.includes('console.log') ||
+        line.includes('console.error') ||
+        line.includes('console.warn')
+      ) {
         for (const secretVar of secretEnvVars) {
           if (line.includes(`process.env.${secretVar}`)) {
             // Check if process.env.SECRET is printed directly inside log args
             const regex = new RegExp(`console\\.(log|error|warn)\\(.*process\\.env\\.${secretVar}`);
             if (regex.test(line)) {
-              console.error(`❌ [SECURITY VIOLATION] ${file}:${idx + 1}: Printing sensitive env variable process.env.${secretVar} in log statement`);
+              console.error(
+                `❌ [SECURITY VIOLATION] ${file}:${idx + 1}: Printing sensitive env variable process.env.${secretVar} in log statement`
+              );
               hasViolations = true;
             }
           }

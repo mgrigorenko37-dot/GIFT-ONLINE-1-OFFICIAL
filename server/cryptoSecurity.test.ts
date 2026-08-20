@@ -12,12 +12,7 @@ function walkDir(dir: string): string[] {
   const list = fs.readdirSync(dir);
   for (const item of list) {
     const fullPath = path.join(dir, item);
-    if (
-      item === 'node_modules' ||
-      item === 'dist' ||
-      item === 'coverage' ||
-      item === '.git'
-    ) {
+    if (item === 'node_modules' || item === 'dist' || item === 'coverage' || item === '.git') {
       continue;
     }
     const itemStat = fs.statSync(fullPath);
@@ -184,7 +179,9 @@ describe('Security & Randomness Audit Tests', () => {
             lineText.includes('console.warn')
           ) {
             for (const secretVar of secretVars) {
-              const regex = new RegExp(`console\\.(log|error|warn)\\(.*process\\.env\\.${secretVar}`);
+              const regex = new RegExp(
+                `console\\.(log|error|warn)\\(.*process\\.env\\.${secretVar}`
+              );
               if (regex.test(lineText)) {
                 loggedSecrets.push(`${file}:${idx + 1} logs process.env.${secretVar}`);
               }

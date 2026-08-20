@@ -48,7 +48,11 @@ export function isOriginAllowed(
   if (!prod) {
     try {
       const url = new URL(origin);
-      if (url.hostname === 'localhost' || url.hostname === '127.0.0.1' || url.hostname === '0.0.0.0') {
+      if (
+        url.hostname === 'localhost' ||
+        url.hostname === '127.0.0.1' ||
+        url.hostname === '0.0.0.0'
+      ) {
         return true;
       }
     } catch {

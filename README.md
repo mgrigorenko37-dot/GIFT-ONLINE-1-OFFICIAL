@@ -85,6 +85,7 @@ React 19 + Vite Frontend (TradingView Charts, ApexCharts, Real-time Stream)
 Configure `.env` or set environment variables:
 
 **Primary (Production & Cloud Run):**
+
 ```env
 PORT=3000
 DATABASE_URL=postgresql://user:password@localhost:5432/gx_exchange
@@ -94,6 +95,7 @@ EXCHANGE_HOT_WALLET_ADDRESS=your_ton_hot_wallet_address
 ```
 
 **Optional Local Development Fallback (only if `DATABASE_URL` is omitted):**
+
 ```env
 SQL_HOST=localhost
 SQL_PORT=5432

@@ -155,7 +155,9 @@ export const restApiRateLimiter = createRateLimiter({
 export function validateInternalWorkerAuth(req: Request, res: Response, next: NextFunction) {
   const secretEnv = process.env.INTERNAL_API_SECRET;
   if (!secretEnv || secretEnv.trim() === '') {
-    return res.status(500).json({ error: 'Server configuration error: INTERNAL_API_SECRET not set' });
+    return res
+      .status(500)
+      .json({ error: 'Server configuration error: INTERNAL_API_SECRET not set' });
   }
 
   const signature = req.headers['x-internal-signature'] as string;
@@ -178,14 +180,18 @@ export function validateInternalWorkerAuth(req: Request, res: Response, next: Ne
 
   // Calculate HMAC signature
   const payloadStr = JSON.stringify(req.body || {});
-  const expectedHmac = crypto.createHmac('sha256', secretEnv)
+  const expectedHmac = crypto
+    .createHmac('sha256', secretEnv)
     .update(`${timestamp}.${payloadStr}`)
     .digest('hex');
 
   const expectedBuffer = Buffer.from(expectedHmac);
   const providedBuffer = Buffer.from(signature);
 
-  if (expectedBuffer.length !== providedBuffer.length || !crypto.timingSafeEqual(expectedBuffer, providedBuffer)) {
+  if (
+    expectedBuffer.length !== providedBuffer.length ||
+    !crypto.timingSafeEqual(expectedBuffer, providedBuffer)
+  ) {
     console.warn(`[Security] Unauthorized internal API access attempt on ${req.path}`);
     return res.status(401).json({ error: 'Unauthorized: Invalid signature' });
   }
@@ -208,7 +214,10 @@ export function validateTelegramWebhookSecret(req: Request, res: Response, next:
   const expectedBuffer = Buffer.from(secretEnv);
   const providedBuffer = Buffer.from(tokenFromHeader);
 
-  if (expectedBuffer.length !== providedBuffer.length || !crypto.timingSafeEqual(expectedBuffer, providedBuffer)) {
+  if (
+    expectedBuffer.length !== providedBuffer.length ||
+    !crypto.timingSafeEqual(expectedBuffer, providedBuffer)
+  ) {
     const clientIp =
       (req.headers['x-forwarded-for'] as string)?.split(',')[0].trim() ||
       req.socket.remoteAddress ||

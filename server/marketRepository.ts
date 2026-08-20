@@ -1083,7 +1083,9 @@ export function resolveMarketRepository(): IMarketRepository {
       console.error(errMsg);
       throw new Error(errMsg);
     }
-    console.log('Production Persistence: Initializing PostgresMarketRepository with PostgreSQL configuration.');
+    console.log(
+      'Production Persistence: Initializing PostgresMarketRepository with PostgreSQL configuration.'
+    );
     return new PostgresMarketRepository();
   }
 
