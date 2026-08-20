@@ -27,9 +27,7 @@ export const GiftsProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   }, []);
 
   return (
-    <GiftsContext.Provider value={{ gifts, source, loading }}>
-      {children}
-    </GiftsContext.Provider>
+    <GiftsContext.Provider value={{ gifts, source, loading }}>{children}</GiftsContext.Provider>
   );
 };
 

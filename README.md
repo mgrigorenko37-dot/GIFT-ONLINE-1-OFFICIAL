@@ -76,11 +76,14 @@ React + Vite Frontend (Tailwind CSS, Trading Terminal, Real-time Charts)
 ## 📦 Getting Started
 
 ### Prerequisites
+
 - Node.js 18+
 - PostgreSQL database instance
 
 ### Environment Variables
+
 Configure `.env` or set environment variables:
+
 ```env
 PORT=3000
 DATABASE_URL=postgresql://user:password@localhost:5432/gx_exchange
@@ -94,6 +97,7 @@ EXCHANGE_HOT_WALLET_ADDRESS=your_ton_hot_wallet_address
 ```
 
 ### Running Locally
+
 ```bash
 # Install dependencies
 npm install

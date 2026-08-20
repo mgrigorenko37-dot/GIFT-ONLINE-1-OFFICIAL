@@ -4,6 +4,7 @@ import Decimal from 'decimal.js';
 import { validateTelegramInitData } from '../telegramAuth';
 import { getPgPool } from '../marketRepository';
 import { WithdrawalStateMachine, WithdrawalTransitionError } from '../withdrawalStateMachine';
+import { validateAndConvertToNano } from '../tonAdapter';
 import {
   createStarsInvoice,
   validatePreCheckout,
@@ -66,9 +67,24 @@ router.post('/withdraw', async (req: express.Request, res: express.Response) => 
   }
 
   const verifiedUserId = String(authResult.user.id);
-  const numAmount = Number(amount);
 
-  if (isNaN(numAmount) || numAmount < 0.1) {
+  if (
+    amount === undefined ||
+    amount === null ||
+    typeof amount === 'boolean' ||
+    (typeof amount !== 'string' && typeof amount !== 'number')
+  ) {
+    return res.status(400).json({ error: 'Invalid amount format.' });
+  }
+
+  const strAmount = String(amount).trim();
+  const validation = validateAndConvertToNano(strAmount);
+  if (!validation.isValid || !validation.amountDecimal) {
+    return res.status(400).json({ error: validation.error || 'Invalid withdrawal amount.' });
+  }
+
+  const amountDecimal = validation.amountDecimal;
+  if (amountDecimal.lessThan('0.1')) {
     return res.status(400).json({ error: 'Minimum withdrawal is 0.1 TON.' });
   }
 
@@ -81,15 +97,21 @@ router.post('/withdraw', async (req: express.Request, res: express.Response) => 
     await client.query('BEGIN');
 
     // 1. Verify bound wallet
-    const userCheck = await client.query('SELECT wallet_address FROM te_users WHERE id = $1', [verifiedUserId]);
+    const userCheck = await client.query('SELECT wallet_address FROM te_users WHERE id = $1', [
+      verifiedUserId,
+    ]);
     if (userCheck.rows.length === 0 || !userCheck.rows[0].wallet_address) {
       await client.query('ROLLBACK');
-      return res.status(400).json({ error: 'No wallet registered for this user. Please connect wallet first.' });
+      return res
+        .status(400)
+        .json({ error: 'No wallet registered for this user. Please connect wallet first.' });
     }
 
     if (userCheck.rows[0].wallet_address.trim().toLowerCase() !== address.trim().toLowerCase()) {
       await client.query('ROLLBACK');
-      return res.status(400).json({ error: 'Withdrawal destination must match your registered wallet.' });
+      return res
+        .status(400)
+        .json({ error: 'Withdrawal destination must match your registered wallet.' });
     }
 
     // 2. Lock balance and verify available funds
@@ -100,7 +122,6 @@ router.post('/withdraw', async (req: express.Request, res: express.Response) => 
 
     const availableBefore = new Decimal(balanceRes.rows[0]?.available_balance || 0);
     const lockedBefore = new Decimal(balanceRes.rows[0]?.locked_balance || 0);
-    const amountDecimal = new Decimal(numAmount);
 
     if (availableBefore.lessThan(amountDecimal)) {
       await client.query('ROLLBACK');
@@ -114,6 +135,7 @@ router.post('/withdraw', async (req: express.Request, res: express.Response) => 
 
     // 3. Move funds from available to locked in ACID transaction (Withdrawal State Machine)
     const withdrawalId = `wd_${crypto.randomUUID()}`;
+    const operationId = `op_wd_${withdrawalId.replace(/^wd_/, '')}`;
     const now = Date.now();
 
     await client.query(
@@ -137,15 +159,26 @@ router.post('/withdraw', async (req: express.Request, res: express.Response) => 
       availableAfter,
       lockedBefore,
       lockedAfter,
-      { address: address.trim() },
+      { address: address.trim(), operationId },
       now
     );
 
-    // 4. Create record in te_withdrawals table with status PENDING
+    // 4. Create record in te_withdrawals table with status PENDING and UNIQUE operation_id
     await client.query(
-      `INSERT INTO te_withdrawals (id, user_id, amount, currency, address, status, funds_released, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-      [withdrawalId, verifiedUserId, amountDecimal.toString(), 'TON', address.trim(), 'PENDING', false, now, now]
+      `INSERT INTO te_withdrawals (id, operation_id, user_id, amount, currency, address, status, funds_released, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+      [
+        withdrawalId,
+        operationId,
+        verifiedUserId,
+        amountDecimal.toString(),
+        'TON',
+        address.trim(),
+        'PENDING',
+        false,
+        now,
+        now,
+      ]
     );
 
     // 5. Emit Outbox Event for background processing worker
@@ -158,7 +191,7 @@ router.post('/withdraw', async (req: express.Request, res: express.Response) => 
         JSON.stringify({
           withdrawalId,
           userId: verifiedUserId,
-          amount: numAmount,
+          amount: amountDecimal.toString(),
           currency: 'TON',
           address: address.trim(),
           status: 'PENDING',
@@ -171,12 +204,14 @@ router.post('/withdraw', async (req: express.Request, res: express.Response) => 
 
     await client.query('COMMIT');
 
-    console.log(`[Withdraw] User ${verifiedUserId} requested ${numAmount} TON withdrawal (ID: ${withdrawalId}). Status: PENDING.`);
+    console.log(
+      `[Withdraw] User ${verifiedUserId} requested ${amountDecimal.toString()} TON withdrawal (ID: ${withdrawalId}). Status: PENDING.`
+    );
     return res.json({
       success: true,
       withdrawalId,
       status: 'PENDING',
-      amount: numAmount,
+      amount: amountDecimal.toString(),
       message: 'Withdrawal queued successfully.',
     });
   } catch (e) {
@@ -212,7 +247,9 @@ router.post('/withdraw/:id/retry', async (req: express.Request, res: express.Res
     await client.query('BEGIN');
 
     // Verify ownership
-    const checkOwner = await client.query('SELECT user_id FROM te_withdrawals WHERE id = $1', [withdrawalId]);
+    const checkOwner = await client.query('SELECT user_id FROM te_withdrawals WHERE id = $1', [
+      withdrawalId,
+    ]);
     if (checkOwner.rows.length === 0) {
       await client.query('ROLLBACK');
       return res.status(404).json({ error: 'Withdrawal not found.' });
@@ -299,7 +336,9 @@ router.post(
             body: JSON.stringify({
               pre_checkout_query_id: pcq.id,
               ok: validation.ok,
-              error_message: validation.ok ? undefined : (validation.errorMessage || 'Invalid payment parameters'),
+              error_message: validation.ok
+                ? undefined
+                : validation.errorMessage || 'Invalid payment parameters',
             }),
           });
         } catch (botErr) {

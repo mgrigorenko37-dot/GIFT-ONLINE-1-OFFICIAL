@@ -10,7 +10,7 @@ export function getMarketSocket(): Socket {
   if (!sharedSocket) {
     const origin = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000';
     const initData = typeof window !== 'undefined' ? window.Telegram?.WebApp?.initData : '';
-    
+
     sharedSocket = io(origin, {
       transports: ['websocket'],
       autoConnect: true,
@@ -18,7 +18,8 @@ export function getMarketSocket(): Socket {
       reconnectionAttempts: Infinity,
       reconnectionDelay: 1000,
       auth: (cb) => {
-        const latestInitData = typeof window !== 'undefined' ? window.Telegram?.WebApp?.initData : '';
+        const latestInitData =
+          typeof window !== 'undefined' ? window.Telegram?.WebApp?.initData : '';
         if (latestInitData) {
           cb({ initData: latestInitData });
         } else {
@@ -303,11 +304,16 @@ export function useMarketSocket({
           if (seqRes.ok) {
             setLastSequence(seq);
             const rawCandle = event.candle;
-            const candleStart = rawCandle.startTime ?? (rawCandle.time ? rawCandle.time * 1000 : Date.now());
+            const candleStart =
+              rawCandle.startTime ?? (rawCandle.time ? rawCandle.time * 1000 : Date.now());
             const unifiedCandle: GiftCandle = {
               startTime: candleStart,
-              endTime: rawCandle.endTime ?? (candleStart + 60000),
-              time: rawCandle.time ?? (rawCandle.startTime ? Math.floor(rawCandle.startTime / 1000) : Math.floor(Date.now() / 1000)),
+              endTime: rawCandle.endTime ?? candleStart + 60000,
+              time:
+                rawCandle.time ??
+                (rawCandle.startTime
+                  ? Math.floor(rawCandle.startTime / 1000)
+                  : Math.floor(Date.now() / 1000)),
               open: rawCandle.open,
               high: rawCandle.high,
               low: rawCandle.low,

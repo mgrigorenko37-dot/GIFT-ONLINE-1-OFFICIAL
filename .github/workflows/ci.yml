@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
   pull_request:
-    branches: [ main ]
+    branches: [main]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -24,7 +24,7 @@ jobs:
         ports:
           - 5432:5432
         options: >-
-          --health-cmd pg_isready
+          --health-cmd "pg_isready -U postgres -d gx_exchange_test"
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
@@ -39,6 +39,13 @@ jobs:
           --health-timeout 5s
           --health-retries 5
 
+    env:
+      NODE_ENV: test
+      DATABASE_URL: postgres://postgres:postgrespassword@localhost:5432/gx_exchange_test
+      REDIS_URL: redis://localhost:6379
+      TELEGRAM_BOT_TOKEN: test_bot_token_123456789
+      USE_MOCK_GIFTS: 'true'
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -49,41 +56,29 @@ jobs:
           node-version: '20'
           cache: 'npm'
 
-      - name: Install dependencies
+      - name: Install dependencies (npm ci)
         run: npm ci
 
-      - name: Typecheck (tsc --noEmit)
+      - name: Typecheck (npm run typecheck)
         run: npm run typecheck
 
-      - name: Build application
+      - name: Build application (npm run build)
         run: npm run build
 
-      - name: Lint check
-        run: npm run eslint
+      - name: Lint check (npm run lint)
+        run: npm run lint
 
-      - name: Check for insecure Math.random() in server/financial code
-        run: |
-          echo "Scanning server/, routes/, workers/ for unsafe Math.random() usage..."
-          UNSAFE_MATH=$(grep -rn "Math\.random()" server/ routes/ workers/ 2>/dev/null | grep -v "\.test\." | grep -v "mock" | grep -v "demo" || true)
-          if [ -n "$UNSAFE_MATH" ]; then
-            echo "::error::Found unsafe Math.random() usages in production server code:"
-            echo "$UNSAFE_MATH"
-            exit 1
-          else
-            echo "✅ No unsafe Math.random() found in server financial code."
-          fi
+      - name: Run unit tests (npm run test:unit)
+        run: npm run test:unit
 
-      - name: Run test suite
-        env:
-          NODE_ENV: test
-          DATABASE_URL: postgres://postgres:postgrespassword@localhost:5432/gx_exchange_test
-          REDIS_URL: redis://localhost:6379
-          TELEGRAM_BOT_TOKEN: test_bot_token_123456789
-          USE_MOCK_GIFTS: "true"
-        run: npm run test
+      - name: Run integration tests (npm run test:integration)
+        run: npm run test:integration
 
-      - name: Upload test results artifact on failure
-        if: failure()
+      - name: Security & Randomness Audit (npm run check:security)
+        run: npm run check:security
+
+      - name: Upload test artifacts on failure
+        if: ${{ failure() }}
         uses: actions/upload-artifact@v4
         with:
           name: test-results

@@ -48,7 +48,11 @@ class MockFailingPostgresRepository implements IMarketRepository {
     this.savedCandles.set(`${instrumentKey}_${timeframe}`, [...candles]);
   }
 
-  async saveSaleAndCandlesAtomic(sale: GiftSale, candles: GiftCandle[], outboxEvents?: any[]): Promise<{ isNew: boolean }> {
+  async saveSaleAndCandlesAtomic(
+    sale: GiftSale,
+    candles: GiftCandle[],
+    outboxEvents?: any[]
+  ): Promise<{ isNew: boolean }> {
     if (!this.dbConnected) {
       throw new Error('PostgreSQL connection error: ECONNREFUSED');
     }

@@ -70,10 +70,7 @@ export function validateTelegramInitData(
     const dataCheckString = dataCheckArr.join('\n');
 
     // secret_key = HMAC_SHA256("WebAppData", bot_token)
-    const secretKey = crypto
-      .createHmac('sha256', 'WebAppData')
-      .update(botToken)
-      .digest();
+    const secretKey = crypto.createHmac('sha256', 'WebAppData').update(botToken).digest();
 
     // calculated_hash = HMAC_SHA256(secret_key, data_check_string)
     const calculatedHash = crypto
@@ -87,7 +84,8 @@ export function validateTelegramInitData(
 
     // Check auth_date for expiration (optional / max 24 hours)
     const authDate = Number(searchParams.get('auth_date'));
-    if (authDate && Date.now() / 1000 - authDate > 86400 * 7) { // 7 days window
+    if (authDate && Date.now() / 1000 - authDate > 86400 * 7) {
+      // 7 days window
       return { isValid: false, error: 'InitData expired' };
     }
 

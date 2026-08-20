@@ -30,7 +30,7 @@ window.addEventListener('unhandledrejection', (e) => {
 const originalConsoleError = console.error;
 console.error = (...args) => {
   if (
-    typeof args[0] === 'string' && 
+    typeof args[0] === 'string' &&
     (args[0].includes('[TON_CONNECT_SDK]') || args[0].includes('analytics events'))
   ) {
     return;

@@ -84,20 +84,32 @@ const targetCode = `    try {
       }`;
 
 const oldTryStart = executeTradeCode.indexOf("    try {\n      await client.query('BEGIN');");
-const oldOrderCheckEnd = executeTradeCode.indexOf("if (order.status !== 'Open' && order.status !== 'PartiallyFilled') {\n        await client.query('ROLLBACK');\n        return null;\n      }");
-const oldOrderCheckEndFull = oldOrderCheckEnd + "if (order.status !== 'Open' && order.status !== 'PartiallyFilled') {\n        await client.query('ROLLBACK');\n        return null;\n      }".length;
+const oldOrderCheckEnd = executeTradeCode.indexOf(
+  "if (order.status !== 'Open' && order.status !== 'PartiallyFilled') {\n        await client.query('ROLLBACK');\n        return null;\n      }"
+);
+const oldOrderCheckEndFull =
+  oldOrderCheckEnd +
+  "if (order.status !== 'Open' && order.status !== 'PartiallyFilled') {\n        await client.query('ROLLBACK');\n        return null;\n      }"
+    .length;
 
-executeTradeCode = executeTradeCode.substring(0, oldTryStart) + targetCode + executeTradeCode.substring(oldOrderCheckEndFull);
+executeTradeCode =
+  executeTradeCode.substring(0, oldTryStart) +
+  targetCode +
+  executeTradeCode.substring(oldOrderCheckEndFull);
 
 // We must also remove the old balRes query which was lower down!
-const oldBalResStart = executeTradeCode.indexOf("const balRes = await client.query(\n        'SELECT available_balance");
+const oldBalResStart = executeTradeCode.indexOf(
+  "const balRes = await client.query(\n        'SELECT available_balance"
+);
 if (oldBalResStart !== -1) {
-  const oldBalResEnd = executeTradeCode.indexOf(";", oldBalResStart) + 1;
-  executeTradeCode = executeTradeCode.substring(0, oldBalResStart) + executeTradeCode.substring(oldBalResEnd);
+  const oldBalResEnd = executeTradeCode.indexOf(';', oldBalResStart) + 1;
+  executeTradeCode =
+    executeTradeCode.substring(0, oldBalResStart) + executeTradeCode.substring(oldBalResEnd);
 }
 
 // Remove "const currency = collateralCurrency;" since we defined it at the top
-executeTradeCode = executeTradeCode.replace("const currency = collateralCurrency;", "");
+executeTradeCode = executeTradeCode.replace('const currency = collateralCurrency;', '');
 
-code = code.substring(0, executeTradeBodyStart) + executeTradeCode + code.substring(executeTradeBodyEnd);
+code =
+  code.substring(0, executeTradeBodyStart) + executeTradeCode + code.substring(executeTradeBodyEnd);
 fs.writeFileSync('server/tradingEngine.ts', code);

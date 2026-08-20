@@ -40,7 +40,7 @@ type Trade = {
 
 const balance = 12480.5;
 
-function GiftArtwork({
+const GiftArtwork = ({
   className,
   small,
   emoji,
@@ -48,7 +48,7 @@ function GiftArtwork({
   className: string;
   small?: boolean;
   emoji?: string;
-}) {
+}) => {
   if (emoji) {
     return (
       <div
@@ -79,7 +79,7 @@ function GiftArtwork({
       <div className='gx-gift-box' />
     </div>
   );
-}
+};
 
 const GXTerminalScreen = () => {
   const { gifts, loading } = useGifts();
@@ -107,17 +107,23 @@ const GXTerminalScreen = () => {
 
   const [variantFilterModel, setVariantFilterModel] = useState<string>('All');
   const [variantFilterBackdrop, setVariantFilterBackdrop] = useState<string>('All');
-  
-  const uniqueModels = useMemo(() => ['All', ...new Set(variants.map(v => v.model_name))], [variants]);
-  const uniqueBackdrops = useMemo(() => ['All', ...new Set(variants.map(v => v.backdrop_color))], [variants]);
-  
+
+  const uniqueModels = useMemo(
+    () => ['All', ...new Set(variants.map((v) => v.model_name))],
+    [variants]
+  );
+  const uniqueBackdrops = useMemo(
+    () => ['All', ...new Set(variants.map((v) => v.backdrop_color))],
+    [variants]
+  );
+
   const filteredVariants = useMemo(() => {
-    return variants.filter(v => 
-      (variantFilterModel === 'All' || v.model_name === variantFilterModel) &&
-      (variantFilterBackdrop === 'All' || v.backdrop_color === variantFilterBackdrop)
+    return variants.filter(
+      (v) =>
+        (variantFilterModel === 'All' || v.model_name === variantFilterModel) &&
+        (variantFilterBackdrop === 'All' || v.backdrop_color === variantFilterBackdrop)
     );
   }, [variants, variantFilterModel, variantFilterBackdrop]);
-
 
   const activeInstrumentKey = useMemo(() => {
     return buildInstrumentKey({
@@ -391,7 +397,7 @@ const GXTerminalScreen = () => {
       latestCandleRef.current = undefined;
     } else {
       setIsChartEmpty(false);
-      
+
       // If we already have data and only the latest candle changed, use update()
       if (
         latestCandleRef.current &&
@@ -404,8 +410,8 @@ const GXTerminalScreen = () => {
         latestChartCandle &&
         latestChartCandle.time > latestCandleRef.current.time
       ) {
-         // New candle formed
-         seriesRef.current.update(latestChartCandle);
+        // New candle formed
+        seriesRef.current.update(latestChartCandle);
       } else {
         // Full replacement (e.g., asset changed or initial load)
         seriesRef.current.setData(realtimeChartCandles);
@@ -953,7 +959,6 @@ const GXTerminalScreen = () => {
                       </div>
                     </div>
                     {expandedGiftId === gift.id && (
-                      
                       <div className='variants-list'>
                         {variantLoading ? (
                           <div style={{ fontSize: 10, color: 'var(--muted)', padding: 4 }}>
@@ -962,82 +967,125 @@ const GXTerminalScreen = () => {
                         ) : (
                           <>
                             {variants.length > 0 && (
-                              <div className='variant-filters' onClick={(e) => e.stopPropagation()} style={{ display: 'flex', gap: '8px', padding: '4px 6px', borderBottom: '1px solid var(--line)', marginBottom: '4px' }}>
-                                <select 
-                                  value={variantFilterModel} 
-                                  onChange={e => setVariantFilterModel(e.target.value)}
-                                  style={{ background: 'var(--panel)', color: 'var(--text)', border: '1px solid var(--line)', borderRadius: '4px', fontSize: '11px', padding: '2px 4px', flex: 1 }}
+                              <div
+                                className='variant-filters'
+                                onClick={(e) => e.stopPropagation()}
+                                style={{
+                                  display: 'flex',
+                                  gap: '8px',
+                                  padding: '4px 6px',
+                                  borderBottom: '1px solid var(--line)',
+                                  marginBottom: '4px',
+                                }}
+                              >
+                                <select
+                                  value={variantFilterModel}
+                                  onChange={(e) => setVariantFilterModel(e.target.value)}
+                                  style={{
+                                    background: 'var(--panel)',
+                                    color: 'var(--text)',
+                                    border: '1px solid var(--line)',
+                                    borderRadius: '4px',
+                                    fontSize: '11px',
+                                    padding: '2px 4px',
+                                    flex: 1,
+                                  }}
                                 >
-                                  {uniqueModels.map(m => <option key={m} value={m}>{m === 'All' ? 'Все модели' : m}</option>)}
+                                  {uniqueModels.map((m) => (
+                                    <option key={m} value={m}>
+                                      {m === 'All' ? 'Все модели' : m}
+                                    </option>
+                                  ))}
                                 </select>
-                                <select 
-                                  value={variantFilterBackdrop} 
-                                  onChange={e => setVariantFilterBackdrop(e.target.value)}
-                                  style={{ background: 'var(--panel)', color: 'var(--text)', border: '1px solid var(--line)', borderRadius: '4px', fontSize: '11px', padding: '2px 4px', flex: 1 }}
+                                <select
+                                  value={variantFilterBackdrop}
+                                  onChange={(e) => setVariantFilterBackdrop(e.target.value)}
+                                  style={{
+                                    background: 'var(--panel)',
+                                    color: 'var(--text)',
+                                    border: '1px solid var(--line)',
+                                    borderRadius: '4px',
+                                    fontSize: '11px',
+                                    padding: '2px 4px',
+                                    flex: 1,
+                                  }}
                                 >
-                                  {uniqueBackdrops.map(b => <option key={b} value={b}>{b === 'All' ? 'Все фоны' : b}</option>)}
+                                  {uniqueBackdrops.map((b) => (
+                                    <option key={b} value={b}>
+                                      {b === 'All' ? 'Все фоны' : b}
+                                    </option>
+                                  ))}
                                 </select>
                               </div>
                             )}
                             {filteredVariants.length > 0 ? (
                               filteredVariants.map((v) => (
-
-                            <div
-                              key={v.id}
-                              className={`variant-card ${selectedVariant?.id === v.id ? 'active' : ''}`}
-                              onClick={() => {
-                                setSelectedVariant(v);
-                                // We could update the chart or terminal to trade this specific variant
-                                setGiftId(v.id);
-                                setSearchParams({ gift: v.id });
-                                setMktPanelOpen(false);
-                              }}
-                            >
-                              <div className='variant-left'>
-                                {v.image_url ? (
-                                  <img src={v.image_url} alt='' className='variant-img' />
-                                ) : (
-                                  <div
-                                    className='variant-img'
-                                    style={{ background: v.backdrop_color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px' }}
-                                  >
-                                    {gift.emoji ? (
-                                      <img
-                                        src={`https://emojik.vercel.app/s/${gift.emoji}`}
-                                        alt='emoji'
-                                        style={{ width: '16px', height: '16px' }}
-                                        onError={(e) => {
-                                          e.currentTarget.style.display = 'none';
-                                          e.currentTarget.parentElement!.innerHTML = gift.emoji || '';
-                                        }}
-                                      />
+                                <div
+                                  key={v.id}
+                                  className={`variant-card ${selectedVariant?.id === v.id ? 'active' : ''}`}
+                                  onClick={() => {
+                                    setSelectedVariant(v);
+                                    // We could update the chart or terminal to trade this specific variant
+                                    setGiftId(v.id);
+                                    setSearchParams({ gift: v.id });
+                                    setMktPanelOpen(false);
+                                  }}
+                                >
+                                  <div className='variant-left'>
+                                    {v.image_url ? (
+                                      <img src={v.image_url} alt='' className='variant-img' />
                                     ) : (
-                                      <div className='gx-gift-box' style={{ transform: 'scale(0.5)' }} />
+                                      <div
+                                        className='variant-img'
+                                        style={{
+                                          background: v.backdrop_color,
+                                          display: 'flex',
+                                          alignItems: 'center',
+                                          justifyContent: 'center',
+                                          fontSize: '14px',
+                                        }}
+                                      >
+                                        {gift.emoji ? (
+                                          <img
+                                            src={`https://emojik.vercel.app/s/${gift.emoji}`}
+                                            alt='emoji'
+                                            style={{ width: '16px', height: '16px' }}
+                                            onError={(e) => {
+                                              e.currentTarget.style.display = 'none';
+                                              e.currentTarget.parentElement!.innerHTML =
+                                                gift.emoji || '';
+                                            }}
+                                          />
+                                        ) : (
+                                          <div
+                                            className='gx-gift-box'
+                                            style={{ transform: 'scale(0.5)' }}
+                                          />
+                                        )}
+                                      </div>
                                     )}
+                                    <div className='variant-info'>
+                                      <span className='variant-name'>
+                                        {v.model_name}{' '}
+                                        {v.symbol_name !== 'None' ? `+ ${v.symbol_name}` : ''}
+                                      </span>
+                                      <span className='variant-rarity'>
+                                        {v.rarity_percentage}% Rarity
+                                      </span>
+                                    </div>
                                   </div>
-                                )}
-                                <div className='variant-info'>
-                                  <span className='variant-name'>
-                                    {v.model_name}{' '}
-                                    {v.symbol_name !== 'None' ? `+ ${v.symbol_name}` : ''}
-                                  </span>
-                                  <span className='variant-rarity'>
-                                    {v.rarity_percentage}% Rarity
-                                  </span>
+                                  <div className='variant-right'>
+                                    <span className='variant-price'>
+                                      {formatUSDT(v.current_price_gx)}
+                                    </span>
+                                  </div>
                                 </div>
+                              ))
+                            ) : (
+                              <div style={{ fontSize: 10, color: 'var(--muted)', padding: 4 }}>
+                                Нет уникальных дизайнов
                               </div>
-                              <div className='variant-right'>
-                                <span className='variant-price'>
-                                  {formatUSDT(v.current_price_gx)}
-                                </span>
-                              </div>
-                            </div>
-                          ))
-                        ) : (
-                          <div style={{ fontSize: 10, color: 'var(--muted)', padding: 4 }}>
-                            Нет уникальных дизайнов
-                          </div>
-                        )}
+                            )}
                           </>
                         )}
                       </div>
@@ -1778,7 +1826,9 @@ const GXTerminalScreen = () => {
                       </div>
                       <div className='sum-row'>
                         <span>Итого</span>
-                        <b>{formatUSDT((Number(price) || curPrice) * (Number(amount) || 0))} Gram</b>
+                        <b>
+                          {formatUSDT((Number(price) || curPrice) * (Number(amount) || 0))} Gram
+                        </b>
                       </div>
                     </div>
 

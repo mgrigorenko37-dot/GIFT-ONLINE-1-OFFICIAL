@@ -14,17 +14,19 @@ const t4 = parseInt(process.argv[3]);
 const intervalMs = parseInt(process.argv[4]);
 
 async function run() {
-   console.log(`[Worker ${name}] PID ${process.pid} starting catch-up...`);
-   try {
-      const res = await engine.processMissedFundingPeriods({
-         currentTimestamp: t4,
-         intervalMs: intervalMs,
-         fundingInterval: '8h'
-      });
-      console.log(`[Worker ${name}] PID ${process.pid} completed catch-up. Processed ${res.length} periods.`);
-   } catch (e: any) {
-      console.log(`[Worker ${name}] PID ${process.pid} failed with error: ${e.message}`);
-   }
-   process.exit(0);
+  console.log(`[Worker ${name}] PID ${process.pid} starting catch-up...`);
+  try {
+    const res = await engine.processMissedFundingPeriods({
+      currentTimestamp: t4,
+      intervalMs: intervalMs,
+      fundingInterval: '8h',
+    });
+    console.log(
+      `[Worker ${name}] PID ${process.pid} completed catch-up. Processed ${res.length} periods.`
+    );
+  } catch (e: any) {
+    console.log(`[Worker ${name}] PID ${process.pid} failed with error: ${e.message}`);
+  }
+  process.exit(0);
 }
 run();

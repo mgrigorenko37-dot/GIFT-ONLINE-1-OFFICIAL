@@ -30,8 +30,12 @@ describe('Market Routes Collections & Gifts Source Tests', () => {
 
   // Helper to execute route handler directly without supertest
   const executeGetGiftsHandler = async (reqOverride: any = {}) => {
-    const route = marketRoutes.stack.find((s: any) =>
-      s.route && s.route.path && (s.route.path === '/collections' || (Array.isArray(s.route.path) && s.route.path.includes('/gifts')))
+    const route = marketRoutes.stack.find(
+      (s: any) =>
+        s.route &&
+        s.route.path &&
+        (s.route.path === '/collections' ||
+          (Array.isArray(s.route.path) && s.route.path.includes('/gifts')))
     );
     const handler = (route as any)?.route?.stack?.[0]?.handle;
 

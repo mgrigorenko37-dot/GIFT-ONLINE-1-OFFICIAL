@@ -1,8 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import {
-  WithdrawalStateMachine,
-  WithdrawalTransitionError,
-} from './withdrawalStateMachine';
+import { WithdrawalStateMachine, WithdrawalTransitionError } from './withdrawalStateMachine';
 
 describe('WithdrawalStateMachine Comprehensive Tests', () => {
   let clientMock: any;
@@ -67,7 +64,12 @@ describe('WithdrawalStateMachine Comprehensive Tests', () => {
       return { rows: [] };
     });
 
-    const result = await WithdrawalStateMachine.lockForProcessing(clientMock, 'wd_cas_1', 'worker_alpha', 2000);
+    const result = await WithdrawalStateMachine.lockForProcessing(
+      clientMock,
+      'wd_cas_1',
+      'worker_alpha',
+      2000
+    );
 
     expect(result).toBeDefined();
     expect(result?.status).toBe('PROCESSING');
@@ -136,8 +138,8 @@ describe('WithdrawalStateMachine Comprehensive Tests', () => {
 
     // Verify balance locked reduction query was executed
     const calls = clientMock.query.mock.calls;
-    const balQuery = calls.find((c: any) =>
-      c[0].includes('UPDATE te_balances') && c[0].includes('locked_balance = $1')
+    const balQuery = calls.find(
+      (c: any) => c[0].includes('UPDATE te_balances') && c[0].includes('locked_balance = $1')
     );
     expect(balQuery).toBeDefined();
     expect(balQuery[1][0]).toBe('0');
@@ -234,8 +236,8 @@ describe('WithdrawalStateMachine Comprehensive Tests', () => {
 
     // Check balance refund query
     const calls = clientMock.query.mock.calls;
-    const refundQuery = calls.find((c: any) =>
-      c[0].includes('UPDATE te_balances') && c[0].includes('available_balance = $1')
+    const refundQuery = calls.find(
+      (c: any) => c[0].includes('UPDATE te_balances') && c[0].includes('available_balance = $1')
     );
     expect(refundQuery).toBeDefined();
     expect(refundQuery[1][0]).toBe('27.5'); // 20 + 7.5
@@ -279,7 +281,11 @@ describe('WithdrawalStateMachine Comprehensive Tests', () => {
       return { rowCount: 1, rows: [] };
     });
 
-    const result = await WithdrawalStateMachine.retryFailedWithdrawal(clientMock, 'wd_retry_1', 5000);
+    const result = await WithdrawalStateMachine.retryFailedWithdrawal(
+      clientMock,
+      'wd_retry_1',
+      5000
+    );
 
     expect(result.status).toBe('PENDING');
     expect(result.failure_reason).toBeNull();
@@ -287,8 +293,8 @@ describe('WithdrawalStateMachine Comprehensive Tests', () => {
 
     // Verify balance re-lock
     const calls = clientMock.query.mock.calls;
-    const reLockQuery = calls.find((c: any) =>
-      c[0].includes('UPDATE te_balances') && c[0].includes('available_balance = $1')
+    const reLockQuery = calls.find(
+      (c: any) => c[0].includes('UPDATE te_balances') && c[0].includes('available_balance = $1')
     );
     expect(reLockQuery).toBeDefined();
     expect(reLockQuery[1][0]).toBe('7'); // 10 - 3

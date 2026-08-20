@@ -10,7 +10,9 @@ export class TonScanner {
   }
 
   public start() {
-    console.log('[TonScanner] Starting robust background scanner with cursor tracking and sender verification...');
+    console.log(
+      '[TonScanner] Starting robust background scanner with cursor tracking and sender verification...'
+    );
     this.intervalId = setInterval(() => this.scan(), 10000); // Check every 10 seconds
   }
 
@@ -34,7 +36,10 @@ export class TonScanner {
       if (res.rows.length > 0) {
         return Number(res.rows[0].last_lt) || 0;
       }
-    } catch (e) {
+    } catch (e: any) {
+      if (e?.code === '42P01' || e?.message?.includes('does not exist')) {
+        return 0;
+      }
       console.warn('[TonScanner] Could not read cursor, defaulting to 0:', e);
     }
     return 0;
@@ -145,7 +150,10 @@ export class TonScanner {
       await client.query('BEGIN');
 
       // 1. Check idempotency: hash already credited?
-      const existing = await client.query('SELECT hash FROM te_ton_deposits WHERE hash = $1 FOR UPDATE', [hash]);
+      const existing = await client.query(
+        'SELECT hash FROM te_ton_deposits WHERE hash = $1 FOR UPDATE',
+        [hash]
+      );
       if (existing.rowCount && existing.rowCount > 0) {
         await client.query('ROLLBACK');
         return; // Already processed
@@ -153,16 +161,22 @@ export class TonScanner {
 
       // 2. Sender Address Validation (C-04)
       // Check if user has a registered wallet address in te_users
-      const userRes = await client.query('SELECT wallet_address FROM te_users WHERE id = $1', [userId]);
+      const userRes = await client.query('SELECT wallet_address FROM te_users WHERE id = $1', [
+        userId,
+      ]);
       if (userRes.rows.length === 0) {
-        console.warn(`[TonScanner] Rejected deposit: User ID ${userId} does not exist in exchange records (Tx: ${hash})`);
+        console.warn(
+          `[TonScanner] Rejected deposit: User ID ${userId} does not exist in exchange records (Tx: ${hash})`
+        );
         await client.query('ROLLBACK');
         return;
       }
 
       const registeredWallet = userRes.rows[0].wallet_address;
       if (!registeredWallet) {
-        console.warn(`[TonScanner] Rejected deposit: User ${userId} has no registered wallet address (Tx: ${hash})`);
+        console.warn(
+          `[TonScanner] Rejected deposit: User ${userId} has no registered wallet address (Tx: ${hash})`
+        );
         await client.query('ROLLBACK');
         return;
       }

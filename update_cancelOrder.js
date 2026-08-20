@@ -37,16 +37,22 @@ const targetCode = `    try {
       }`;
 
 const oldTryStart = cancelCode.indexOf("    try {\n      await client.query('BEGIN');");
-const oldOrderResEnd = cancelCode.indexOf("if (orderRes.rows.length === 0) {\n        await client.query('ROLLBACK');\n        return null;\n      }") + "if (orderRes.rows.length === 0) {\n        await client.query('ROLLBACK');\n        return null;\n      }".length;
+const oldOrderResEnd =
+  cancelCode.indexOf(
+    "if (orderRes.rows.length === 0) {\n        await client.query('ROLLBACK');\n        return null;\n      }"
+  ) +
+  "if (orderRes.rows.length === 0) {\n        await client.query('ROLLBACK');\n        return null;\n      }"
+    .length;
 
-cancelCode = cancelCode.substring(0, oldTryStart) + targetCode + cancelCode.substring(oldOrderResEnd);
+cancelCode =
+  cancelCode.substring(0, oldTryStart) + targetCode + cancelCode.substring(oldOrderResEnd);
 
 // Remove the old balance lock which was later
 const oldBalLock = `await client.query(
           'SELECT available_balance FROM te_balances WHERE user_id = $1 AND currency = $2 FOR UPDATE',
           [order.userId, order.collateralCurrency]
         );`;
-cancelCode = cancelCode.replace(oldBalLock, "");
+cancelCode = cancelCode.replace(oldBalLock, '');
 
 code = code.substring(0, cancelOrderStart) + cancelCode + code.substring(cancelOrderEnd);
 fs.writeFileSync('server/tradingEngine.ts', code);

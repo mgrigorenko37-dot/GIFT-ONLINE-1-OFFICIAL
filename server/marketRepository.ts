@@ -397,8 +397,17 @@ export function getPgPool(): Pool {
   if (global._postgresPool) {
     return global._postgresPool;
   }
-  const isProduction = process.env.NODE_ENV === 'production';
-  const hasDatabaseUrl = Boolean(process.env.DATABASE_URL || process.env.SQL_HOST);
+
+  if (process.env.DATABASE_URL) {
+    global._postgresPool = new Pool({
+      connectionString: process.env.DATABASE_URL,
+      max: 20,
+    });
+    global._postgresPool.on('error', (err) => {
+      console.error('Unexpected error on idle SQL pool client:', err);
+    });
+    return global._postgresPool;
+  }
 
   if (process.env.SQL_HOST) {
     global._postgresPool = new Pool({
@@ -409,7 +418,6 @@ export function getPgPool(): Pool {
       max: 20,
     });
 
-    // Prevent unhandled pool-level errors from crashing the application
     global._postgresPool.on('error', (err) => {
       console.error('Unexpected error on idle SQL pool client:', err);
     });
@@ -417,7 +425,7 @@ export function getPgPool(): Pool {
     return global._postgresPool;
   }
 
-  throw new Error('No SQL_HOST configured');
+  throw new Error('Neither DATABASE_URL nor SQL_HOST is configured');
 }
 
 export class PostgresMarketRepository implements IMarketRepository {
@@ -665,7 +673,9 @@ export class PostgresMarketRepository implements IMarketRepository {
       );
 
       if (saleRes.rowCount === 0) {
-        try { await client.query('ROLLBACK'); } catch(e) {}
+        try {
+          await client.query('ROLLBACK');
+        } catch (e) {}
         return { isNew: false };
       }
 
@@ -750,7 +760,9 @@ export class PostgresMarketRepository implements IMarketRepository {
       await client.query('COMMIT');
       return { isNew: true };
     } catch (err) {
-      try { await client.query('ROLLBACK'); } catch(e) {}
+      try {
+        await client.query('ROLLBACK');
+      } catch (e) {}
       console.error('PostgresMarketRepository saveSaleAndCandlesAtomic error:', err);
       throw err;
     } finally {
@@ -844,7 +856,9 @@ export class PostgresMarketRepository implements IMarketRepository {
         sequence: r.sequence ? Number(r.sequence) : undefined,
       }));
     } catch (err) {
-      try { await client.query('ROLLBACK'); } catch(e) {}
+      try {
+        await client.query('ROLLBACK');
+      } catch (e) {}
       console.error('PostgresMarketRepository fetchPendingOutboxEvents error:', err);
       return [];
     } finally {
@@ -986,7 +1000,9 @@ export class PostgresMarketRepository implements IMarketRepository {
       }
       await client.query('COMMIT');
     } catch (err) {
-      try { await client.query('ROLLBACK'); } catch(e) {}
+      try {
+        await client.query('ROLLBACK');
+      } catch (e) {}
       console.error('PostgresMarketRepository saveCandles error:', err);
       throw err;
     } finally {
@@ -1011,8 +1027,7 @@ export class PostgresMarketRepository implements IMarketRepository {
         actualKey = `${actualKey.replace(/-/g, '_').toUpperCase()}_CLASSIC`;
       }
     }
-    
-    
+
     let query = `SELECT instrument_key as "instrumentKey", timeframe, start_time as "startTime",
                         end_time as "endTime", open::text, high::text, low::text, close::text,
                         volume::text, quote_volume as "quoteVolume", sum_quote as "sumQuote",

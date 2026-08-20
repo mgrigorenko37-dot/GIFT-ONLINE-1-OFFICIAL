@@ -324,6 +324,7 @@ describe('Redis Fault Tolerance & Multi-Instance Production Rules', () => {
   });
 
   it('7. отсутствие duplicate events после восстановления: outbox flush after reconnect does not cause duplicate sales/candles', async () => {
+    clearMarketState();
     process.env.REQUIRE_REDIS = 'true';
     const mockClient = new MockTestRedisClient();
     setTestRedisClients(mockClient, mockClient);

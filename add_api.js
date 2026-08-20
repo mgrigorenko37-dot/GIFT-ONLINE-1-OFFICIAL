@@ -33,5 +33,8 @@ app.get('/api/gifts', async (req, res) => {
 });
 `;
 
-code = code.replace("// --- Real-time Price Cache ---", apiCode + "\n// --- Real-time Price Cache ---");
+code = code.replace(
+  '// --- Real-time Price Cache ---',
+  apiCode + '\n// --- Real-time Price Cache ---'
+);
 fs.writeFileSync('server.ts', code, 'utf8');

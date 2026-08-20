@@ -34,13 +34,16 @@ const targetCode = `    try {
       );`;
 
 const oldTryStart = placeOrderCode.indexOf("    try {\n      await client.query('BEGIN');");
-const oldPosResEnd = placeOrderCode.indexOf("];\n      }") + "];\n      }".length; // this is inside `if (posRes.rows.length > 0) { position = posRes.rows[0]; }`
+const oldPosResEnd = placeOrderCode.indexOf('];\n      }') + '];\n      }'.length; // this is inside `if (posRes.rows.length > 0) { position = posRes.rows[0]; }`
 // Actually, let's just replace the top part until `const now = Date.now();`
 
-let oldNowStart = placeOrderCode.indexOf("const now = Date.now();", oldTryStart);
+let oldNowStart = placeOrderCode.indexOf('const now = Date.now();', oldTryStart);
 let topPartOld = placeOrderCode.substring(oldTryStart, oldNowStart);
 
-placeOrderCode = placeOrderCode.substring(0, oldTryStart) + targetCode + `
+placeOrderCode =
+  placeOrderCode.substring(0, oldTryStart) +
+  targetCode +
+  `
       let position = null;
       if (posRes.rows.length > 0) {
         position = {
@@ -48,7 +51,8 @@ placeOrderCode = placeOrderCode.substring(0, oldTryStart) + targetCode + `
         };
       }
 
-      ` + placeOrderCode.substring(oldNowStart);
+      ` +
+  placeOrderCode.substring(oldNowStart);
 
 // Remove the old balance lock:
 // await client.query(
@@ -59,7 +63,7 @@ const oldBalLock = `await client.query(
           'SELECT available_balance FROM te_balances WHERE user_id = $1 AND currency = $2 FOR UPDATE',
           [order.userId, order.collateralCurrency]
         );`;
-placeOrderCode = placeOrderCode.replace(oldBalLock, "");
+placeOrderCode = placeOrderCode.replace(oldBalLock, '');
 
 code = code.substring(0, placeOrderBodyStart) + placeOrderCode + code.substring(placeOrderBodyEnd);
 fs.writeFileSync('server/tradingEngine.ts', code);

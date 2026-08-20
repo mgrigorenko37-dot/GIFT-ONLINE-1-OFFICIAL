@@ -33,7 +33,7 @@ app.get('/api/rates', async (req, res) => {
 if (!code.includes('/api/rates')) {
   code = code.replace("app.get('/api/config',", rateEndpoint + "\napp.get('/api/config',");
   fs.writeFileSync('server.ts', code);
-  console.log("Added /api/rates to server.ts");
+  console.log('Added /api/rates to server.ts');
 } else {
-  console.log("/api/rates already exists");
+  console.log('/api/rates already exists');
 }

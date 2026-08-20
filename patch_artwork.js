@@ -29,5 +29,8 @@ const newArtwork = `const GiftArtwork: React.FC<{ className: string; large?: boo
   }
   if (emoji) {`;
 
-code = code.replace(/const GiftArtwork: React\.FC<\{ className: string; large\?: boolean; emoji\?: string \}> = \(\{\n  className,\n  large,\n  emoji,\n\}\) => \{\n  if \(emoji\) \{/g, newArtwork);
+code = code.replace(
+  /const GiftArtwork: React\.FC<\{ className: string; large\?: boolean; emoji\?: string \}> = \(\{\n  className,\n  large,\n  emoji,\n\}\) => \{\n  if \(emoji\) \{/g,
+  newArtwork
+);
 fs.writeFileSync('src/screens/Capital/CapitalScreen.tsx', code, 'utf8');

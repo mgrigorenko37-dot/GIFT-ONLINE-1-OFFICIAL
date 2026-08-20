@@ -1,8 +1,14 @@
 const fs = require('fs');
 
 let serverCode = fs.readFileSync('server.ts', 'utf8');
-serverCode = serverCode.replace("import express from 'express';", "import express from 'express';\nimport { errorLogger } from './server/errorLogger';");
-serverCode = serverCode.replace("app.use('/api', (req, res, next)", "app.use(errorLogger);\n  app.use('/api', (req, res, next)");
+serverCode = serverCode.replace(
+  "import express from 'express';",
+  "import express from 'express';\nimport { errorLogger } from './server/errorLogger';"
+);
+serverCode = serverCode.replace(
+  "app.use('/api', (req, res, next)",
+  "app.use(errorLogger);\n  app.use('/api', (req, res, next)"
+);
 fs.writeFileSync('server.ts', serverCode, 'utf8');
 
 let indexCode = fs.readFileSync('index.html', 'utf8');

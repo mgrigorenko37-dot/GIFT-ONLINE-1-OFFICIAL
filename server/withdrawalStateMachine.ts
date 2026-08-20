@@ -1,12 +1,14 @@
 import { PoolClient } from 'pg';
 import Decimal from 'decimal.js';
 
-export type WithdrawalStatus = 'PENDING' | 'PROCESSING' | 'RETRYING' | 'COMPLETED' | 'FAILED';
+export type WithdrawalStatus =
+  'PENDING' | 'PROCESSING' | 'RETRYING' | 'COMPLETED' | 'FAILED' | 'NEEDS_RECONCILIATION';
 
 export interface WithdrawalRecord {
   id: string;
+  operation_id: string;
   user_id: string;
-  amount: number;
+  amount: string; // Exact decimal string from PostgreSQL NUMERIC (never converted to JS float number)
   currency: string;
   address: string;
   status: WithdrawalStatus;
@@ -25,8 +27,9 @@ export interface WithdrawalRecord {
 
 export const VALID_STATUS_TRANSITIONS: Record<WithdrawalStatus, WithdrawalStatus[]> = {
   PENDING: ['PROCESSING'],
-  PROCESSING: ['COMPLETED', 'FAILED', 'RETRYING'],
-  RETRYING: ['PROCESSING'],
+  PROCESSING: ['COMPLETED', 'FAILED', 'RETRYING', 'NEEDS_RECONCILIATION'],
+  RETRYING: ['PROCESSING', 'NEEDS_RECONCILIATION'],
+  NEEDS_RECONCILIATION: ['COMPLETED', 'FAILED', 'RETRYING'], // Can be resolved automatically via reconciliation or manually
   FAILED: ['PENDING'], // Allowed only via explicit retry flow
   COMPLETED: [], // Terminal state - NO transitions allowed
 };
@@ -184,14 +187,16 @@ export class WithdrawalStateMachine {
     now: number = Date.now()
   ): Promise<WithdrawalRecord> {
     if (!txHash || !txHash.trim()) {
-      throw new WithdrawalTransitionError('Cannot transition to COMPLETED without a valid tx_hash.', 'MISSING_TX_HASH');
+      throw new WithdrawalTransitionError(
+        'Cannot transition to COMPLETED without a valid tx_hash.',
+        'MISSING_TX_HASH'
+      );
     }
 
     // 1. Lock withdrawal row
-    const checkRes = await client.query(
-      `SELECT * FROM te_withdrawals WHERE id = $1 FOR UPDATE`,
-      [withdrawalId]
-    );
+    const checkRes = await client.query(`SELECT * FROM te_withdrawals WHERE id = $1 FOR UPDATE`, [
+      withdrawalId,
+    ]);
 
     if (checkRes.rows.length === 0) {
       throw new WithdrawalTransitionError(`Withdrawal ${withdrawalId} not found.`, 'NOT_FOUND');
@@ -202,9 +207,9 @@ export class WithdrawalStateMachine {
       return current; // Idempotent
     }
 
-    if (current.status !== 'PROCESSING') {
+    if (current.status !== 'PROCESSING' && current.status !== 'RETRYING') {
       throw new WithdrawalTransitionError(
-        `Cannot transition to COMPLETED from status '${current.status}'. Must be in 'PROCESSING'.`,
+        `Cannot transition to COMPLETED from status '${current.status}'. Must be in 'PROCESSING' or 'RETRYING'.`,
         'INVALID_CURRENT_STATUS'
       );
     }
@@ -260,7 +265,7 @@ export class WithdrawalStateMachine {
            failure_reason = NULL,
            locked_at = NULL,
            updated_at = $2
-       WHERE id = $3 AND status = 'PROCESSING'
+       WHERE id = $3 AND status IN ('PROCESSING', 'RETRYING')
        RETURNING *`,
       [txHash.trim(), now, withdrawalId]
     );
@@ -321,10 +326,9 @@ export class WithdrawalStateMachine {
     now: number = Date.now()
   ): Promise<{ released: boolean; withdrawal: WithdrawalRecord }> {
     // 1. Lock withdrawal record
-    const checkRes = await client.query(
-      `SELECT * FROM te_withdrawals WHERE id = $1 FOR UPDATE`,
-      [withdrawalId]
-    );
+    const checkRes = await client.query(`SELECT * FROM te_withdrawals WHERE id = $1 FOR UPDATE`, [
+      withdrawalId,
+    ]);
 
     if (checkRes.rows.length === 0) {
       throw new WithdrawalTransitionError(`Withdrawal ${withdrawalId} not found.`, 'NOT_FOUND');
@@ -334,7 +338,9 @@ export class WithdrawalStateMachine {
 
     // Guard: only allow release if funds have not been released yet
     if (current.funds_released) {
-      console.log(`[WithdrawalStateMachine] Funds for withdrawal ${withdrawalId} already released previously. Skipping release.`);
+      console.log(
+        `[WithdrawalStateMachine] Funds for withdrawal ${withdrawalId} already released previously. Skipping release.`
+      );
       return { released: false, withdrawal: current };
     }
 
@@ -422,13 +428,15 @@ export class WithdrawalStateMachine {
     now: number = Date.now()
   ): Promise<WithdrawalRecord> {
     if (!failureReason || !failureReason.trim()) {
-      throw new WithdrawalTransitionError('Cannot transition to FAILED without a valid failure_reason.', 'MISSING_FAILURE_REASON');
+      throw new WithdrawalTransitionError(
+        'Cannot transition to FAILED without a valid failure_reason.',
+        'MISSING_FAILURE_REASON'
+      );
     }
 
-    const checkRes = await client.query(
-      `SELECT * FROM te_withdrawals WHERE id = $1 FOR UPDATE`,
-      [withdrawalId]
-    );
+    const checkRes = await client.query(`SELECT * FROM te_withdrawals WHERE id = $1 FOR UPDATE`, [
+      withdrawalId,
+    ]);
 
     if (checkRes.rows.length === 0) {
       throw new WithdrawalTransitionError(`Withdrawal ${withdrawalId} not found.`, 'NOT_FOUND');
@@ -531,7 +539,9 @@ export class WithdrawalStateMachine {
     );
 
     if (updateRes.rows.length === 0) {
-      throw new WithdrawalTransitionError(`Cannot transition ${withdrawalId} to RETRYING; record not found or not in PROCESSING.`);
+      throw new WithdrawalTransitionError(
+        `Cannot transition ${withdrawalId} to RETRYING; record not found or not in PROCESSING.`
+      );
     }
 
     return this.mapRowToRecord(updateRes.rows[0]);
@@ -546,10 +556,9 @@ export class WithdrawalStateMachine {
     withdrawalId: string,
     now: number = Date.now()
   ): Promise<WithdrawalRecord> {
-    const checkRes = await client.query(
-      `SELECT * FROM te_withdrawals WHERE id = $1 FOR UPDATE`,
-      [withdrawalId]
-    );
+    const checkRes = await client.query(`SELECT * FROM te_withdrawals WHERE id = $1 FOR UPDATE`, [
+      withdrawalId,
+    ]);
 
     if (checkRes.rows.length === 0) {
       throw new WithdrawalTransitionError(`Withdrawal ${withdrawalId} not found.`, 'NOT_FOUND');
@@ -660,11 +669,48 @@ export class WithdrawalStateMachine {
     return res.rowCount || 0;
   }
 
+  /**
+   * Transition to NEEDS_RECONCILIATION.
+   * Placed when broadcast status is unknown or verification is inconclusive.
+   * Prevents blind re-transfers.
+   */
+  public static async markNeedsReconciliation(
+    client: PoolClient,
+    withdrawalId: string,
+    reason: string,
+    workerId: string,
+    now: number = Date.now()
+  ): Promise<WithdrawalRecord> {
+    const updateRes = await client.query(
+      `UPDATE te_withdrawals
+       SET status = 'NEEDS_RECONCILIATION',
+           failure_reason = $1,
+           locked_at = NULL,
+           worker_id = $2,
+           updated_at = $3
+       WHERE id = $4 AND status IN ('PROCESSING', 'RETRYING')
+       RETURNING *`,
+      [reason, workerId, now, withdrawalId]
+    );
+
+    if (updateRes.rows.length === 0) {
+      const checkRes = await client.query(`SELECT * FROM te_withdrawals WHERE id = $1`, [
+        withdrawalId,
+      ]);
+      if (checkRes.rows.length === 0)
+        throw new WithdrawalTransitionError(`Withdrawal ${withdrawalId} not found.`);
+      return this.mapRowToRecord(checkRes.rows[0]);
+    }
+
+    return this.mapRowToRecord(updateRes.rows[0]);
+  }
+
   public static mapRowToRecord(row: any): WithdrawalRecord {
     return {
       id: row.id,
+      operation_id: row.operation_id || row.id,
       user_id: row.user_id,
-      amount: Number(row.amount),
+      amount: String(row.amount),
       currency: row.currency,
       address: row.address,
       status: row.status as WithdrawalStatus,

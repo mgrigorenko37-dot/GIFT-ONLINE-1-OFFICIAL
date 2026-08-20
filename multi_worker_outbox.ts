@@ -16,34 +16,39 @@ async function run() {
   let processed = 0;
   try {
     await client.query('BEGIN');
-    
+
     // We add a LIMIT 10 so they don't both grab all 20 at once in the test
-    const res = await client.query(`
+    const res = await client.query(
+      `
       SELECT * FROM te_outbox_events 
       WHERE status = 'test_pending' AND user_id = $1
       ORDER BY id ASC 
       LIMIT 10 
       FOR UPDATE SKIP LOCKED
-    `, [userFilter]);
+    `,
+      [userFilter]
+    );
 
     for (const row of res.rows) {
       const data = JSON.parse(row.payload);
-      
+
       // simulated delivery
       if (crashOnI === data.i) {
-         console.log(`[Worker ${name}] CRASHING on simulated delivery failure for i=${data.i} (ID: ${row.id})`);
-         throw new Error('Delivery failure simulated');
+        console.log(
+          `[Worker ${name}] CRASHING on simulated delivery failure for i=${data.i} (ID: ${row.id})`
+        );
+        throw new Error('Delivery failure simulated');
       }
-      
+
       console.log(`[Worker ${name}] Delivered event i=${data.i} (ID: ${row.id})`);
-      
+
       await client.query(
         `UPDATE te_outbox_events SET status = 'test_published', published_at = $1 WHERE id = $2`,
         [Date.now(), row.id]
       );
       processed++;
       // slight delay to ensure concurrent worker takes other rows
-      await new Promise(r => setTimeout(r, 20)); 
+      await new Promise((r) => setTimeout(r, 20));
     }
     await client.query('COMMIT');
     console.log(`[Worker ${name}] Successfully committed ${processed} events.`);

@@ -7,10 +7,13 @@ import { setupSocketServer } from './socketServer';
 import { PostgresTradingEngine } from './tradingEngine';
 
 // Helper to create genuine Telegram WebApp initData HMAC-SHA256
-function generateValidTelegramInitData(botToken: string, user: { id: number; first_name: string; username?: string }) {
+function generateValidTelegramInitData(
+  botToken: string,
+  user: { id: number; first_name: string; username?: string }
+) {
   const authDate = Math.floor(Date.now() / 1000);
   const userJson = JSON.stringify(user);
-  
+
   const params: Record<string, string> = {
     auth_date: String(authDate),
     query_id: 'AAHdF6IQAAAAAN0XohDhrOrc',
@@ -22,15 +25,9 @@ function generateValidTelegramInitData(botToken: string, user: { id: number; fir
     .map((k) => `${k}=${params[k]}`);
   const dataCheckString = dataCheckArr.join('\n');
 
-  const secretKey = crypto
-    .createHmac('sha256', 'WebAppData')
-    .update(botToken)
-    .digest();
+  const secretKey = crypto.createHmac('sha256', 'WebAppData').update(botToken).digest();
 
-  const hash = crypto
-    .createHmac('sha256', secretKey)
-    .update(dataCheckString)
-    .digest('hex');
+  const hash = crypto.createHmac('sha256', secretKey).update(dataCheckString).digest('hex');
 
   return `auth_date=${params.auth_date}&query_id=${params.query_id}&user=${encodeURIComponent(userJson)}&hash=${hash}`;
 }
@@ -51,7 +48,9 @@ describe('Socket.IO Strict Telegram Auth & Zero Fallback Tests', () => {
       getUserOrders: vi.fn().mockResolvedValue([]),
       getAllPositions: vi.fn().mockResolvedValue([]),
       getBalance: vi.fn().mockResolvedValue({ available: 50, locked: 10, currency: 'TON' }),
-      getMarginInfo: vi.fn().mockResolvedValue({ equity: 50, freeMargin: 40, marginUsed: 10, marginLevel: 500 }),
+      getMarginInfo: vi
+        .fn()
+        .mockResolvedValue({ equity: 50, freeMargin: 40, marginUsed: 10, marginLevel: 500 }),
       getUserTrades: vi.fn().mockResolvedValue([]),
       placeOrder: vi.fn().mockResolvedValue({
         orderId: 'order_test_123',
@@ -130,7 +129,8 @@ describe('Socket.IO Strict Telegram Auth & Zero Fallback Tests', () => {
   it('2. Connection fails if initData signature is invalid or tampered with', async () => {
     let connectError: any = null;
 
-    const fakeInitData = 'auth_date=1700000000&user=%7B%22id%22%3A999888%7D&hash=invalid_hash_signature_123';
+    const fakeInitData =
+      'auth_date=1700000000&user=%7B%22id%22%3A999888%7D&hash=invalid_hash_signature_123';
 
     const client: ClientSocket = ClientIO(`http://localhost:${port}`, {
       transports: ['websocket'],
@@ -240,7 +240,7 @@ describe('Socket.IO Strict Telegram Auth & Zero Fallback Tests', () => {
     client.close();
   });
 
-  it('5. Ownership verification on cancelOrder prevents cancelling another user\'s order', async () => {
+  it("5. Ownership verification on cancelOrder prevents cancelling another user's order", async () => {
     // Mock user orders: order_1 belongs to user 999888, order_2 belongs to victim 777
     mockEngine.getUserOrders.mockResolvedValue([
       {
@@ -289,7 +289,7 @@ describe('Socket.IO Strict Telegram Auth & Zero Fallback Tests', () => {
     client.close();
   });
 
-  it('6. Attempting to join another user\'s private room emits security violation error', async () => {
+  it("6. Attempting to join another user's private room emits security violation error", async () => {
     const validInitData = generateValidTelegramInitData(TEST_BOT_TOKEN, {
       id: 999888,
       first_name: 'Alice',
@@ -321,7 +321,36 @@ describe('Socket.IO Strict Telegram Auth & Zero Fallback Tests', () => {
     client.close();
   });
 
-  it('7. DEMO_AUTH mode provides isolated sandbox without DB or real financial access', async () => {
+  it('7. DEMO_AUTH request fails when ALLOW_DEMO_AUTH env flag is disabled', async () => {
+    delete process.env.ALLOW_DEMO_AUTH;
+    delete process.env.ALLOW_DEMO_MODE;
+
+    let connectError: any = null;
+    const client: ClientSocket = ClientIO(`http://localhost:${port}`, {
+      transports: ['websocket'],
+      auth: {
+        demoAuth: true,
+      },
+      reconnection: false,
+    });
+
+    await new Promise<void>((resolve) => {
+      client.on('connect_error', (err) => {
+        connectError = err;
+        resolve();
+      });
+      client.on('connect', () => resolve());
+    });
+
+    expect(connectError).toBeDefined();
+    expect(connectError.message).toContain('Demo authentication is disabled');
+    expect(client.connected).toBe(false);
+    client.close();
+  });
+
+  it('8. DEMO_AUTH mode provides isolated sandbox when ALLOW_DEMO_AUTH is true', async () => {
+    process.env.ALLOW_DEMO_AUTH = 'true';
+
     const client: ClientSocket = ClientIO(`http://localhost:${port}`, {
       transports: ['websocket'],
       auth: {
@@ -350,9 +379,73 @@ describe('Socket.IO Strict Telegram Auth & Zero Fallback Tests', () => {
     await new Promise((r) => setTimeout(r, 50));
 
     expect(rejectedEvent).toBeDefined();
-    expect(rejectedEvent.error).toContain('DEMO mode: Financial and trading operations are disabled');
+    expect(rejectedEvent.error).toContain(
+      'DEMO mode: Financial and trading operations are disabled'
+    );
     expect(mockEngine.placeOrder).not.toHaveBeenCalled();
 
+    // Attempt room join violation in DEMO mode
+    let roomError: any = null;
+    client.on('error', (err) => {
+      roomError = err;
+    });
+
+    client.emit('join_room', 'user_999888');
+    await new Promise((r) => setTimeout(r, 50));
+
+    expect(roomError).toBeDefined();
+    expect(roomError.message).toContain('Demo context cannot join private user rooms');
+
+    delete process.env.ALLOW_DEMO_AUTH;
     client.close();
+  });
+
+  it('9. Financial handler helper functions strictly reject DemoContext at runtime', async () => {
+    const {
+      handleGetUserOrders,
+      handleGetBalance,
+      handleGetPositions,
+      handleGetMarginInfo,
+      handleGetUserTrades,
+      handlePlaceOrder,
+      handleCancelOrder,
+    } = await import('./socketServer');
+
+    const demoCtx: any = {
+      type: 'demo',
+      demoId: 'demo_guest_12345',
+      isDemo: true,
+      authenticatedAt: Date.now(),
+    };
+
+    await expect(handleGetUserOrders(demoCtx, mockEngine)).rejects.toThrow(
+      'Security Error: Financial operations require AuthenticatedTelegramContext.'
+    );
+    await expect(handleGetBalance(demoCtx, mockEngine)).rejects.toThrow(
+      'Security Error: Financial operations require AuthenticatedTelegramContext.'
+    );
+    await expect(handleGetPositions(demoCtx, mockEngine)).rejects.toThrow(
+      'Security Error: Financial operations require AuthenticatedTelegramContext.'
+    );
+    await expect(handleGetMarginInfo(demoCtx, mockEngine)).rejects.toThrow(
+      'Security Error: Financial operations require AuthenticatedTelegramContext.'
+    );
+    await expect(handleGetUserTrades(demoCtx, mockEngine)).rejects.toThrow(
+      'Security Error: Financial operations require AuthenticatedTelegramContext.'
+    );
+    await expect(
+      handlePlaceOrder(demoCtx, mockEngine, {
+        giftName: 'gift_1',
+        side: 'buy',
+        type: 'limit',
+        amount: 1,
+        price: 5,
+      })
+    ).rejects.toThrow(
+      'Security Error: Financial operations require AuthenticatedTelegramContext.'
+    );
+    await expect(handleCancelOrder(demoCtx, mockEngine, 'ord_1')).rejects.toThrow(
+      'Security Error: Financial operations require AuthenticatedTelegramContext.'
+    );
   });
 });

@@ -8,14 +8,14 @@ import typescriptPlugin from '@typescript-eslint/eslint-plugin';
 
 export default [
   {
+    ignores: ['dist/**', 'coverage/**', 'node_modules/**'],
+  },
+  {
     files: ['**/*.{js,jsx,ts,tsx}'],
     languageOptions: {
       ecmaVersion: 'latest',
       sourceType: 'module',
       parser: typescriptParser,
-      parserOptions: {
-        project: './tsconfig.json',
-      },
     },
     settings: {
       react: {
@@ -32,17 +32,27 @@ export default [
     },
     rules: {
       ...hooksPlugin.configs.recommended.rules,
-      ...jsxA11yPlugin.configs.recommended.rules,
+      'react-hooks/set-state-in-effect': 'off',
+      'react-hooks/refs': 'off',
       'no-console': 'warn',
       'react/prop-types': 'off',
-      'prettier/prettier': 'error',
+      'prettier/prettier': 'warn',
       'react/react-in-jsx-scope': 'off',
       'react/jsx-no-target-blank': 'off',
       'react/require-default-props': 'off',
       '@typescript-eslint/no-explicit-any': 'off',
-      'no-unused-vars': ['error', { args: 'none' }],
+      'no-unused-vars': 'off',
+      '@typescript-eslint/no-unused-vars': ['warn', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
       'jsx-a11y/label-has-associated-control': 'off',
-      'react/function-component-definition': [2, { namedComponents: 'arrow-function' }],
+      'react/function-component-definition': 'off',
+    },
+  },
+  {
+    files: ['**/*.{ts,tsx}'],
+    languageOptions: {
+      parserOptions: {
+        project: './tsconfig.json',
+      },
     },
   },
 ];

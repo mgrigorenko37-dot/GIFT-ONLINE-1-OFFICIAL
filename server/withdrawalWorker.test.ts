@@ -43,12 +43,15 @@ describe('WithdrawalWorker & TON Transfer Integration', () => {
       if (sql === 'BEGIN' || sql === 'COMMIT' || sql === 'ROLLBACK') return { rows: [] };
 
       // Recovery of stale records
-      if (sql.includes('WHERE status = \'PROCESSING\'') && sql.includes('locked_at <')) {
+      if (sql.includes("WHERE status = 'PROCESSING'") && sql.includes('locked_at <')) {
         return { rowCount: 0, rows: [] };
       }
 
       // SELECT FOR UPDATE SKIP LOCKED
-      if (sql.includes('SELECT id FROM te_withdrawals') && sql.includes("status IN ('PENDING', 'RETRYING')")) {
+      if (
+        sql.includes('SELECT id FROM te_withdrawals') &&
+        sql.includes("status IN ('PENDING', 'RETRYING')")
+      ) {
         if (!selectCalled) {
           selectCalled = true;
           return { rows: [{ id: pendingWithdrawal.id }] };
@@ -107,7 +110,12 @@ describe('WithdrawalWorker & TON Transfer Integration', () => {
         };
       }
 
-      if (sql.includes('UPDATE te_balances') || sql.includes('INSERT INTO te_outbox_events') || sql.includes('UPDATE te_outbox_events') || sql.includes('INSERT INTO te_financial_audits')) {
+      if (
+        sql.includes('UPDATE te_balances') ||
+        sql.includes('INSERT INTO te_outbox_events') ||
+        sql.includes('UPDATE te_outbox_events') ||
+        sql.includes('INSERT INTO te_financial_audits')
+      ) {
         return { rowCount: 1, rows: [] };
       }
 
@@ -125,19 +133,19 @@ describe('WithdrawalWorker & TON Transfer Integration', () => {
     expect(processed).toBe(1);
     expect(mockAdapter.sentTransfers.length).toBe(1);
     expect(mockAdapter.sentTransfers[0].to).toBe(pendingWithdrawal.address);
-    expect(mockAdapter.sentTransfers[0].amount).toBe(2.5);
+    expect(mockAdapter.sentTransfers[0].amount).toBe('2.5');
 
     // Verify SQL updates: status COMPLETED
     const calls = clientMock.query.mock.calls;
-    const completedUpdate = calls.find((c: any) =>
-      c[0].includes('UPDATE te_withdrawals') && c[0].includes("status = 'COMPLETED'")
+    const completedUpdate = calls.find(
+      (c: any) => c[0].includes('UPDATE te_withdrawals') && c[0].includes("status = 'COMPLETED'")
     );
     expect(completedUpdate).toBeDefined();
     expect(completedUpdate[1][0]).toMatch(/^mock_tx_/);
     expect(completedUpdate[1][2]).toBe('wd_12345');
 
-    const balanceUpdate = calls.find((c: any) =>
-      c[0].includes('UPDATE te_balances') && c[0].includes('locked_balance = $1')
+    const balanceUpdate = calls.find(
+      (c: any) => c[0].includes('UPDATE te_balances') && c[0].includes('locked_balance = $1')
     );
     expect(balanceUpdate).toBeDefined();
   });
@@ -164,7 +172,10 @@ describe('WithdrawalWorker & TON Transfer Integration', () => {
     clientMock.query.mockImplementation(async (sql: string, params: any[]) => {
       if (sql === 'BEGIN' || sql === 'COMMIT' || sql === 'ROLLBACK') return { rows: [] };
 
-      if (sql.includes('SELECT id FROM te_withdrawals') && sql.includes("status IN ('PENDING', 'RETRYING')")) {
+      if (
+        sql.includes('SELECT id FROM te_withdrawals') &&
+        sql.includes("status IN ('PENDING', 'RETRYING')")
+      ) {
         if (!selectCalled) {
           selectCalled = true;
           return { rows: [{ id: pendingWithdrawal.id }] };
@@ -212,8 +223,8 @@ describe('WithdrawalWorker & TON Transfer Integration', () => {
 
     // Verify RETRYING transition was initiated
     const calls = clientMock.query.mock.calls;
-    const retryingUpdate = calls.find((c: any) =>
-      c[0].includes('UPDATE te_withdrawals') && c[0].includes("status = 'RETRYING'")
+    const retryingUpdate = calls.find(
+      (c: any) => c[0].includes('UPDATE te_withdrawals') && c[0].includes("status = 'RETRYING'")
     );
     expect(retryingUpdate).toBeDefined();
     expect(retryingUpdate[1][0]).toBe('TON Node connection timeout (504 Gateway Timeout)');
@@ -224,7 +235,10 @@ describe('WithdrawalWorker & TON Transfer Integration', () => {
     clientMock.query.mockImplementation(async (sql: string, params: any[]) => {
       if (sql === 'BEGIN' || sql === 'COMMIT' || sql === 'ROLLBACK') return { rows: [] };
 
-      if (sql.includes('SELECT id FROM te_withdrawals') && sql.includes("status IN ('PENDING', 'RETRYING')")) {
+      if (
+        sql.includes('SELECT id FROM te_withdrawals') &&
+        sql.includes("status IN ('PENDING', 'RETRYING')")
+      ) {
         callCount++;
         if (callCount === 1) {
           return { rows: [{ id: 'wd_idempotent' }] };
@@ -237,6 +251,7 @@ describe('WithdrawalWorker & TON Transfer Integration', () => {
           rows: [
             {
               id: 'wd_idempotent',
+              operation_id: 'op_wd_idempotent',
               user_id: 'user_1',
               amount: '1.0',
               currency: 'TON',
@@ -274,7 +289,33 @@ describe('WithdrawalWorker & TON Transfer Integration', () => {
         return { rows: [{ available_balance: '10.0', locked_balance: '1.0' }] };
       }
 
-      if (sql.includes('UPDATE te_withdrawals') || sql.includes('UPDATE te_balances') || sql.includes('INSERT INTO te_outbox_events') || sql.includes('UPDATE te_outbox_events') || sql.includes('INSERT INTO te_financial_audits')) {
+      if (sql.includes('UPDATE te_withdrawals')) {
+        return {
+          rowCount: 1,
+          rows: [
+            {
+              id: 'wd_idempotent',
+              operation_id: 'op_wd_idempotent',
+              user_id: 'user_1',
+              amount: '1.0',
+              currency: 'TON',
+              address: 'EQCD39VS5jcptHL8vMjEXrzGaRcCVYto7HUn4bpAOg8xqB2N',
+              status: 'COMPLETED',
+              attempts: 1,
+              funds_released: false,
+              created_at: 1000,
+              updated_at: 1000,
+            },
+          ],
+        };
+      }
+
+      if (
+        sql.includes('UPDATE te_balances') ||
+        sql.includes('INSERT INTO te_outbox_events') ||
+        sql.includes('UPDATE te_outbox_events') ||
+        sql.includes('INSERT INTO te_financial_audits')
+      ) {
         return { rowCount: 1, rows: [] };
       }
 
@@ -334,7 +375,24 @@ describe('WithdrawalWorker & TON Transfer Integration', () => {
           return { rows: [] };
         }
         if (sql.includes('UPDATE te_withdrawals') && sql.includes("status = 'PROCESSING'")) {
-          return { rows: [{ ...row1, status: 'PROCESSING', worker_id: params[0], attempts: 1 }] };
+          return {
+            rows: [
+              {
+                ...row1,
+                operation_id: 'op_' + row1.id,
+                status: 'PROCESSING',
+                worker_id: params[0],
+                attempts: 1,
+              },
+            ],
+          };
+        }
+        if (sql.includes('UPDATE te_withdrawals') && sql.includes("status = 'COMPLETED'")) {
+          return {
+            rows: [
+              { ...row1, operation_id: 'op_' + row1.id, status: 'COMPLETED', tx_hash: params[0] },
+            ],
+          };
         }
         if (sql.includes('SELECT * FROM te_withdrawals WHERE id = $1 FOR UPDATE')) {
           return { rows: [{ ...row1, status: 'PROCESSING', attempts: 1 }] };
@@ -358,7 +416,24 @@ describe('WithdrawalWorker & TON Transfer Integration', () => {
           return { rows: [] };
         }
         if (sql.includes('UPDATE te_withdrawals') && sql.includes("status = 'PROCESSING'")) {
-          return { rows: [{ ...row2, status: 'PROCESSING', worker_id: params[0], attempts: 1 }] };
+          return {
+            rows: [
+              {
+                ...row2,
+                operation_id: 'op_' + row2.id,
+                status: 'PROCESSING',
+                worker_id: params[0],
+                attempts: 1,
+              },
+            ],
+          };
+        }
+        if (sql.includes('UPDATE te_withdrawals') && sql.includes("status = 'COMPLETED'")) {
+          return {
+            rows: [
+              { ...row2, operation_id: 'op_' + row2.id, status: 'COMPLETED', tx_hash: params[0] },
+            ],
+          };
         }
         if (sql.includes('SELECT * FROM te_withdrawals WHERE id = $1 FOR UPDATE')) {
           return { rows: [{ ...row2, status: 'PROCESSING', attempts: 1 }] };
@@ -385,6 +460,6 @@ describe('WithdrawalWorker & TON Transfer Integration', () => {
     expect(res1).toBe(1);
     expect(res2).toBe(1);
     expect(mockAdapter.sentTransfers.length).toBe(2);
-    expect(mockAdapter.sentTransfers.map((t) => t.amount).sort()).toEqual([10, 20]);
+    expect(mockAdapter.sentTransfers.map((t) => t.amount).sort()).toEqual(['10', '20']);
   });
 });

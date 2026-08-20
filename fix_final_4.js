@@ -13,7 +13,7 @@ for (let i = 0; i < lines.length; i++) {
       }
       if (lines[j].includes("it('")) break; // found another test
     }
-    
+
     if (!isTest14) {
       lines[i] = lines[i].replace('90 - bal.fees', '100 - bal.fees');
     }

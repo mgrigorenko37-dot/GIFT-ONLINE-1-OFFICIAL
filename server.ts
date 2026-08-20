@@ -146,6 +146,7 @@ process.on('SIGINT', () => {
 });
 
 async function startServer() {
+  await setupDatabaseSchema();
   initMarketStateRepository();
   initOutboxWorker(getMarketRepository());
 

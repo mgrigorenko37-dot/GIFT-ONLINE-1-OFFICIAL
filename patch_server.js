@@ -19,5 +19,8 @@ const replacement = `    const mapped = result.rows.map(r => {
       };
     });`;
 
-code = code.replace(/    const mapped = result\.rows\.map\(r => \(\{[\s\S]*?source: 'postgres'\n    \}\)\);/, replacement);
+code = code.replace(
+  /    const mapped = result\.rows\.map\(r => \(\{[\s\S]*?source: 'postgres'\n    \}\)\);/,
+  replacement
+);
 fs.writeFileSync('server.ts', code, 'utf8');

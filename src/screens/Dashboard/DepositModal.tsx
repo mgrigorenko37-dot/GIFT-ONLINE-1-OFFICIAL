@@ -32,8 +32,8 @@ export const DepositModal: React.FC<DepositModalProps> = ({
     setStatus('processing');
 
     setTimeout(() => {
-        // Gram deposit simulation
-        setTimeout(() => setStatus('success'), 2000);
+      // Gram deposit simulation
+      setTimeout(() => setStatus('success'), 2000);
     }, 1000);
   };
 
@@ -125,8 +125,8 @@ export const DepositModal: React.FC<DepositModalProps> = ({
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
                 <span style={{ color: '#625d70', fontSize: 14 }}>Rate</span>
                 <span style={{ color: '#f6f3ff', fontSize: 14 }}>
-                  1 {method === 'stars' ? 'Star' : 'Gram'} = {formatUSDT(gxPreview / Number(amount))}{' '}
-                  USDT
+                  1 {method === 'stars' ? 'Star' : 'Gram'} ={' '}
+                  {formatUSDT(gxPreview / Number(amount))} USDT
                 </span>
               </div>
               <div style={{ height: 1, background: '#2a2840', margin: '12px 0' }} />

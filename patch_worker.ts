@@ -4,7 +4,7 @@ let code = fs.readFileSync('server/tradingWorker.ts', 'utf8');
 
 // Add import
 if (!code.includes('SchedulerLease')) {
-   code = "import { SchedulerLease } from './schedulerLease';\n" + code;
+  code = "import { SchedulerLease } from './schedulerLease';\n" + code;
 }
 
 const target = `  try {
@@ -40,7 +40,7 @@ const replacement = `  try {
 const targetEnd = `  } catch (err) {
     console.error('[FundingWorker] Error processing funding:', err);
   }`;
-  
+
 const replacementEnd = `    } finally {
        await lease.releaseLock(lockClient, 'FUNDING_JOB', String(alignedTimestamp));
     }
@@ -49,10 +49,10 @@ const replacementEnd = `    } finally {
   }`;
 
 if (code.includes(target) && code.includes(targetEnd)) {
-    code = code.replace(target, replacement);
-    code = code.replace(targetEnd, replacementEnd);
-    fs.writeFileSync('server/tradingWorker.ts', code);
-    console.log("Worker patched successfully");
+  code = code.replace(target, replacement);
+  code = code.replace(targetEnd, replacementEnd);
+  fs.writeFileSync('server/tradingWorker.ts', code);
+  console.log('Worker patched successfully');
 } else {
-    console.log("Could not find targets");
+  console.log('Could not find targets');
 }

@@ -522,6 +522,6 @@ describe('Postgres Margin and Isolation Tests', () => {
   });
 
 });
-`
+`;
 
 fs.writeFileSync('tests/postgresql_margin_tests.test.ts', testCode);

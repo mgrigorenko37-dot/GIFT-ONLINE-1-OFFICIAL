@@ -16,7 +16,9 @@ export async function processTradingOutbox(pool: Pool, io: Server) {
     `);
 
     if (res.rows.length === 0) {
-      try { await client.query('ROLLBACK'); } catch(e) {}
+      try {
+        await client.query('ROLLBACK');
+      } catch (e) {}
       return;
     }
 
@@ -47,8 +49,13 @@ export async function processTradingOutbox(pool: Pool, io: Server) {
     }
 
     await client.query('COMMIT');
-  } catch (e) {
-    try { await client.query('ROLLBACK'); } catch(e) {}
+  } catch (e: any) {
+    try {
+      await client.query('ROLLBACK');
+    } catch (e) {}
+    if (e?.code === '42P01' || e?.message?.includes('does not exist')) {
+      return;
+    }
     console.error('Error processing trading outbox', e);
   } finally {
     client.release();

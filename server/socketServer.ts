@@ -27,11 +27,130 @@ export type Trade = {
   takerSide: 'buy' | 'sell';
 };
 
-export interface AuthenticatedSocketContext {
+export interface AuthenticatedTelegramContext {
+  type: 'telegram';
   userId: string;
-  isDemo: boolean;
-  telegramUser?: ValidatedTelegramUser;
+  isDemo: false;
+  telegramUser: ValidatedTelegramUser;
   authenticatedAt: number;
+}
+
+export interface DemoContext {
+  type: 'demo';
+  demoId: string;
+  isDemo: true;
+  authenticatedAt: number;
+}
+
+export type AuthenticatedSocketContext = AuthenticatedTelegramContext | DemoContext;
+
+export function isTelegramContext(
+  ctx: AuthenticatedSocketContext
+): ctx is AuthenticatedTelegramContext {
+  return Boolean(ctx && ctx.type === 'telegram' && ctx.isDemo === false && typeof ctx.userId === 'string');
+}
+
+export function isDemoContext(ctx: AuthenticatedSocketContext): ctx is DemoContext {
+  return Boolean(ctx && ctx.type === 'demo' && ctx.isDemo === true && typeof ctx.demoId === 'string');
+}
+
+export async function handleGetUserOrders(
+  ctx: AuthenticatedTelegramContext,
+  tradingEngine: PostgresTradingEngine
+) {
+  if (!isTelegramContext(ctx)) {
+    throw new Error('Security Error: Financial operations require AuthenticatedTelegramContext.');
+  }
+  return await tradingEngine.getUserOrders(ctx.userId);
+}
+
+export async function handleGetBalance(
+  ctx: AuthenticatedTelegramContext,
+  tradingEngine: PostgresTradingEngine
+) {
+  if (!isTelegramContext(ctx)) {
+    throw new Error('Security Error: Financial operations require AuthenticatedTelegramContext.');
+  }
+  return await tradingEngine.getBalance(ctx.userId);
+}
+
+export async function handleGetPositions(
+  ctx: AuthenticatedTelegramContext,
+  tradingEngine: PostgresTradingEngine
+) {
+  if (!isTelegramContext(ctx)) {
+    throw new Error('Security Error: Financial operations require AuthenticatedTelegramContext.');
+  }
+  return await tradingEngine.getAllPositions(ctx.userId);
+}
+
+export async function handleGetMarginInfo(
+  ctx: AuthenticatedTelegramContext,
+  tradingEngine: PostgresTradingEngine,
+  currency: string = 'TON'
+) {
+  if (!isTelegramContext(ctx)) {
+    throw new Error('Security Error: Financial operations require AuthenticatedTelegramContext.');
+  }
+  return await tradingEngine.getMarginInfo(ctx.userId, currency);
+}
+
+export async function handleGetUserTrades(
+  ctx: AuthenticatedTelegramContext,
+  tradingEngine: PostgresTradingEngine
+) {
+  if (!isTelegramContext(ctx)) {
+    throw new Error('Security Error: Financial operations require AuthenticatedTelegramContext.');
+  }
+  return await tradingEngine.getUserTrades(ctx.userId);
+}
+
+export async function handlePlaceOrder(
+  ctx: AuthenticatedTelegramContext,
+  tradingEngine: PostgresTradingEngine,
+  orderData: {
+    giftName: string;
+    side: 'buy' | 'sell';
+    type: 'limit' | 'market';
+    amount: number;
+    price: number;
+    reduceOnly?: boolean;
+  }
+) {
+  if (!isTelegramContext(ctx)) {
+    throw new Error('Security Error: Financial operations require AuthenticatedTelegramContext.');
+  }
+  return await tradingEngine.placeOrder(
+    {
+      userId: ctx.userId,
+      instrumentKey: orderData.giftName,
+      side: orderData.side === 'buy' ? 'Buy' : 'Sell',
+      orderType: orderData.type === 'limit' ? 'Limit' : 'Market',
+      qty: Number(orderData.amount),
+      price: Number(orderData.price) || 0,
+      reduceOnly: orderData.reduceOnly === true,
+    },
+    true
+  );
+}
+
+export async function handleCancelOrder(
+  ctx: AuthenticatedTelegramContext,
+  tradingEngine: PostgresTradingEngine,
+  orderId: string
+) {
+  if (!isTelegramContext(ctx)) {
+    throw new Error('Security Error: Financial operations require AuthenticatedTelegramContext.');
+  }
+
+  // Check ownership strictly against verified Telegram ID (ctx.userId)
+  const userOrders = await tradingEngine.getUserOrders(ctx.userId);
+  const ownsOrder = userOrders.some((o) => o.orderId === orderId);
+  if (!ownsOrder) {
+    throw new Error('Unauthorized to cancel this order: ownership verification failed.');
+  }
+
+  return await tradingEngine.cancelOrder(orderId);
 }
 
 export const getOrderBook = async (tradingEngine: PostgresTradingEngine, giftName: string) => {
@@ -95,7 +214,9 @@ export const matchOrder = async (
 ) => {
   const activeOrders = await tradingEngine.getActiveOrders(order.giftName);
   const oppositeOrders = activeOrders.filter(
-    (o) => (order.side === 'buy' ? o.side === 'Sell' : o.side === 'Buy') && o.orderId !== engineOrder?.orderId
+    (o) =>
+      (order.side === 'buy' ? o.side === 'Sell' : o.side === 'Buy') &&
+      o.orderId !== engineOrder?.orderId
   );
 
   if (order.side === 'buy') {
@@ -120,7 +241,9 @@ export const matchOrder = async (
     remainingToFill -= fillAmount;
 
     if (engineOrder) {
-      await tradingEngine.executeTrade(engineOrder.orderId, fillAmount, fillPrice).catch(console.error);
+      await tradingEngine
+        .executeTrade(engineOrder.orderId, fillAmount, fillPrice)
+        .catch(console.error);
     }
     await tradingEngine.executeTrade(match.orderId, fillAmount, fillPrice).catch(console.error);
     await tradingEngine.updateMarkPrice(order.giftName, fillPrice).catch(console.error);
@@ -165,16 +288,27 @@ export function setupSocketServer(io: Server, tradingEngine: PostgresTradingEngi
     const headers = socket.handshake.headers || {};
 
     const rawInitData = auth.initData || headers['x-telegram-init-data'];
-    const isDemoMode = auth.demoAuth === true || headers['x-demo-auth'] === 'true';
+    const isDemoRequested = auth.demoAuth === true || headers['x-demo-auth'] === 'true';
+    const allowDemoAuth =
+      process.env.ALLOW_DEMO_AUTH === 'true' || process.env.ALLOW_DEMO_MODE === 'true';
 
-    // 1. Explicit DEMO_AUTH mode for sandboxed browser preview without Telegram WebApp
-    if (isDemoMode) {
+    // 1. Explicit DEMO_AUTH mode enabled ONLY when explicitly configured
+    if (isDemoRequested) {
+      if (!allowDemoAuth) {
+        return next(
+          new Error(
+            'Authentication error: Demo authentication is disabled. Telegram initData is strictly required.'
+          )
+        );
+      }
+
       const demoId = `demo_guest_${socket.id.substring(0, 8)}`;
       (socket as any).authContext = {
-        userId: demoId,
+        type: 'demo',
+        demoId,
         isDemo: true,
         authenticatedAt: Date.now(),
-      } as AuthenticatedSocketContext;
+      } as DemoContext;
       return next();
     }
 
@@ -191,42 +325,64 @@ export function setupSocketServer(io: Server, tradingEngine: PostgresTradingEngi
     // Set verified Telegram User ID on authenticated socket context
     const verifiedUserId = String(authResult.user.id);
     (socket as any).authContext = {
+      type: 'telegram',
       userId: verifiedUserId,
       isDemo: false,
       telegramUser: authResult.user,
       authenticatedAt: Date.now(),
-    } as AuthenticatedSocketContext;
+    } as AuthenticatedTelegramContext;
 
     next();
   });
 
   io.on('connection', (socket: Socket) => {
     const authContext: AuthenticatedSocketContext = (socket as any).authContext;
-    if (!authContext || !authContext.userId) {
+    if (!authContext) {
       socket.disconnect(true);
       return;
     }
 
-    const verifiedUserId = authContext.userId;
-    const isDemo = authContext.isDemo;
-    const privateRoom = `user_${verifiedUserId}`;
+    const isDemo = isDemoContext(authContext);
+    const isTelegram = isTelegramContext(authContext);
 
-    // Join only the verified user private room
+    if (!isDemo && !isTelegram) {
+      socket.disconnect(true);
+      return;
+    }
+
+    const privateRoom = isTelegram
+      ? `user_${authContext.userId}`
+      : `demo_user_${authContext.demoId}`;
+
+    // Join only the verified user room or demo room
     socket.join(privateRoom);
     attachSocketListeners(socket);
 
     let currentRoom = '';
 
-    // Guard: Prevent arbitrary joins to private user rooms
-    const originalJoin = socket.join.bind(socket);
+    // Guard: Prevent arbitrary joins to private user rooms or demo rooms
     socket.on('join_room', (roomToJoin: string) => {
-      if (typeof roomToJoin === 'string' && roomToJoin.startsWith('user_') && roomToJoin !== privateRoom) {
-        socket.emit('error', { message: 'Security violation: Cannot join private user room.' });
-        return;
+      if (typeof roomToJoin !== 'string') return;
+
+      if (isTelegram) {
+        if (roomToJoin.startsWith('user_') && roomToJoin !== privateRoom) {
+          socket.emit('error', { message: 'Security violation: Cannot join private user room.' });
+          return;
+        }
+        if (roomToJoin.startsWith('demo_user_')) {
+          socket.emit('error', { message: 'Security violation: Cannot join demo rooms.' });
+          return;
+        }
+      } else if (isDemo) {
+        if (roomToJoin.startsWith('user_')) {
+          socket.emit('error', {
+            message: 'Security violation: Demo context cannot join private user rooms.',
+          });
+          return;
+        }
       }
-      if (typeof roomToJoin === 'string') {
-        socket.join(roomToJoin);
-      }
+
+      socket.join(roomToJoin);
     });
 
     socket.on('subscribe', async (giftName: string) => {
@@ -237,7 +393,7 @@ export function setupSocketServer(io: Server, tradingEngine: PostgresTradingEngi
       socket.emit('orderBook', await getOrderBook(tradingEngine, giftName));
       socket.emit('recentTrades', await getTrades(giftName));
 
-      if (isDemo) {
+      if (isDemoContext(authContext)) {
         // Sandboxed DEMO state: no PostgreSQL DB queries or state leakage
         socket.emit('userOrders', []);
         socket.emit('positions', []);
@@ -247,122 +403,11 @@ export function setupSocketServer(io: Server, tradingEngine: PostgresTradingEngi
         return;
       }
 
-      // Verified real user state
-      const userOrders = await tradingEngine.getUserOrders(verifiedUserId);
-      const mappedOrders = userOrders.map((o) => ({
-        id: o.orderId,
-        userId: verifiedUserId,
-        giftName: o.instrumentKey,
-        side: o.side.toLowerCase(),
-        type: o.orderType.toLowerCase(),
-        price: o.price,
-        amount: o.qty,
-        filled: o.executedQty,
-        status: o.status.toLowerCase(),
-        time: o.createdAt,
-      }));
-      socket.emit('userOrders', mappedOrders);
-      socket.emit('positions', await tradingEngine.getAllPositions(verifiedUserId));
-      socket.emit('balance', await tradingEngine.getBalance(verifiedUserId));
-      socket.emit('marginInfo', await tradingEngine.getMarginInfo(verifiedUserId, 'TON'));
-      socket.emit('tradeHistory', await tradingEngine.getUserTrades(verifiedUserId));
-    });
-
-    socket.on('getMarginInfo', async (currency: string = 'TON') => {
-      if (isDemo) {
-        socket.emit('marginInfo', { equity: 100, freeMargin: 100, marginUsed: 0, marginLevel: 0 });
-        return;
-      }
-      const margin = await tradingEngine.getMarginInfo(verifiedUserId, currency);
-      socket.emit('marginInfo', margin);
-    });
-
-    socket.on('placeOrder', async (data: any) => {
-      if (isDemo) {
-        socket.emit('orderRejected', { error: 'DEMO mode: Financial and trading operations are disabled.' });
-        return;
-      }
-
-      if (!data || !data.giftName || !data.amount || !data.side) {
-        socket.emit('orderRejected', { error: 'Invalid order parameters' });
-        return;
-      }
-
-      // Strictly use verifiedUserId (ignore any data.userId or client-provided spoofed id)
-      const engineOrder = await tradingEngine.placeOrder(
-        {
-          userId: verifiedUserId,
-          instrumentKey: data.giftName,
-          side: data.side === 'buy' ? 'Buy' : 'Sell',
-          orderType: data.type === 'limit' ? 'Limit' : 'Market',
-          qty: Number(data.amount),
-          price: Number(data.price) || 0,
-          reduceOnly: data.reduceOnly === true,
-        },
-        true
-      );
-
-      if (engineOrder.status === 'Rejected') {
-        socket.emit('orderRejected', engineOrder);
-        return;
-      }
-
-      const order: Order = {
-        id: engineOrder.orderId,
-        userId: verifiedUserId,
-        giftName: data.giftName,
-        side: data.side,
-        type: data.type,
-        price: Number(data.price),
-        amount: Number(data.amount),
-        filled: 0,
-        status: 'open',
-        time: Date.now(),
-      };
-
-      await matchOrder(tradingEngine, order, io, engineOrder);
-
-      const userOrders = await tradingEngine.getUserOrders(verifiedUserId);
-      const mappedOrders = userOrders.map((o) => ({
-        id: o.orderId,
-        userId: verifiedUserId,
-        giftName: o.instrumentKey,
-        side: o.side.toLowerCase(),
-        type: o.orderType.toLowerCase(),
-        price: o.price,
-        amount: o.qty,
-        filled: o.executedQty,
-        status: o.status.toLowerCase(),
-        time: o.createdAt,
-      }));
-
-      socket.emit('userOrders', mappedOrders);
-      socket.emit('positions', await tradingEngine.getAllPositions(verifiedUserId));
-      socket.emit('balance', await tradingEngine.getBalance(verifiedUserId));
-      socket.emit('marginInfo', await tradingEngine.getMarginInfo(verifiedUserId, 'TON'));
-    });
-
-    socket.on('cancelOrder', async (orderId: string) => {
-      if (isDemo) {
-        socket.emit('error', { message: 'DEMO mode: Order cancellation disabled.' });
-        return;
-      }
-
-      // Check ownership strictly against verifiedUserId
-      const userOrders = await tradingEngine.getUserOrders(verifiedUserId);
-      const ownsOrder = userOrders.some((o) => o.orderId === orderId);
-      if (!ownsOrder) {
-        socket.emit('error', { message: 'Unauthorized to cancel this order: ownership verification failed.' });
-        return;
-      }
-
-      const engineOrder = await tradingEngine.cancelOrder(orderId);
-      if (engineOrder) {
-        io.to(engineOrder.instrumentKey).emit('orderBook', await getOrderBook(tradingEngine, engineOrder.instrumentKey));
-        const updatedOrders = await tradingEngine.getUserOrders(verifiedUserId);
-        const mappedOrders = updatedOrders.map((o) => ({
+      if (isTelegramContext(authContext)) {
+        const userOrders = await handleGetUserOrders(authContext, tradingEngine);
+        const mappedOrders = userOrders.map((o) => ({
           id: o.orderId,
-          userId: verifiedUserId,
+          userId: authContext.userId,
           giftName: o.instrumentKey,
           side: o.side.toLowerCase(),
           type: o.orderType.toLowerCase(),
@@ -373,9 +418,128 @@ export function setupSocketServer(io: Server, tradingEngine: PostgresTradingEngi
           time: o.createdAt,
         }));
         socket.emit('userOrders', mappedOrders);
-        socket.emit('balance', await tradingEngine.getBalance(verifiedUserId));
-        socket.emit('positions', await tradingEngine.getAllPositions(verifiedUserId));
-        socket.emit('marginInfo', await tradingEngine.getMarginInfo(verifiedUserId, 'TON'));
+        socket.emit('positions', await handleGetPositions(authContext, tradingEngine));
+        socket.emit('balance', await handleGetBalance(authContext, tradingEngine));
+        socket.emit('marginInfo', await handleGetMarginInfo(authContext, tradingEngine, 'TON'));
+        socket.emit('tradeHistory', await handleGetUserTrades(authContext, tradingEngine));
+      }
+    });
+
+    socket.on('getMarginInfo', async (currency: string = 'TON') => {
+      if (isDemoContext(authContext)) {
+        socket.emit('marginInfo', { equity: 100, freeMargin: 100, marginUsed: 0, marginLevel: 0 });
+        return;
+      }
+      if (isTelegramContext(authContext)) {
+        const margin = await handleGetMarginInfo(authContext, tradingEngine, currency);
+        socket.emit('marginInfo', margin);
+      }
+    });
+
+    socket.on('placeOrder', async (data: any) => {
+      if (isDemoContext(authContext)) {
+        socket.emit('orderRejected', {
+          error: 'DEMO mode: Financial and trading operations are disabled.',
+        });
+        return;
+      }
+
+      if (!isTelegramContext(authContext)) {
+        socket.emit('orderRejected', { error: 'Authentication required.' });
+        return;
+      }
+
+      if (!data || !data.giftName || !data.amount || !data.side) {
+        socket.emit('orderRejected', { error: 'Invalid order parameters' });
+        return;
+      }
+
+      try {
+        const engineOrder = await handlePlaceOrder(authContext, tradingEngine, data);
+
+        if (engineOrder.status === 'Rejected') {
+          socket.emit('orderRejected', engineOrder);
+          return;
+        }
+
+        const order: Order = {
+          id: engineOrder.orderId,
+          userId: authContext.userId,
+          giftName: data.giftName,
+          side: data.side,
+          type: data.type,
+          price: Number(data.price),
+          amount: Number(data.amount),
+          filled: 0,
+          status: 'open',
+          time: Date.now(),
+        };
+
+        await matchOrder(tradingEngine, order, io, engineOrder);
+
+        const userOrders = await handleGetUserOrders(authContext, tradingEngine);
+        const mappedOrders = userOrders.map((o) => ({
+          id: o.orderId,
+          userId: authContext.userId,
+          giftName: o.instrumentKey,
+          side: o.side.toLowerCase(),
+          type: o.orderType.toLowerCase(),
+          price: o.price,
+          amount: o.qty,
+          filled: o.executedQty,
+          status: o.status.toLowerCase(),
+          time: o.createdAt,
+        }));
+
+        socket.emit('userOrders', mappedOrders);
+        socket.emit('positions', await handleGetPositions(authContext, tradingEngine));
+        socket.emit('balance', await handleGetBalance(authContext, tradingEngine));
+        socket.emit('marginInfo', await handleGetMarginInfo(authContext, tradingEngine, 'TON'));
+      } catch (err: any) {
+        socket.emit('orderRejected', { error: err.message || 'Order execution failed.' });
+      }
+    });
+
+    socket.on('cancelOrder', async (orderId: string) => {
+      if (isDemoContext(authContext)) {
+        socket.emit('error', { message: 'DEMO mode: Order cancellation disabled.' });
+        return;
+      }
+
+      if (!isTelegramContext(authContext)) {
+        socket.emit('error', { message: 'Authentication required.' });
+        return;
+      }
+
+      try {
+        const engineOrder = await handleCancelOrder(authContext, tradingEngine, orderId);
+        if (engineOrder) {
+          io.to(engineOrder.instrumentKey).emit(
+            'orderBook',
+            await getOrderBook(tradingEngine, engineOrder.instrumentKey)
+          );
+          const updatedOrders = await handleGetUserOrders(authContext, tradingEngine);
+          const mappedOrders = updatedOrders.map((o) => ({
+            id: o.orderId,
+            userId: authContext.userId,
+            giftName: o.instrumentKey,
+            side: o.side.toLowerCase(),
+            type: o.orderType.toLowerCase(),
+            price: o.price,
+            amount: o.qty,
+            filled: o.executedQty,
+            status: o.status.toLowerCase(),
+            time: o.createdAt,
+          }));
+          socket.emit('userOrders', mappedOrders);
+          socket.emit('balance', await handleGetBalance(authContext, tradingEngine));
+          socket.emit('positions', await handleGetPositions(authContext, tradingEngine));
+          socket.emit('marginInfo', await handleGetMarginInfo(authContext, tradingEngine, 'TON'));
+        }
+      } catch (e: any) {
+        socket.emit('error', {
+          message: e.message || 'Unauthorized to cancel this order: ownership verification failed.',
+        });
       }
     });
   });

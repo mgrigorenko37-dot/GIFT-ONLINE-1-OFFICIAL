@@ -37,7 +37,9 @@ export async function handleGetCandles(req: Request, res: Response) {
     let normKey = '';
     if (rawKey) {
       if (rawKey.split(':').length !== 4) {
-        return res.status(400).json({ error: 'Invalid instrumentKey format. Expected collection:model:backdrop:currency' });
+        return res.status(400).json({
+          error: 'Invalid instrumentKey format. Expected collection:model:backdrop:currency',
+        });
       }
       // Validate format of rawKey
       let parsed;
@@ -49,41 +51,33 @@ export async function handleGetCandles(req: Request, res: Response) {
 
       // Check parameter consistency if individual fields are passed
       if (rawCol && rawCol !== parsed.collectionId) {
-        return res
-          .status(400)
-          .json({
-            error: `Parameter mismatch: collectionId "${rawCol}" does not match instrumentKey collectionId "${parsed.collectionId}"`,
-          });
+        return res.status(400).json({
+          error: `Parameter mismatch: collectionId "${rawCol}" does not match instrumentKey collectionId "${parsed.collectionId}"`,
+        });
       }
 
       if (rawModel) {
         const normModel = rawModel === 'any' || rawModel === 'all' ? 'all' : rawModel;
         if (normModel !== parsed.modelId) {
-          return res
-            .status(400)
-            .json({
-              error: `Parameter mismatch: modelId "${rawModel}" does not match instrumentKey modelId "${parsed.modelId}"`,
-            });
+          return res.status(400).json({
+            error: `Parameter mismatch: modelId "${rawModel}" does not match instrumentKey modelId "${parsed.modelId}"`,
+          });
         }
       }
 
       if (rawBackdrop) {
         const normBackdrop = rawBackdrop === 'any' || rawBackdrop === 'all' ? 'all' : rawBackdrop;
         if (normBackdrop !== parsed.backdropId) {
-          return res
-            .status(400)
-            .json({
-              error: `Parameter mismatch: backdropId "${rawBackdrop}" does not match instrumentKey backdropId "${parsed.backdropId}"`,
-            });
+          return res.status(400).json({
+            error: `Parameter mismatch: backdropId "${rawBackdrop}" does not match instrumentKey backdropId "${parsed.backdropId}"`,
+          });
         }
       }
 
       if (rawCurr && rawCurr !== parsed.currency) {
-        return res
-          .status(400)
-          .json({
-            error: `Parameter mismatch: currency "${rawCurr}" does not match instrumentKey currency "${parsed.currency}"`,
-          });
+        return res.status(400).json({
+          error: `Parameter mismatch: currency "${rawCurr}" does not match instrumentKey currency "${parsed.currency}"`,
+        });
       }
 
       normKey = buildInstrumentKey(parsed);
@@ -179,7 +173,6 @@ export async function handleGetCandles(req: Request, res: Response) {
     });
 
     return res.json(history);
-
   } catch (error: any) {
     console.error('Error in GET /api/market/candles:', error);
     return res.status(500).json({ error: 'Internal server error' });

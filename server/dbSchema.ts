@@ -93,8 +93,8 @@ export async function initDbSchema(pool: Pool) {
       `CREATE TABLE IF NOT EXISTS te_balances (
         user_id VARCHAR(255),
         currency VARCHAR(20) DEFAULT 'TON',
-        available_balance NUMERIC NOT NULL,
-        locked_balance NUMERIC NOT NULL DEFAULT 0,
+        available_balance NUMERIC NOT NULL CHECK (available_balance >= 0),
+        locked_balance NUMERIC NOT NULL DEFAULT 0 CHECK (locked_balance >= 0),
         realized_pnl NUMERIC NOT NULL DEFAULT 0,
         total_fees NUMERIC NOT NULL DEFAULT 0,
         updated_at BIGINT NOT NULL,
@@ -134,7 +134,8 @@ export async function initDbSchema(pool: Pool) {
         amount NUMERIC NOT NULL,
         currency VARCHAR(32) NOT NULL DEFAULT 'TON',
         address VARCHAR(255) NOT NULL,
-        status VARCHAR(32) NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING', 'PROCESSING', 'RETRYING', 'COMPLETED', 'FAILED')),
+        operation_id VARCHAR(255) UNIQUE,
+        status VARCHAR(32) NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING', 'PROCESSING', 'RETRYING', 'COMPLETED', 'FAILED', 'NEEDS_RECONCILIATION')),
         tx_hash VARCHAR(255),
         failure_reason TEXT,
         attempts INT NOT NULL DEFAULT 0,
@@ -148,6 +149,8 @@ export async function initDbSchema(pool: Pool) {
         updated_at BIGINT NOT NULL
       )`,
       `ALTER TABLE te_withdrawals ADD COLUMN IF NOT EXISTS attempts INT NOT NULL DEFAULT 0`,
+      `ALTER TABLE te_withdrawals ADD COLUMN IF NOT EXISTS operation_id VARCHAR(255)`,
+      `CREATE UNIQUE INDEX IF NOT EXISTS te_withdrawals_operation_id_idx ON te_withdrawals (operation_id) WHERE operation_id IS NOT NULL`,
       `ALTER TABLE te_withdrawals ADD COLUMN IF NOT EXISTS next_attempt_at BIGINT`,
       `ALTER TABLE te_withdrawals ADD COLUMN IF NOT EXISTS locked_at BIGINT`,
       `ALTER TABLE te_withdrawals ADD COLUMN IF NOT EXISTS processed_at BIGINT`,
@@ -231,6 +234,7 @@ export async function initDbSchema(pool: Pool) {
       )`,
       `CREATE UNIQUE INDEX IF NOT EXISTS idx_te_invoices_nonce_unique ON te_invoices(nonce)`,
       `CREATE UNIQUE INDEX IF NOT EXISTS idx_te_invoices_idem_user_unique ON te_invoices(idempotency_key, user_id) WHERE idempotency_key IS NOT NULL`,
+      `CREATE UNIQUE INDEX IF NOT EXISTS idx_te_invoices_charge_id_unique ON te_invoices(telegram_payment_charge_id) WHERE telegram_payment_charge_id IS NOT NULL`,
       `CREATE TABLE IF NOT EXISTS te_payments (
         id VARCHAR(255) PRIMARY KEY,
         invoice_id VARCHAR(255) REFERENCES te_invoices(id),
@@ -266,7 +270,7 @@ export async function initDbSchema(pool: Pool) {
       )`,
       `CREATE INDEX IF NOT EXISTS idx_gift_variants_collection ON gift_variants(collection_id)`,
       `CREATE UNIQUE INDEX IF NOT EXISTS idx_gift_collections_id_unique ON gift_collections(id)`,
-      `CREATE UNIQUE INDEX IF NOT EXISTS idx_gift_variants_id_unique ON gift_variants(id)`
+      `CREATE UNIQUE INDEX IF NOT EXISTS idx_gift_variants_id_unique ON gift_variants(id)`,
     ];
 
     for (const sql of tables) {
@@ -287,6 +291,8 @@ export async function initDbSchema(pool: Pool) {
       'ALTER TABLE te_orders ADD COLUMN IF NOT EXISTS reduce_only BOOLEAN NOT NULL DEFAULT false',
       'ALTER TABLE te_orders ALTER COLUMN position_effect TYPE VARCHAR(32)',
       'ALTER TABLE te_balances ALTER COLUMN currency TYPE VARCHAR(32)',
+      'ALTER TABLE te_balances ADD CONSTRAINT te_balances_avail_nonneg CHECK (available_balance >= 0)',
+      'ALTER TABLE te_balances ADD CONSTRAINT te_balances_locked_nonneg CHECK (locked_balance >= 0)',
       'ALTER TABLE te_orders ALTER COLUMN side TYPE VARCHAR(32)',
       'ALTER TABLE te_positions ALTER COLUMN side TYPE VARCHAR(32)',
       'ALTER TABLE te_trades ALTER COLUMN side TYPE VARCHAR(32)',

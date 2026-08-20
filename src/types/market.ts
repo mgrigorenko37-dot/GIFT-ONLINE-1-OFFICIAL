@@ -31,8 +31,8 @@ export interface GiftSale {
   price: string;
   currency: Currency;
   quantity: string | number;
-  eventTime: number; 
-  createdAt?: number; 
+  eventTime: number;
+  createdAt?: number;
   timestamp?: number;
   sellerId?: string;
   buyerId?: string;
@@ -75,14 +75,20 @@ export interface ParsedInstrumentKey {
 }
 
 export function buildInstrumentKey(parsed: ParsedInstrumentKey): string {
-  if (!parsed || !parsed.collectionId || typeof parsed.collectionId !== 'string' || !parsed.collectionId.trim()) {
+  if (
+    !parsed ||
+    !parsed.collectionId ||
+    typeof parsed.collectionId !== 'string' ||
+    !parsed.collectionId.trim()
+  ) {
     throw new Error('collectionId must be a non-empty string');
   }
   if (!parsed.currency || !VALID_CURRENCIES.has(parsed.currency)) {
     throw new Error(`Invalid currency: ${parsed.currency}`);
   }
   const model = parsed.modelId !== undefined && parsed.modelId !== '' ? parsed.modelId : 'all';
-  const backdrop = parsed.backdropId !== undefined && parsed.backdropId !== '' ? parsed.backdropId : 'all';
+  const backdrop =
+    parsed.backdropId !== undefined && parsed.backdropId !== '' ? parsed.backdropId : 'all';
   return `${parsed.collectionId}:${model}:${backdrop}:${parsed.currency}`;
 }
 

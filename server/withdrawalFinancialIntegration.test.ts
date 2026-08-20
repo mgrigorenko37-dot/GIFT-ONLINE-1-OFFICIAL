@@ -1,9 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import Decimal from 'decimal.js';
-import {
-  WithdrawalStateMachine,
-  WithdrawalTransitionError,
-} from './withdrawalStateMachine';
+import { WithdrawalStateMachine, WithdrawalTransitionError } from './withdrawalStateMachine';
 
 describe('Financial Logic & Withdrawal Error Handling Integration Tests', () => {
   let clientMock: any;
@@ -186,8 +183,9 @@ describe('Financial Logic & Withdrawal Error Handling Integration Tests', () => 
     expect(fundsReleased).toBe(true);
 
     // Verify financial audit was called
-    const auditCall = clientMock.query.mock.calls.find((c: any) =>
-      c[0].includes('INSERT INTO te_financial_audits') && c[1][0] === 'WITHDRAWAL_FUNDS_RELEASED'
+    const auditCall = clientMock.query.mock.calls.find(
+      (c: any) =>
+        c[0].includes('INSERT INTO te_financial_audits') && c[1][0] === 'WITHDRAWAL_FUNDS_RELEASED'
     );
     expect(auditCall).toBeDefined();
     expect(auditCall[1][4]).toBe('30'); // amount

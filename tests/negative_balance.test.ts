@@ -24,7 +24,7 @@ describe('Negative Balance Execution Rejection', () => {
     const userId = 'user_poor';
     const instrumentKey = 'durov-cap:all:all:TON';
     const orderId = 'ord1';
-    
+
     const initialOrder = {
       order_id: orderId,
       user_id: userId,
@@ -44,20 +44,34 @@ describe('Negative Balance Execution Rejection', () => {
     };
 
     client.query.mockImplementation(async (queryStr: string, params: any[]) => {
-      if (queryStr.includes('FROM te_orders WHERE order_id = $1') && !queryStr.includes('FOR UPDATE')) {
+      if (
+        queryStr.includes('FROM te_orders WHERE order_id = $1') &&
+        !queryStr.includes('FOR UPDATE')
+      ) {
         return { rows: [initialOrder], rowCount: 1 };
       }
       if (queryStr.includes('FROM te_orders WHERE order_id = $1 FOR UPDATE')) {
         return { rows: [initialOrder], rowCount: 1 };
       }
       if (queryStr.includes('FROM te_balances WHERE user_id = $1 AND currency = $2 FOR UPDATE')) {
-        return { rows: [{ available_balance: 5, locked_balance: 0, realized_pnl: 0, total_fees: 0 }], rowCount: 1 };
+        return {
+          rows: [{ available_balance: 5, locked_balance: 0, realized_pnl: 0, total_fees: 0 }],
+          rowCount: 1,
+        };
       }
-      if (queryStr.includes('FROM te_positions WHERE user_id = $1 AND instrument_key = $2 FOR UPDATE')) {
+      if (
+        queryStr.includes('FROM te_positions WHERE user_id = $1 AND instrument_key = $2 FOR UPDATE')
+      ) {
         return { rows: [], rowCount: 0 };
       }
-      if (queryStr.includes('FROM te_balances WHERE user_id = $1 AND currency = $2') && !queryStr.includes('FOR UPDATE')) {
-        return { rows: [{ available_balance: 5, locked_balance: 0, realized_pnl: 0, total_fees: 0 }], rowCount: 1 };
+      if (
+        queryStr.includes('FROM te_balances WHERE user_id = $1 AND currency = $2') &&
+        !queryStr.includes('FOR UPDATE')
+      ) {
+        return {
+          rows: [{ available_balance: 5, locked_balance: 0, realized_pnl: 0, total_fees: 0 }],
+          rowCount: 1,
+        };
       }
       if (queryStr.includes('FROM te_positions WHERE user_id = $1 AND collateral_currency = $2')) {
         return { rows: [], rowCount: 0 };
@@ -74,7 +88,10 @@ describe('Negative Balance Execution Rejection', () => {
       if (queryStr.startsWith('INSERT INTO te_executions')) {
         return { rowCount: 1 };
       }
-      if (queryStr.startsWith('INSERT INTO te_positions') || queryStr.startsWith('UPDATE te_positions')) {
+      if (
+        queryStr.startsWith('INSERT INTO te_positions') ||
+        queryStr.startsWith('UPDATE te_positions')
+      ) {
         return { rowCount: 1 };
       }
       return { rows: [], rowCount: 0 };
@@ -82,13 +99,17 @@ describe('Negative Balance Execution Rejection', () => {
 
     const trade = await engine.executeTrade(orderId, 1, 100);
     expect(trade).toBeNull();
-    
+
     // Check if INSERT INTO te_executions with REJECTED was called
-    const insertExecCall = client.query.mock.calls.find(c => c[0].includes('INSERT INTO te_executions') && c[1].includes('REJECTED'));
+    const insertExecCall = client.query.mock.calls.find(
+      (c) => c[0].includes('INSERT INTO te_executions') && c[1].includes('REJECTED')
+    );
     expect(insertExecCall).toBeDefined();
-    
+
     // Check order update logic
-    const updateOrderCall = client.query.mock.calls.find(c => c[0].includes('UPDATE te_orders SET status=$1, rejection_reason=$2'));
+    const updateOrderCall = client.query.mock.calls.find((c) =>
+      c[0].includes('UPDATE te_orders SET status=$1, rejection_reason=$2')
+    );
     expect(updateOrderCall).toBeDefined();
     expect(updateOrderCall![1][0]).toBe('Rejected');
     expect(updateOrderCall![1][1]).toContain('Insufficient margin');

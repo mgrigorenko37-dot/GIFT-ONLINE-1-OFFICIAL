@@ -10,7 +10,6 @@ import { beginCell } from '@ton/core';
 
 type Tab = 'deposit' | 'withdraw';
 
-
 const DashboardScreen: React.FC = () => {
   const navigate = useNavigate();
   const { currentLang, openLangModal, t } = useLanguage();
@@ -34,8 +33,8 @@ const DashboardScreen: React.FC = () => {
     }
   }, [location.state]);
 
-  const [gramRate, setGramRate] = useState<number>(5.50);
-  
+  const [gramRate, setGramRate] = useState<number>(5.5);
+
   useEffect(() => {
     const fetchRate = async () => {
       try {
@@ -77,33 +76,30 @@ const DashboardScreen: React.FC = () => {
       tonConnectUI.openModal();
       return;
     }
-    
+
     if (Number(amount) <= 0) return;
 
     try {
       const nanoTon = Math.floor(Number(amount) * 1e9).toString();
       const userId = user?.id || 'demo_user';
-      
+
       // 1. Fetch Hot Wallet Address from server
       const configRes = await fetch('/api/config');
       const config = await configRes.json();
       const hotWallet = config.hotWalletAddress || address; // Fallback to own address if not configured
-      
+
       // Standard way to add a text comment in Gram
-      const body = beginCell()
-        .storeUint(0, 32)
-        .storeStringTail(`Deposit_${userId}`)
-        .endCell();
+      const body = beginCell().storeUint(0, 32).storeStringTail(`Deposit_${userId}`).endCell();
 
       const transaction = {
         validUntil: Math.floor(Date.now() / 1000) + 360,
         messages: [
           {
-            address: hotWallet, 
+            address: hotWallet,
             amount: nanoTon,
-            payload: body.toBoc().toString('base64')
-          }
-        ]
+            payload: body.toBoc().toString('base64'),
+          },
+        ],
       };
 
       await tonConnectUI.sendTransaction(transaction);
@@ -349,10 +345,7 @@ const DashboardScreen: React.FC = () => {
 
                 <div className='gx-order-summary' style={{ marginTop: 12 }}>
                   <span>
-                    Rate{' '}
-                    <b>
-                      1 Gram = {gramRate.toFixed(2)} USDT
-                    </b>
+                    Rate <b>1 Gram = {gramRate.toFixed(2)} USDT</b>
                   </span>
                   <span>
                     You receive <strong>{formatUSDT(gxPreview)} USDT</strong>
@@ -370,7 +363,9 @@ const DashboardScreen: React.FC = () => {
                   onClick={handleTonDeposit}
                 >
                   {wallet ? '💎 Deposit Gram' : '💎 Connect Wallet'}
-                  <i className='material-icons'>{wallet ? 'arrow_forward' : 'account_balance_wallet'}</i>
+                  <i className='material-icons'>
+                    {wallet ? 'arrow_forward' : 'account_balance_wallet'}
+                  </i>
                 </button>
                 <p className='gx-order-disclaimer'>
                   <i className='material-icons'>lock</i> Payments processed securely
@@ -419,8 +414,8 @@ const DashboardScreen: React.FC = () => {
                       style={{ flex: 1 }}
                     />
                     {!wallet && (
-                      <button 
-                        type="button"
+                      <button
+                        type='button'
                         onClick={() => tonConnectUI.openModal()}
                         style={{
                           background: 'rgba(139, 118, 255, 0.15)',
@@ -431,7 +426,7 @@ const DashboardScreen: React.FC = () => {
                           cursor: 'pointer',
                           fontWeight: 600,
                           fontSize: 13,
-                          whiteSpace: 'nowrap'
+                          whiteSpace: 'nowrap',
                         }}
                       >
                         Connect

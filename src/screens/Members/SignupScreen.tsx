@@ -26,10 +26,10 @@ const SignupScreen: React.FC = () => {
         background: '#0a0910',
         padding: '40px 20px',
         position: 'relative',
-        overflow: 'hidden'
+        overflow: 'hidden',
       }}
     >
-      <div 
+      <div
         style={{
           position: 'absolute',
           top: '50%',
@@ -43,9 +43,22 @@ const SignupScreen: React.FC = () => {
         }}
       />
 
-      <div className='gx-panel' style={{ width: '100%', maxWidth: 400, padding: '40px 32px', position: 'relative', zIndex: 1, background: 'rgba(21, 20, 27, 0.7)', backdropFilter: 'blur(10px)', border: '1px solid rgba(255, 255, 255, 0.05)', borderRadius: 24 }}>
+      <div
+        className='gx-panel'
+        style={{
+          width: '100%',
+          maxWidth: 400,
+          padding: '40px 32px',
+          position: 'relative',
+          zIndex: 1,
+          background: 'rgba(21, 20, 27, 0.7)',
+          backdropFilter: 'blur(10px)',
+          border: '1px solid rgba(255, 255, 255, 0.05)',
+          borderRadius: 24,
+        }}
+      >
         <div style={{ textAlign: 'center', marginBottom: 40 }}>
-          <div 
+          <div
             style={{
               fontSize: '36px',
               fontWeight: 800,
@@ -55,32 +68,35 @@ const SignupScreen: React.FC = () => {
               alignItems: 'center',
               justifyContent: 'center',
               gap: '2px',
-              marginBottom: 16
+              marginBottom: 16,
             }}
           >
             Gift<span style={{ color: '#8b76ff' }}>X</span>
           </div>
-          <h1 style={{ fontSize: 24, color: '#f6f3ff', margin: '0 0 12px', fontWeight: 600 }}>Welcome</h1>
+          <h1 style={{ fontSize: 24, color: '#f6f3ff', margin: '0 0 12px', fontWeight: 600 }}>
+            Welcome
+          </h1>
           <p style={{ color: '#8c879a', fontSize: 15, margin: 0, lineHeight: 1.5 }}>
-            {isTelegram && user ? `Hello, ${user.first_name}! Connect your wallet to start trading.` : 'Connect your Telegram and Gram wallet to start trading rare gifts.'}
+            {isTelegram && user
+              ? `Hello, ${user.first_name}! Connect your wallet to start trading.`
+              : 'Connect your Telegram and Gram wallet to start trading rare gifts.'}
           </p>
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          
           <div style={{ display: 'flex', justifyContent: 'center', width: '100%' }}>
             <TonConnectButton style={{ width: '100%' }} />
           </div>
 
-          <button 
-            className='gx-submit' 
-            style={{ 
-              marginTop: 12, 
+          <button
+            className='gx-submit'
+            style={{
+              marginTop: 12,
               opacity: wallet || (isTelegram && user) ? 1 : 0.5,
               background: wallet ? '#8b76ff' : '#2a2840',
               color: wallet ? '#ffffff' : '#8c879a',
               border: 'none',
-              cursor: 'pointer'
+              cursor: 'pointer',
             }}
             onClick={handleContinue}
           >

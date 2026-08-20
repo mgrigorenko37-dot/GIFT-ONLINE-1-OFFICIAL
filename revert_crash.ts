@@ -11,7 +11,7 @@ const replaceStr = `        results.push(payment);
         }
         await client.query('COMMIT');
       }`;
-      
+
 const targetStr = `        results.push(payment);
       }
 

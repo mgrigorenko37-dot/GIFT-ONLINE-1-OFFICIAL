@@ -6,6 +6,7 @@ description: Durable product direction for the imported React exchange project.
 The product direction is a Bybit/Binance-style exchange for collectible Telegram gifts, delivered as a Telegram Mini App and branded GX. The immediate priority is the trading interface, not live payments or a complete backend.
 
 Core product decisions:
+
 - Use an existing open-source exchange UI as inspiration/base where licensing permits; do not rebuild the trading interface from scratch unnecessarily.
 - Adapt the current crypto exchange template toward a dark, professional exchange experience with watchlist/market selection, charts, order book, buy/sell order form, portfolio/balance, and transaction history.
 - Telegram gifts are the traded assets; the internal account currency is GX.

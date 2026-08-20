@@ -430,7 +430,10 @@ describe('Stage 5: 33 REST API Candle History Scenarios', () => {
 
     // Scenario 21: Invalid instrumentKey rejected
     {
-      const res = await mockApiCall({ instrumentKey: 'invalid_key_without_colons', timeframe: '1m' });
+      const res = await mockApiCall({
+        instrumentKey: 'invalid_key_without_colons',
+        timeframe: '1m',
+      });
       assert(res.status === 400, 'Scenario 21: Status 400 for invalid instrumentKey format');
       console.log('✓ Scenario 21 passed: Invalid instrumentKey rejected');
     }
@@ -448,7 +451,11 @@ describe('Stage 5: 33 REST API Candle History Scenarios', () => {
 
     // Scenario 23: Negative timestamp rejected
     {
-      const res = await mockApiCall({ instrumentKey: 'c1:all:all:TON', timeframe: '1m', from: -100 });
+      const res = await mockApiCall({
+        instrumentKey: 'c1:all:all:TON',
+        timeframe: '1m',
+        from: -100,
+      });
       assert(res.status === 400, 'Scenario 23: Status 400 for negative timestamp');
       console.log('✓ Scenario 23 passed: Negative timestamp rejected');
     }

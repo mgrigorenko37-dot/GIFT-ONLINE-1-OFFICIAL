@@ -32,7 +32,7 @@ export const mapTelegramGift = (tgGift: any) => {
 
   const rawId = String(mapped?.id || tgGift.id || emoji || 'gift');
   const seed = rawId.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
-  const change = parseFloat((((seed % 100) / 10) - 5).toFixed(2));
+  const change = parseFloat(((seed % 100) / 10 - 5).toFixed(2));
   const volume = `${(seed % 150) + 10}K`;
 
   return {

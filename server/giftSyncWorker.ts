@@ -46,7 +46,12 @@ export function validateTonCollectionsResponse(data: any): TonCollectionItem[] |
 
   const validCollections: TonCollectionItem[] = [];
   for (const item of data.nft_collections) {
-    if (item && typeof item === 'object' && typeof item.address === 'string' && typeof item.name === 'string') {
+    if (
+      item &&
+      typeof item === 'object' &&
+      typeof item.address === 'string' &&
+      typeof item.name === 'string'
+    ) {
       validCollections.push(item);
     }
   }
@@ -77,13 +82,15 @@ export async function syncTelegramGifts(options?: SyncOptions): Promise<SyncResu
   let lockAcquired = false;
 
   const isProduction = process.env.NODE_ENV === 'production';
-  const useMockGifts = options?.forceMock ?? (process.env.USE_MOCK_GIFTS === 'true');
+  const useMockGifts = options?.forceMock ?? process.env.USE_MOCK_GIFTS === 'true';
 
   try {
     client = await getPgPool().connect();
 
     // 1. Acquire PostgreSQL distributed advisory lock
-    const lockRes = await client.query('SELECT pg_try_advisory_lock($1) as locked', [SYNC_ADVISORY_LOCK_ID]);
+    const lockRes = await client.query('SELECT pg_try_advisory_lock($1) as locked', [
+      SYNC_ADVISORY_LOCK_ID,
+    ]);
     if (!lockRes.rows[0]?.locked) {
       console.log('[GiftSync] Another sync process holds the advisory lock. Skipping cycle.');
       return {
@@ -99,15 +106,18 @@ export async function syncTelegramGifts(options?: SyncOptions): Promise<SyncResu
     // 2. Production Mode Execution (Strict: only TON API & PostgreSQL)
     if (!useMockGifts) {
       if (isProduction && process.env.USE_MOCK_GIFTS === 'true') {
-        console.warn('[GiftSync] SAFETY REJECTION: Mock fixtures are strictly prohibited in production mode.');
+        console.warn(
+          '[GiftSync] SAFETY REJECTION: Mock fixtures are strictly prohibited in production mode.'
+        );
       }
 
       console.log('[GiftSync] Running in PRODUCTION mode (Strict TON API source).');
-      const tonEndpoint = options?.tonApiEndpoint || process.env.TON_API_ENDPOINT || 'https://tonapi.io/v2';
+      const tonEndpoint =
+        options?.tonApiEndpoint || process.env.TON_API_ENDPOINT || 'https://tonapi.io/v2';
       const apiKey = options?.tonApiKey || process.env.TON_API_KEY;
 
       const headers: Record<string, string> = {
-        'Accept': 'application/json',
+        Accept: 'application/json',
       };
       if (apiKey) {
         headers['Authorization'] = `Bearer ${apiKey}`;
@@ -130,7 +140,9 @@ export async function syncTelegramGifts(options?: SyncOptions): Promise<SyncResu
 
       if (!res.ok) {
         const statusText = res.statusText || `HTTP ${res.status}`;
-        console.error(`[GiftSync] TON API responded with error status: ${res.status} ${statusText}`);
+        console.error(
+          `[GiftSync] TON API responded with error status: ${res.status} ${statusText}`
+        );
         return {
           success: false,
           source: 'ton_api',
@@ -204,9 +216,12 @@ export async function syncTelegramGifts(options?: SyncOptions): Promise<SyncResu
               if (validItems) {
                 for (const item of validItems) {
                   const attributes = item.metadata?.attributes || [];
-                  const model = attributes.find((a: any) => a.trait_type === 'Model')?.value || 'Standard';
-                  const backdrop = attributes.find((a: any) => a.trait_type === 'Backdrop')?.value || '#2a2840';
-                  const symbol = attributes.find((a: any) => a.trait_type === 'Symbol')?.value || 'None';
+                  const model =
+                    attributes.find((a: any) => a.trait_type === 'Model')?.value || 'Standard';
+                  const backdrop =
+                    attributes.find((a: any) => a.trait_type === 'Backdrop')?.value || '#2a2840';
+                  const symbol =
+                    attributes.find((a: any) => a.trait_type === 'Symbol')?.value || 'None';
                   const itemImage = item.metadata?.image || '';
 
                   await client.query(
@@ -232,7 +247,9 @@ export async function syncTelegramGifts(options?: SyncOptions): Promise<SyncResu
         }
 
         await client.query('COMMIT');
-        console.log(`[GiftSync] Production sync completed. Collections: ${collectionsSynced}, Variants: ${variantsSynced}`);
+        console.log(
+          `[GiftSync] Production sync completed. Collections: ${collectionsSynced}, Variants: ${variantsSynced}`
+        );
         return {
           success: true,
           source: 'ton_api',
@@ -253,7 +270,9 @@ export async function syncTelegramGifts(options?: SyncOptions): Promise<SyncResu
     }
 
     // 3. Development Mode Execution (USE_MOCK_GIFTS=true)
-    console.log('[GiftSync] Running in DEVELOPMENT mode (USE_MOCK_GIFTS=true, Deterministic Mock Fixtures).');
+    console.log(
+      '[GiftSync] Running in DEVELOPMENT mode (USE_MOCK_GIFTS=true, Deterministic Mock Fixtures).'
+    );
     await client.query('BEGIN');
 
     let mockCollectionsSynced = 0;
@@ -299,7 +318,9 @@ export async function syncTelegramGifts(options?: SyncOptions): Promise<SyncResu
       }
 
       await client.query('COMMIT');
-      console.log(`[GiftSync] Mock sync completed. Collections: ${mockCollectionsSynced}, Variants: ${mockVariantsSynced}`);
+      console.log(
+        `[GiftSync] Mock sync completed. Collections: ${mockCollectionsSynced}, Variants: ${mockVariantsSynced}`
+      );
       return {
         success: true,
         source: 'mock',

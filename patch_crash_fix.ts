@@ -14,7 +14,7 @@ const targetStr = `        results.push(payment);
       if (ownClient) {
         await client.query('COMMIT');
       }`;
-      
+
 const replaceStr = `        results.push(payment);
       }
 
@@ -27,9 +27,9 @@ const replaceStr = `        results.push(payment);
       }`;
 
 if (code.includes(targetStr)) {
-   code = code.replace(targetStr, replaceStr);
+  code = code.replace(targetStr, replaceStr);
 } else {
-   console.log('Target string not found');
+  console.log('Target string not found');
 }
 
 fs.writeFileSync('server/tradingEngine.ts', code);

@@ -11,15 +11,15 @@ export class SchedulerLease {
   }
 
   // Use PostgreSQL advisory locks for distributed locking since DDL is restricted here.
-  // We use key pairs: 
+  // We use key pairs:
   // - typeKey (e.g., hash of 'FUNDING')
   // - stringKey (e.g., hash of 'TON_170000000')
-  
+
   private stringToHash(str: string): number {
     let hash = 0;
     for (let i = 0; i < str.length; i++) {
       const char = str.charCodeAt(i);
-      hash = ((hash << 5) - hash) + char;
+      hash = (hash << 5) - hash + char;
       hash = hash & hash; // Convert to 32bit integer
     }
     return hash;
@@ -37,7 +37,10 @@ export class SchedulerLease {
     const client = await this.pool.connect();
     try {
       // Use pg_try_advisory_lock to return immediately if locked
-      const res = await client.query('SELECT pg_try_advisory_lock($1, $2) as acquired', [typeHash, keyHash]);
+      const res = await client.query('SELECT pg_try_advisory_lock($1, $2) as acquired', [
+        typeHash,
+        keyHash,
+      ]);
       const acquired = res.rows[0].acquired;
 
       if (!acquired) {

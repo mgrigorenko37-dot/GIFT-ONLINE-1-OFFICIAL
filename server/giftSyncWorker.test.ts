@@ -227,7 +227,9 @@ describe('Telegram Gifts Production vs Mock Synchronization Tests', () => {
 
     // Incomplete variants validator
     expect(validateTonItemsResponse(null)).toBeNull();
-    expect(validateTonItemsResponse({ nft_items: [{ address: 'EQ_ITEM_VALID' }, {}] })?.length).toBe(1);
+    expect(
+      validateTonItemsResponse({ nft_items: [{ address: 'EQ_ITEM_VALID' }, {}] })?.length
+    ).toBe(1);
   });
 
   it('7. Verifies absolute absence of Math.random() in production gift sync path', () => {

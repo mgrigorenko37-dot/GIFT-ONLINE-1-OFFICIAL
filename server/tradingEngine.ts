@@ -39,7 +39,19 @@ export interface Position {
   markPrice: number;
   unrealizedPnl: number;
   realizedPnl: number;
-  status: 'Open' | 'Closed' | 'Liquidated' | 'MarginCall' | 'PendingLiquidation' | 'LiquidationFailed' | 'OPEN' | 'MARGIN_CALL' | 'PENDING_LIQUIDATION' | 'LIQUIDATED' | 'CLOSED' | 'LIQUIDATION_FAILED';
+  status:
+    | 'Open'
+    | 'Closed'
+    | 'Liquidated'
+    | 'MarginCall'
+    | 'PendingLiquidation'
+    | 'LiquidationFailed'
+    | 'OPEN'
+    | 'MARGIN_CALL'
+    | 'PENDING_LIQUIDATION'
+    | 'LIQUIDATED'
+    | 'CLOSED'
+    | 'LIQUIDATION_FAILED';
   settlementCurrency: string;
   pnlCurrency: string;
   collateralCurrency: string;
@@ -139,18 +151,41 @@ export interface InstrumentCurrencyConfig {
 const INSTRUMENT_CURRENCY_MAP: Record<string, InstrumentCurrencyConfig> = {};
 
 function validateRates(config: InstrumentCurrencyConfig) {
-  if (typeof config.maintenanceMarginRate !== 'number' || isNaN(config.maintenanceMarginRate) || !isFinite(config.maintenanceMarginRate) || config.maintenanceMarginRate < 0 || config.maintenanceMarginRate > 1) {
+  if (
+    typeof config.maintenanceMarginRate !== 'number' ||
+    isNaN(config.maintenanceMarginRate) ||
+    !isFinite(config.maintenanceMarginRate) ||
+    config.maintenanceMarginRate < 0 ||
+    config.maintenanceMarginRate > 1
+  ) {
     throw new Error('Invalid maintenanceMarginRate');
   }
-  if (typeof config.liquidationFeeRate !== 'number' || isNaN(config.liquidationFeeRate) || !isFinite(config.liquidationFeeRate) || config.liquidationFeeRate < 0 || config.liquidationFeeRate > 1) {
+  if (
+    typeof config.liquidationFeeRate !== 'number' ||
+    isNaN(config.liquidationFeeRate) ||
+    !isFinite(config.liquidationFeeRate) ||
+    config.liquidationFeeRate < 0 ||
+    config.liquidationFeeRate > 1
+  ) {
     throw new Error('Invalid liquidationFeeRate');
   }
   if (config.liquidationBuffer !== undefined) {
-    if (typeof config.liquidationBuffer !== 'number' || isNaN(config.liquidationBuffer) || !isFinite(config.liquidationBuffer) || config.liquidationBuffer < 0 || config.liquidationBuffer > 1) {
+    if (
+      typeof config.liquidationBuffer !== 'number' ||
+      isNaN(config.liquidationBuffer) ||
+      !isFinite(config.liquidationBuffer) ||
+      config.liquidationBuffer < 0 ||
+      config.liquidationBuffer > 1
+    ) {
       throw new Error('Invalid liquidationBuffer');
     }
   }
-  if (typeof config.maxLiquidationRetries !== 'number' || isNaN(config.maxLiquidationRetries) || !isFinite(config.maxLiquidationRetries) || config.maxLiquidationRetries < 0) {
+  if (
+    typeof config.maxLiquidationRetries !== 'number' ||
+    isNaN(config.maxLiquidationRetries) ||
+    !isFinite(config.maxLiquidationRetries) ||
+    config.maxLiquidationRetries < 0
+  ) {
     throw new Error('Invalid maxLiquidationRetries');
   }
 }
@@ -187,7 +222,7 @@ defineInstrument('star:all:all:STARS', 'STARS');
 export function getInstrumentConfig(instrumentKey: string): InstrumentCurrencyConfig {
   const config = INSTRUMENT_CURRENCY_MAP[instrumentKey];
   if (config) return config;
-  
+
   let curr: 'TON' | 'STARS' | undefined = undefined;
   if (instrumentKey) {
     if (
@@ -222,13 +257,12 @@ export function getInstrumentConfig(instrumentKey: string): InstrumentCurrencyCo
     liquidationFeeRate: 0.01,
     liquidationBuffer: 0.005,
     markPriceSource: 'internal_orderbook',
-    maxLiquidationRetries: 3
+    maxLiquidationRetries: 3,
   };
   return defaultConfig;
 }
 
 export class PostgresTradingEngine extends EventEmitter {
-
   private async lockMarginResources(client: any, userId: string, currency: string) {
     // 1. заблокировать валютный Balance через FOR UPDATE;
     await client.query(
@@ -258,10 +292,7 @@ export class PostgresTradingEngine extends EventEmitter {
       'SELECT available_balance, locked_balance FROM te_balances WHERE user_id = $1 AND currency = $2',
       [userId, currency]
     );
-    const walletBalance =
-      balRes.rows.length > 0
-        ? Number(balRes.rows[0].available_balance)
-        : 0;
+    const walletBalance = balRes.rows.length > 0 ? Number(balRes.rows[0].available_balance) : 0;
 
     const posRes = await client.query(
       "SELECT qty, avg_entry_price, side, mark_price, instrument_key FROM te_positions WHERE user_id = $1 AND (collateral_currency = $2 OR collateral_currency IS NULL) AND status IN ('Open', 'MarginCall')",
@@ -278,13 +309,13 @@ export class PostgresTradingEngine extends EventEmitter {
       const entryPrice = Number(pos.avg_entry_price);
       const markPrice = pos.mark_price != null ? Number(pos.mark_price) : entryPrice;
       const side = pos.side;
-      
+
       const config = getInstrumentConfig(pos.instrument_key);
       const maintenanceMarginRate = config.maintenanceMarginRate;
 
       const initialMargin = (qty * entryPrice) / leverage;
       totalUsedMargin += initialMargin;
-      
+
       const notional = qty * markPrice;
       totalPositionNotional += notional;
       maintenanceMargin += notional * maintenanceMarginRate;
@@ -405,7 +436,7 @@ export class PostgresTradingEngine extends EventEmitter {
   private mapPosition(r: any): Position {
     const config = getInstrumentConfig(r.instrument_key);
     return {
-      positionId: r.position_id || ('pos_' + r.user_id + '_' + r.instrument_key),
+      positionId: r.position_id || 'pos_' + r.user_id + '_' + r.instrument_key,
       userId: r.user_id,
       instrumentKey: r.instrument_key,
       side: r.side,
@@ -481,8 +512,12 @@ export class PostgresTradingEngine extends EventEmitter {
       await this.lockMarginResources(client, orderData.userId, collateralCurrency);
 
       if (orderData.qty <= 0) {
-        try { await client.query('ROLLBACK'); } catch(e) {}
-        throw new Error(`Invalid order quantity: qty must be strictly positive (> 0), received ${orderData.qty}`);
+        try {
+          await client.query('ROLLBACK');
+        } catch (e) {}
+        throw new Error(
+          `Invalid order quantity: qty must be strictly positive (> 0), received ${orderData.qty}`
+        );
       }
 
       const now = Date.now();
@@ -543,7 +578,6 @@ export class PostgresTradingEngine extends EventEmitter {
 
       if (order.status !== 'Rejected') {
         // Заблокировать соответствующий валютный Balance
-        
 
         if (order.positionEffect === 'Open') {
           const margin = await this.calculateMargin(client, order.userId, order.collateralCurrency);
@@ -587,7 +621,9 @@ export class PostgresTradingEngine extends EventEmitter {
           ]
         );
       } catch (e: any) {
-        try { await client.query('ROLLBACK TO SAVEPOINT insert_order_sp'); } catch(e) {}
+        try {
+          await client.query('ROLLBACK TO SAVEPOINT insert_order_sp');
+        } catch (e) {}
         if (e?.message?.includes('does not exist')) {
           await client.query(
             `INSERT INTO te_orders (order_id, user_id, instrument_key, side, order_type, qty, price, reduce_only, position_effect, rejection_reason, status, executed_qty, remaining_qty, avg_fill_price, fee, created_at, updated_at)
@@ -632,7 +668,9 @@ export class PostgresTradingEngine extends EventEmitter {
       await client.query('COMMIT');
       return order;
     } catch (e) {
-      try { await client.query('ROLLBACK'); } catch(e) {}
+      try {
+        await client.query('ROLLBACK');
+      } catch (e) {}
       throw e;
     } finally {
       client.release();
@@ -644,20 +682,29 @@ export class PostgresTradingEngine extends EventEmitter {
     try {
       await client.query('BEGIN');
 
-      const initialOrderRes = await client.query('SELECT user_id, instrument_key, collateral_currency FROM te_orders WHERE order_id = $1', [orderId]);
+      const initialOrderRes = await client.query(
+        'SELECT user_id, instrument_key, collateral_currency FROM te_orders WHERE order_id = $1',
+        [orderId]
+      );
       if (initialOrderRes.rows.length === 0) {
-        try { await client.query('ROLLBACK'); } catch(e) {}
+        try {
+          await client.query('ROLLBACK');
+        } catch (e) {}
         return null;
       }
       const initialOrder = initialOrderRes.rows[0];
-      const currency = initialOrder.collateral_currency || getInstrumentConfig(initialOrder.instrument_key).collateralCurrency;
+      const currency =
+        initialOrder.collateral_currency ||
+        getInstrumentConfig(initialOrder.instrument_key).collateralCurrency;
       await this.lockMarginResources(client, initialOrder.user_id, currency);
-const orderRes = await client.query(
+      const orderRes = await client.query(
         'SELECT * FROM te_orders WHERE order_id = $1 FOR UPDATE',
         [orderId]
       );
       if (orderRes.rows.length === 0) {
-        try { await client.query('ROLLBACK'); } catch(e) {}
+        try {
+          await client.query('ROLLBACK');
+        } catch (e) {}
         return null;
       }
       const order = this.mapOrder(orderRes.rows[0]);
@@ -695,10 +742,14 @@ const orderRes = await client.query(
         await client.query('COMMIT');
         return order;
       }
-      try { await client.query('ROLLBACK'); } catch(e) {}
+      try {
+        await client.query('ROLLBACK');
+      } catch (e) {}
       return null;
     } catch (e) {
-      try { await client.query('ROLLBACK'); } catch(e) {}
+      try {
+        await client.query('ROLLBACK');
+      } catch (e) {}
       throw e;
     } finally {
       client.release();
@@ -718,13 +769,20 @@ const orderRes = await client.query(
     try {
       await client.query('BEGIN');
 
-      const initialOrderRes = await client.query('SELECT user_id, instrument_key, collateral_currency FROM te_orders WHERE order_id = $1', [orderId]);
+      const initialOrderRes = await client.query(
+        'SELECT user_id, instrument_key, collateral_currency FROM te_orders WHERE order_id = $1',
+        [orderId]
+      );
       if (initialOrderRes.rows.length === 0) {
-        try { await client.query('ROLLBACK'); } catch(e) {}
+        try {
+          await client.query('ROLLBACK');
+        } catch (e) {}
         return null;
       }
       const initialOrder = initialOrderRes.rows[0];
-      const currency = initialOrder.collateral_currency || getInstrumentConfig(initialOrder.instrument_key).collateralCurrency;
+      const currency =
+        initialOrder.collateral_currency ||
+        getInstrumentConfig(initialOrder.instrument_key).collateralCurrency;
 
       await this.lockMarginResources(client, initialOrder.user_id, currency);
 
@@ -739,10 +797,14 @@ const orderRes = await client.query(
           Number(existingExec.fill_price) === fillPrice &&
           existingExec.order_id === orderId
         ) {
-          try { await client.query('ROLLBACK'); } catch(e) {}
+          try {
+            await client.query('ROLLBACK');
+          } catch (e) {}
           return null; // Already processed
         } else {
-          try { await client.query('ROLLBACK'); } catch(e) {}
+          try {
+            await client.query('ROLLBACK');
+          } catch (e) {}
           throw new Error('Conflict: execution_id already exists with different data');
         }
       }
@@ -753,36 +815,51 @@ const orderRes = await client.query(
           [options.source, options.externalExecutionId]
         );
         if (extCheck.rows.length > 0) {
-          try { await client.query('ROLLBACK'); } catch(e) {}
+          try {
+            await client.query('ROLLBACK');
+          } catch (e) {}
           return null;
         }
       }
 
       if (fillQty <= 0) {
-        try { await client.query('ROLLBACK'); } catch(e) {}
-        throw new Error(`Invalid fill quantity: fillQty must be strictly positive (> 0), received ${fillQty}`);
+        try {
+          await client.query('ROLLBACK');
+        } catch (e) {}
+        throw new Error(
+          `Invalid fill quantity: fillQty must be strictly positive (> 0), received ${fillQty}`
+        );
       }
-const orderRes = await client.query(
+      const orderRes = await client.query(
         'SELECT * FROM te_orders WHERE order_id = $1 FOR UPDATE',
         [orderId]
       );
       if (orderRes.rows.length === 0) {
-        try { await client.query('ROLLBACK'); } catch(e) {}
+        try {
+          await client.query('ROLLBACK');
+        } catch (e) {}
         return null;
       }
       const order = this.mapOrder(orderRes.rows[0]);
 
       if (order.status !== 'Open' && order.status !== 'PartiallyFilled') {
-        try { await client.query('ROLLBACK'); } catch(e) {}
+        try {
+          await client.query('ROLLBACK');
+        } catch (e) {}
         return null;
       }
 
       const posRes = await client.query(
-        "SELECT * FROM te_positions WHERE user_id = $1 AND instrument_key = $2 FOR UPDATE",
+        'SELECT * FROM te_positions WHERE user_id = $1 AND instrument_key = $2 FOR UPDATE',
         [order.userId, order.instrumentKey]
       );
       let oldPosition = posRes.rows.length > 0 ? this.mapPosition(posRes.rows[0]) : null;
-      const hasPosition = oldPosition && (oldPosition.status === 'Open' || oldPosition.status === 'MarginCall' || oldPosition.status === 'OPEN' || oldPosition.status === 'MARGIN_CALL');
+      const hasPosition =
+        oldPosition &&
+        (oldPosition.status === 'Open' ||
+          oldPosition.status === 'MarginCall' ||
+          oldPosition.status === 'OPEN' ||
+          oldPosition.status === 'MARGIN_CALL');
 
       let executionStatus = 'PROCESSING';
       let rejectedReason = '';
@@ -900,8 +977,8 @@ const orderRes = await client.query(
                 0,
                 order.settlementCurrency,
                 order.feeCurrency,
-              order.pnlCurrency || order.settlementCurrency,
-              'REJECTED',
+                order.pnlCurrency || order.settlementCurrency,
+                'REJECTED',
                 Date.now(),
                 Date.now(),
                 options?.source || null,
@@ -916,13 +993,19 @@ const orderRes = await client.query(
 
       const requestedQty = fillQty;
       if (fillQty <= 0) {
-        try { await client.query('ROLLBACK'); } catch(e) {}
-        throw new Error(`Invalid trade execution quantity: fillQty must be strictly positive (> 0), received ${fillQty}`);
+        try {
+          await client.query('ROLLBACK');
+        } catch (e) {}
+        throw new Error(
+          `Invalid trade execution quantity: fillQty must be strictly positive (> 0), received ${fillQty}`
+        );
       }
 
       if (order.positionEffect === 'Close') {
         if (!oldPosition || oldPosition.status !== 'Open' || oldPosition.qty <= 0) {
-          try { await client.query('ROLLBACK'); } catch(e) {}
+          try {
+            await client.query('ROLLBACK');
+          } catch (e) {}
           throw new Error('Cannot close position with zero or negative quantity');
         }
         if (fillQty > oldPosition.qty) {
@@ -934,8 +1017,12 @@ const orderRes = await client.query(
         fillQty = order.remainingQty;
       }
       if (fillQty <= 0) {
-        try { await client.query('ROLLBACK'); } catch(e) {}
-        throw new Error(`Invalid trade execution quantity: fillQty must be strictly positive (> 0), received ${fillQty}`);
+        try {
+          await client.query('ROLLBACK');
+        } catch (e) {}
+        throw new Error(
+          `Invalid trade execution quantity: fillQty must be strictly positive (> 0), received ${fillQty}`
+        );
       }
 
       const instrumentConfig = getInstrumentConfig(order.instrumentKey);
@@ -1038,8 +1125,10 @@ const orderRes = await client.query(
       const currentTradeRealizedPnl = order.positionEffect === 'Close' ? newPnl - oldPnl : 0;
       trade.realizedPnl = currentTradeRealizedPnl;
 
-      
-      const balRes = await client.query('SELECT available_balance, locked_balance, realized_pnl, total_fees FROM te_balances WHERE user_id = $1 AND currency = $2', [order.userId, currency]);
+      const balRes = await client.query(
+        'SELECT available_balance, locked_balance, realized_pnl, total_fees FROM te_balances WHERE user_id = $1 AND currency = $2',
+        [order.userId, currency]
+      );
       let currentBalance =
         balRes.rows.length > 0
           ? Number(balRes.rows[0].available_balance)
@@ -1088,7 +1177,9 @@ const orderRes = await client.query(
           ]
         );
       } catch (e: any) {
-        try { await client.query('ROLLBACK TO SAVEPOINT insert_trade_sp'); } catch(e) {}
+        try {
+          await client.query('ROLLBACK TO SAVEPOINT insert_trade_sp');
+        } catch (e) {}
         await client.query(
           `INSERT INTO te_trades (trade_id, order_id, user_id, instrument_key, side, qty, price, fee, realized_pnl, timestamp)
            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
@@ -1147,7 +1238,9 @@ const orderRes = await client.query(
           );
           if (res.rowCount === 0) throw new Error('Failed to insert position');
         } catch (e: any) {
-          try { await client.query('ROLLBACK TO SAVEPOINT insert_pos_sp'); } catch(e) {}
+          try {
+            await client.query('ROLLBACK TO SAVEPOINT insert_pos_sp');
+          } catch (e) {}
           const res = await client.query(
             `INSERT INTO te_positions (position_id, user_id, instrument_key, side, qty, avg_entry_price, mark_price, unrealized_pnl, realized_pnl, status, settlement_currency, pnl_currency, collateral_currency, opened_at, updated_at) 
              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
@@ -1208,7 +1301,9 @@ const orderRes = await client.query(
           );
           if (res.rowCount === 0) throw new Error('Failed to update position');
         } catch (e: any) {
-          try { await client.query('ROLLBACK TO SAVEPOINT update_pos_sp'); } catch(e) {}
+          try {
+            await client.query('ROLLBACK TO SAVEPOINT update_pos_sp');
+          } catch (e) {}
           const res = await client.query(
             `UPDATE te_positions SET side=$1, qty=$2, avg_entry_price=$3, mark_price=$4, unrealized_pnl=$5, realized_pnl=$6, status=$7, opened_at=$8, updated_at=$9 WHERE position_id=$10`,
             [
@@ -1241,27 +1336,28 @@ const orderRes = await client.query(
           collateralCurrency: newPosition.collateralCurrency,
         },
         newPosition.updatedAt || newPosition.openedAt || Date.now(),
-        newPosition.status === 'Closed' ? (newPosition.updatedAt || Date.now()) : null,
+        newPosition.status === 'Closed' ? newPosition.updatedAt || Date.now() : null,
         client
       );
 
-      
       const updatedMargin = await this.calculateMargin(client, order.userId, currency);
       const newEquity = newBalance + updatedMargin.totalUnrealizedPnl;
       const newAvailableBalance = newEquity - updatedMargin.usedMargin;
 
       if (newAvailableBalance < 0 && order.positionEffect === 'Open') {
-        try { await client.query('ROLLBACK TO SAVEPOINT execute_start_sp'); } catch(e) {}
-        
+        try {
+          await client.query('ROLLBACK TO SAVEPOINT execute_start_sp');
+        } catch (e) {}
+
         order.status = 'Rejected';
         order.rejectionReason = `Insufficient margin: required ${updatedMargin.usedMargin.toFixed(2)}, available ${newEquity.toFixed(2)}`;
         order.updatedAt = Date.now();
-        
+
         await client.query(
           `UPDATE te_orders SET status=$1, rejection_reason=$2, updated_at=$3 WHERE order_id=$4`,
           [order.status, order.rejectionReason, order.updatedAt, order.orderId]
         );
-        
+
         await client.query(
           `INSERT INTO te_executions (execution_id, order_id, user_id, instrument_key, side, requested_qty, fill_qty, fill_price, fee, settlement_currency, fee_currency, pnl_currency, status, created_at, processed_at, source, external_execution_id) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)`,
           [
@@ -1287,9 +1383,8 @@ const orderRes = await client.query(
         await client.query('COMMIT');
         return null;
       }
-      
-      const newLockedBalance = updatedMargin.usedMargin;
 
+      const newLockedBalance = updatedMargin.usedMargin;
 
       const nowMs = Date.now();
       if (balRes.rows.length === 0) {
@@ -1347,7 +1442,9 @@ const orderRes = await client.query(
           ]
         );
       } catch (e: any) {
-        try { await client.query('ROLLBACK TO SAVEPOINT insert_exec_sp'); } catch(e) {}
+        try {
+          await client.query('ROLLBACK TO SAVEPOINT insert_exec_sp');
+        } catch (e) {}
         await client.query(
           `INSERT INTO te_executions (execution_id, order_id, user_id, instrument_key, side, requested_qty, fill_qty, fill_price, fee, status, created_at, processed_at, source, external_execution_id) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
           [
@@ -1394,7 +1491,9 @@ const orderRes = await client.query(
             [ev.type, order.userId, JSON.stringify(ev.payload), 'pending', currency, now]
           );
         } catch (e: any) {
-          try { await client.query('ROLLBACK TO SAVEPOINT insert_outbox_sp'); } catch(e) {}
+          try {
+            await client.query('ROLLBACK TO SAVEPOINT insert_outbox_sp');
+          } catch (e) {}
           await client.query(
             'INSERT INTO te_outbox_events (event_type, user_id, payload, status, created_at) VALUES ($1, $2, $3, $4, $5)',
             [ev.type, order.userId, JSON.stringify(ev.payload), 'pending', now]
@@ -1402,11 +1501,12 @@ const orderRes = await client.query(
         }
       }
 
-      
       await client.query('COMMIT');
       return trade;
     } catch (e) {
-      try { await client.query('ROLLBACK'); } catch(e) {}
+      try {
+        await client.query('ROLLBACK');
+      } catch (e) {}
       throw e;
     } finally {
       client.release();
@@ -1421,12 +1521,12 @@ const orderRes = await client.query(
         "SELECT * FROM te_positions WHERE instrument_key = $1 AND status IN ('Open', 'MarginCall') FOR UPDATE",
         [instrumentKey]
       );
-      
+
       const liquidatedUsers = new Set<string>();
 
       for (const row of posRes.rows) {
         const position = this.mapPosition(row);
-        
+
         if (liquidatedUsers.has(position.userId)) continue;
 
         // 2. Обновить markPrice.
@@ -1442,9 +1542,13 @@ const orderRes = await client.query(
           'UPDATE te_positions SET mark_price = $1, unrealized_pnl = $2 WHERE position_id = $3',
           [position.markPrice, position.unrealizedPnl, position.positionId]
         );
-        
+
         // Пересчитать equity и margin state.
-        const marginInfo = await this.calculateMargin(client, position.userId, position.collateralCurrency);
+        const marginInfo = await this.calculateMargin(
+          client,
+          position.userId,
+          position.collateralCurrency
+        );
 
         // 5. Определить:
         // достаточно ли маржи;
@@ -1454,32 +1558,43 @@ const orderRes = await client.query(
         let isLiquidationNeeded = false;
 
         if (marginInfo.equity <= marginInfo.maintenanceMargin && marginInfo.maintenanceMargin > 0) {
-           isLiquidationNeeded = true;
+          isLiquidationNeeded = true;
         } else if (marginInfo.equity < marginInfo.usedMargin) {
-           newStatus = 'MarginCall';
+          newStatus = 'MarginCall';
         } else {
-           newStatus = 'Open';
+          newStatus = 'Open';
         }
 
         if (isLiquidationNeeded) {
-           // We do liquidation
-           await this.liquidateUser(client, position.userId, position.collateralCurrency);
-           liquidatedUsers.add(position.userId);
-           continue;
+          // We do liquidation
+          await this.liquidateUser(client, position.userId, position.collateralCurrency);
+          liquidatedUsers.add(position.userId);
+          continue;
         }
 
         if (newStatus !== position.status) {
-           position.status = newStatus as any;
-           await client.query(
-             'UPDATE te_positions SET status = $1 WHERE position_id = $2',
-             [newStatus, position.positionId]
-           );
-           if (newStatus === 'MarginCall') {
-             await client.query(
-               'INSERT INTO te_outbox_events (event_type, user_id, payload, status, currency, created_at) VALUES ($1, $2, $3, $4, $5, $6)',
-               ['marginCall', position.userId, JSON.stringify({ userId: position.userId, instrumentKey: position.instrumentKey, status: 'MarginCall' }), 'pending', position.settlementCurrency, Date.now()]
-             );
-           }
+          position.status = newStatus as any;
+          await client.query('UPDATE te_positions SET status = $1 WHERE position_id = $2', [
+            newStatus,
+            position.positionId,
+          ]);
+          if (newStatus === 'MarginCall') {
+            await client.query(
+              'INSERT INTO te_outbox_events (event_type, user_id, payload, status, currency, created_at) VALUES ($1, $2, $3, $4, $5, $6)',
+              [
+                'marginCall',
+                position.userId,
+                JSON.stringify({
+                  userId: position.userId,
+                  instrumentKey: position.instrumentKey,
+                  status: 'MarginCall',
+                }),
+                'pending',
+                position.settlementCurrency,
+                Date.now(),
+              ]
+            );
+          }
         }
 
         // 7. Создать outbox event в той же транзакции.
@@ -1497,19 +1612,23 @@ const orderRes = await client.query(
             ]
           );
         } catch (e: any) {
-          try { await client.query('ROLLBACK TO SAVEPOINT insert_outbox_mark_sp'); } catch(e) {}
+          try {
+            await client.query('ROLLBACK TO SAVEPOINT insert_outbox_mark_sp');
+          } catch (e) {}
           await client.query(
             'INSERT INTO te_outbox_events (event_type, user_id, payload, status, created_at) VALUES ($1, $2, $3, $4, $5)',
             ['positionUpdated', position.userId, JSON.stringify(position), 'pending', Date.now()]
           );
         }
       }
-      
+
       // 8. Выполнить commit.
       await client.query('COMMIT');
     } catch (e) {
       console.error('Error in updateMarkPrice', e);
-      try { await client.query('ROLLBACK'); } catch(e) {}
+      try {
+        await client.query('ROLLBACK');
+      } catch (e) {}
     } finally {
       client.release();
     }
@@ -1576,7 +1695,7 @@ const orderRes = await client.query(
             realizedPnl: 0,
             pnlCurrency: existingExec.pnl_currency,
             settlementCurrency: existingExec.settlement_currency,
-            timestamp: Number(existingExec.processed_at || existingExec.created_at)
+            timestamp: Number(existingExec.processed_at || existingExec.created_at),
           };
         }
       }
@@ -1605,20 +1724,18 @@ const orderRes = await client.query(
             [passedExecutionId]
           );
           if (execCheck.rows.length > 0) {
-            const tradeRes = await client.query(
-              'SELECT * FROM te_trades WHERE order_id = $1',
-              [execCheck.rows[0].order_id]
-            );
+            const tradeRes = await client.query('SELECT * FROM te_trades WHERE order_id = $1', [
+              execCheck.rows[0].order_id,
+            ]);
             if (ownClient) await client.query('COMMIT');
             if (tradeRes.rows.length > 0) return this.mapTrade(tradeRes.rows[0]);
             return execCheck.rows[0];
           }
         }
         if (passedTradeId) {
-          const tradeCheck = await client.query(
-            'SELECT * FROM te_trades WHERE trade_id = $1',
-            [passedTradeId]
-          );
+          const tradeCheck = await client.query('SELECT * FROM te_trades WHERE trade_id = $1', [
+            passedTradeId,
+          ]);
           if (tradeCheck.rows.length > 0) {
             if (ownClient) await client.query('COMMIT');
             return this.mapTrade(tradeCheck.rows[0]);
@@ -1701,7 +1818,9 @@ const orderRes = await client.query(
         // 8 & 9. Закрыть позицию с qty=0. Установить status=LIQUIDATED.
         const closedQty = pos.qty;
         if (closedQty <= 0) {
-          throw new Error(`Cannot liquidate position with zero or negative quantity: pos.qty = ${closedQty}`);
+          throw new Error(
+            `Cannot liquidate position with zero or negative quantity: pos.qty = ${closedQty}`
+          );
         }
         pos.status = 'Liquidated';
         pos.qty = 0;
@@ -1756,12 +1875,12 @@ const orderRes = await client.query(
             liquidationFee,
             currency,
             nowMs,
-            nowMs
+            nowMs,
           ]
         );
 
         // 12. Записать Trade с reason=LIQUIDATION.
-        const tradeId = (i === 0 && passedTradeId) ? passedTradeId : ('t_liq_' + crypto.randomUUID());
+        const tradeId = i === 0 && passedTradeId ? passedTradeId : 't_liq_' + crypto.randomUUID();
         const trade = {
           tradeId,
           orderId: liqOrderId,
@@ -1781,18 +1900,32 @@ const orderRes = await client.query(
           settlementCurrency: currency,
           status: 'EXECUTED',
           reason: reasonNote || 'LIQUIDATION',
-          timestamp: nowMs
+          timestamp: nowMs,
         };
 
         await client.query(
           `INSERT INTO te_trades (trade_id, order_id, user_id, instrument_key, side, qty, price, fee, fee_currency, realized_pnl, pnl_currency, timestamp) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
-          [trade.tradeId, trade.orderId, trade.userId, trade.instrumentKey, trade.side, trade.qty, trade.price, trade.fee, trade.feeCurrency, trade.realizedPnl, trade.pnlCurrency, trade.timestamp]
+          [
+            trade.tradeId,
+            trade.orderId,
+            trade.userId,
+            trade.instrumentKey,
+            trade.side,
+            trade.qty,
+            trade.price,
+            trade.fee,
+            trade.feeCurrency,
+            trade.realizedPnl,
+            trade.pnlCurrency,
+            trade.timestamp,
+          ]
         );
 
         lastTradeResult = trade;
 
         // 14. Записать execution, если liquidation является execution-операцией.
-        const executionId = (i === 0 && passedExecutionId) ? passedExecutionId : ('exec_liq_' + crypto.randomUUID());
+        const executionId =
+          i === 0 && passedExecutionId ? passedExecutionId : 'exec_liq_' + crypto.randomUUID();
         await client.query(
           `INSERT INTO te_executions (execution_id, order_id, user_id, instrument_key, side, requested_qty, fill_qty, fill_price, fee, settlement_currency, fee_currency, pnl_currency, status, created_at, processed_at, source, external_execution_id) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)`,
           [
@@ -1812,54 +1945,68 @@ const orderRes = await client.query(
             nowMs,
             nowMs,
             'LIQUIDATE',
-            null
+            null,
           ]
         );
 
         // 15. Записать outbox events.
         await client.query(
           `INSERT INTO te_outbox_events (event_type, user_id, payload, status, currency, created_at) VALUES ($1, $2, $3, $4, $5, $6)`,
-          ['orderUpdated', userId, JSON.stringify({
-            orderId: liqOrderId,
+          [
+            'orderUpdated',
             userId,
-            positionId: pos.positionId,
-            instrumentKey: pos.instrumentKey,
-            side: tradeSide,
+            JSON.stringify({
+              orderId: liqOrderId,
+              userId,
+              positionId: pos.positionId,
+              instrumentKey: pos.instrumentKey,
+              side: tradeSide,
+              currency,
+              orderType: 'Market',
+              qty: closedQty,
+              markPrice: pos.markPrice,
+              price: pos.markPrice,
+              reduceOnly: true,
+              positionEffect: 'LIQUIDATE',
+              realizedPnl: loss,
+              fee: liquidationFee,
+              liquidationFee,
+              status: 'Filled',
+              reason: reasonNote || 'LIQUIDATION',
+              executedQty: closedQty,
+              remainingQty: 0,
+              avgFillPrice: pos.markPrice,
+            }),
+            'pending',
             currency,
-            orderType: 'Market',
-            qty: closedQty,
-            markPrice: pos.markPrice,
-            price: pos.markPrice,
-            reduceOnly: true,
-            positionEffect: 'LIQUIDATE',
-            realizedPnl: loss,
-            fee: liquidationFee,
-            liquidationFee,
-            status: 'Filled',
-            reason: reasonNote || 'LIQUIDATION',
-            executedQty: closedQty,
-            remainingQty: 0,
-            avgFillPrice: pos.markPrice
-          }), 'pending', currency, nowMs]
+            nowMs,
+          ]
         );
 
         await client.query(
           `INSERT INTO te_outbox_events (event_type, user_id, payload, status, currency, created_at) VALUES ($1, $2, $3, $4, $5, $6)`,
-          ['positionUpdated', userId, JSON.stringify({
-            ...pos,
+          [
+            'positionUpdated',
             userId,
-            positionId: pos.positionId,
-            instrumentKey: pos.instrumentKey,
-            side: pos.side,
-            currency: pos.collateralCurrency || currency,
-            qty: pos.qty,
-            markPrice: pos.markPrice,
-            realizedPnl: pos.realizedPnl,
-            fee: liquidationFee,
-            liquidationFee,
-            status: pos.status,
-            reason: pos.liquidationReason || reasonNote || 'LIQUIDATION'
-          }), 'pending', currency, nowMs]
+            JSON.stringify({
+              ...pos,
+              userId,
+              positionId: pos.positionId,
+              instrumentKey: pos.instrumentKey,
+              side: pos.side,
+              currency: pos.collateralCurrency || currency,
+              qty: pos.qty,
+              markPrice: pos.markPrice,
+              realizedPnl: pos.realizedPnl,
+              fee: liquidationFee,
+              liquidationFee,
+              status: pos.status,
+              reason: pos.liquidationReason || reasonNote || 'LIQUIDATION',
+            }),
+            'pending',
+            currency,
+            nowMs,
+          ]
         );
         await client.query(
           `INSERT INTO te_outbox_events (event_type, user_id, payload, status, currency, created_at) VALUES ($1, $2, $3, $4, $5, $6)`,
@@ -1880,67 +2027,96 @@ const orderRes = await client.query(
 
         await client.query(
           `UPDATE te_balances SET available_balance = $1, locked_balance = $2, total_fees = total_fees + $3, realized_pnl = realized_pnl + $4, updated_at = $5 WHERE user_id = $6 AND currency = $7`,
-          [finalBalance, updatedMargin.usedMargin, totalLiquidationFee, totalRealizedLoss, nowMs, userId, currency]
+          [
+            finalBalance,
+            updatedMargin.usedMargin,
+            totalLiquidationFee,
+            totalRealizedLoss,
+            nowMs,
+            userId,
+            currency,
+          ]
         );
 
         const firstPosRow = posRes.rows[0] ? this.mapPosition(posRes.rows[0]) : null;
 
         await client.query(
           `INSERT INTO te_outbox_events (event_type, user_id, payload, status, currency, created_at) VALUES ($1, $2, $3, $4, $5, $6)`,
-          ['balanceUpdated', userId, JSON.stringify({
+          [
+            'balanceUpdated',
             userId,
-            positionId: firstPosRow?.positionId || null,
-            instrumentKey: firstPosRow?.instrumentKey || null,
-            side: firstPosRow?.side || null,
+            JSON.stringify({
+              userId,
+              positionId: firstPosRow?.positionId || null,
+              instrumentKey: firstPosRow?.instrumentKey || null,
+              side: firstPosRow?.side || null,
+              currency,
+              qty: firstPosRow?.qty || 0,
+              markPrice: firstPosRow?.markPrice || 0,
+              realizedPnl: totalRealizedLoss,
+              fee: totalLiquidationFee,
+              liquidationFee: totalLiquidationFee,
+              balance: finalBalance,
+              status: 'UPDATED',
+              reason: 'LIQUIDATION',
+            }),
+            'pending',
             currency,
-            qty: firstPosRow?.qty || 0,
-            markPrice: firstPosRow?.markPrice || 0,
-            realizedPnl: totalRealizedLoss,
-            fee: totalLiquidationFee,
-            liquidationFee: totalLiquidationFee,
-            balance: finalBalance,
-            status: 'UPDATED',
-            reason: 'LIQUIDATION'
-          }), 'pending', currency, nowMs]
+            nowMs,
+          ]
         );
 
         await client.query(
           `INSERT INTO te_outbox_events (event_type, user_id, payload, status, currency, created_at) VALUES ($1, $2, $3, $4, $5, $6)`,
-          ['ledgerUpdated', userId, JSON.stringify({
+          [
+            'ledgerUpdated',
             userId,
-            positionId: firstPosRow?.positionId || null,
-            instrumentKey: firstPosRow?.instrumentKey || null,
-            side: firstPosRow?.side || null,
+            JSON.stringify({
+              userId,
+              positionId: firstPosRow?.positionId || null,
+              instrumentKey: firstPosRow?.instrumentKey || null,
+              side: firstPosRow?.side || null,
+              currency,
+              qty: firstPosRow?.qty || 0,
+              markPrice: firstPosRow?.markPrice || 0,
+              realizedPnl: totalRealizedLoss,
+              fee: totalLiquidationFee,
+              liquidationFee: totalLiquidationFee,
+              balance: finalBalance,
+              status: 'RECORDED',
+              reason: 'LIQUIDATION',
+            }),
+            'pending',
             currency,
-            qty: firstPosRow?.qty || 0,
-            markPrice: firstPosRow?.markPrice || 0,
-            realizedPnl: totalRealizedLoss,
-            fee: totalLiquidationFee,
-            liquidationFee: totalLiquidationFee,
-            balance: finalBalance,
-            status: 'RECORDED',
-            reason: 'LIQUIDATION'
-          }), 'pending', currency, nowMs]
+            nowMs,
+          ]
         );
 
         await client.query(
           `INSERT INTO te_outbox_events (event_type, user_id, payload, status, currency, created_at) VALUES ($1, $2, $3, $4, $5, $6)`,
-          ['marginCall', userId, JSON.stringify({
+          [
+            'marginCall',
             userId,
-            positionId: firstPosRow?.positionId || null,
-            instrumentKey: firstPosRow?.instrumentKey || null,
-            side: firstPosRow?.side || null,
+            JSON.stringify({
+              userId,
+              positionId: firstPosRow?.positionId || null,
+              instrumentKey: firstPosRow?.instrumentKey || null,
+              side: firstPosRow?.side || null,
+              currency,
+              qty: firstPosRow?.qty || 0,
+              markPrice: firstPosRow?.markPrice || 0,
+              realizedPnl: totalRealizedLoss,
+              fee: totalLiquidationFee,
+              liquidationFee: totalLiquidationFee,
+              type: 'liquidation',
+              balance: finalBalance,
+              status: 'LIQUIDATED',
+              reason: 'LIQUIDATION',
+            }),
+            'pending',
             currency,
-            qty: firstPosRow?.qty || 0,
-            markPrice: firstPosRow?.markPrice || 0,
-            realizedPnl: totalRealizedLoss,
-            fee: totalLiquidationFee,
-            liquidationFee: totalLiquidationFee,
-            type: 'liquidation',
-            balance: finalBalance,
-            status: 'LIQUIDATED',
-            reason: 'LIQUIDATION'
-          }), 'pending', currency, nowMs]
+            nowMs,
+          ]
         );
       }
 
@@ -1951,7 +2127,9 @@ const orderRes = await client.query(
       return lastTradeResult;
     } catch (e) {
       if (ownClient) {
-        try { await client.query('ROLLBACK'); } catch(e) {}
+        try {
+          await client.query('ROLLBACK');
+        } catch (e) {}
       }
       throw e;
     } finally {
@@ -1973,7 +2151,7 @@ const orderRes = await client.query(
     },
     clientArg?: any
   ): Promise<FundingPeriodSnapshot> {
-    const client = clientArg || await this.pool.connect();
+    const client = clientArg || (await this.pool.connect());
     const ownClient = !clientArg;
     try {
       const fundingInterval = snapshot.fundingInterval || '8h';
@@ -1991,7 +2169,7 @@ const orderRes = await client.query(
           snapshot.fundingTimestamp,
           snapshot.fundingRate,
           snapshot.markPrice,
-          createdAt
+          createdAt,
         ]
       );
       return {
@@ -2001,7 +2179,7 @@ const orderRes = await client.query(
         fundingTimestamp: snapshot.fundingTimestamp,
         fundingRate: snapshot.fundingRate,
         markPrice: snapshot.markPrice,
-        createdAt
+        createdAt,
       };
     } finally {
       if (ownClient) {
@@ -2026,7 +2204,7 @@ const orderRes = await client.query(
     validTo?: number | null,
     clientArg?: any
   ): Promise<PositionSnapshot> {
-    const client = clientArg || await this.pool.connect();
+    const client = clientArg || (await this.pool.connect());
     const ownClient = !clientArg;
     try {
       const nowMs = validFrom ?? Date.now();
@@ -2058,7 +2236,7 @@ const orderRes = await client.query(
           position.collateralCurrency || null,
           nowMs,
           validTo ?? null,
-          Date.now()
+          Date.now(),
         ]
       );
 
@@ -2075,7 +2253,7 @@ const orderRes = await client.query(
         collateralCurrency: position.collateralCurrency,
         validFrom: nowMs,
         validTo: validTo ?? null,
-        createdAt: Date.now()
+        createdAt: Date.now(),
       };
     } finally {
       if (ownClient) {
@@ -2089,7 +2267,7 @@ const orderRes = await client.query(
     timestamp: number,
     clientArg?: any
   ): Promise<PositionSnapshot | null> {
-    const client = clientArg || await this.pool.connect();
+    const client = clientArg || (await this.pool.connect());
     const ownClient = !clientArg;
     try {
       const res = await client.query(
@@ -2118,7 +2296,7 @@ const orderRes = await client.query(
         collateralCurrency: row.collateral_currency || undefined,
         validFrom: Number(row.valid_from),
         validTo: row.valid_to ? Number(row.valid_to) : null,
-        createdAt: Number(row.created_at)
+        createdAt: Number(row.created_at),
       };
     } finally {
       if (ownClient) {
@@ -2134,7 +2312,7 @@ const orderRes = await client.query(
     fundingTimestamp: number,
     clientArg?: any
   ): Promise<FundingPeriodSnapshot | null> {
-    const client = clientArg || await this.pool.connect();
+    const client = clientArg || (await this.pool.connect());
     const ownClient = !clientArg;
     try {
       const res = await client.query(
@@ -2153,7 +2331,7 @@ const orderRes = await client.query(
         fundingTimestamp: Number(row.funding_timestamp),
         fundingRate: Number(row.funding_rate),
         markPrice: Number(row.mark_price),
-        createdAt: Number(row.created_at)
+        createdAt: Number(row.created_at),
       };
     } finally {
       if (ownClient) {
@@ -2182,11 +2360,17 @@ const orderRes = await client.query(
       const fundingTimestamp = options.fundingTimestamp || Date.now();
 
       if (options.fundingRate != null) {
-        if (typeof options.fundingRate !== 'number' || isNaN(options.fundingRate) || !Number.isFinite(options.fundingRate)) {
+        if (
+          typeof options.fundingRate !== 'number' ||
+          isNaN(options.fundingRate) ||
+          !Number.isFinite(options.fundingRate)
+        ) {
           throw new Error('Invalid fundingRate: must be a valid finite number');
         }
         if (Math.abs(options.fundingRate) > 1.0) {
-          throw new Error(`Invalid fundingRate (${options.fundingRate}): exceeds maximum allowed range [-1.0, 1.0]`);
+          throw new Error(
+            `Invalid fundingRate (${options.fundingRate}): exceeds maximum allowed range [-1.0, 1.0]`
+          );
         }
       }
 
@@ -2238,14 +2422,21 @@ const orderRes = await client.query(
             fundingAmount: Number(row.funding_amount),
             status: row.status,
             createdAt: Number(row.created_at),
-            processedAt: Number(row.processed_at)
+            processedAt: Number(row.processed_at),
           };
 
           if (options.currency && existingPayment.currency !== options.currency) {
-            throw new Error(`Funding conflict: Existing funding payment currency (${existingPayment.currency}) does not match requested currency (${options.currency})`);
+            throw new Error(
+              `Funding conflict: Existing funding payment currency (${existingPayment.currency}) does not match requested currency (${options.currency})`
+            );
           }
-          if (options.fundingRate != null && Math.abs(existingPayment.fundingRate - options.fundingRate) > 1e-8) {
-            throw new Error(`Funding conflict: Existing funding rate (${existingPayment.fundingRate}) does not match requested rate (${options.fundingRate})`);
+          if (
+            options.fundingRate != null &&
+            Math.abs(existingPayment.fundingRate - options.fundingRate) > 1e-8
+          ) {
+            throw new Error(
+              `Funding conflict: Existing funding rate (${existingPayment.fundingRate}) does not match requested rate (${options.fundingRate})`
+            );
           }
 
           results.push(existingPayment);
@@ -2255,22 +2446,37 @@ const orderRes = await client.query(
       for (const posRow of posRes.rows) {
         const position = this.mapPosition(posRow);
         const posCurrency = position.collateralCurrency || position.settlementCurrency;
-        if (!posCurrency || String(posCurrency).trim() === '' || posCurrency === 'undefined' || posCurrency === 'null') {
+        if (
+          !posCurrency ||
+          String(posCurrency).trim() === '' ||
+          posCurrency === 'undefined' ||
+          posCurrency === 'null'
+        ) {
           throw new Error(`Funding error: Position ${position.positionId} has missing currency`);
         }
         if (posCurrency !== 'TON' && posCurrency !== 'STARS') {
-          throw new Error(`Funding error: Position ${position.positionId} has unsupported currency '${posCurrency}'`);
+          throw new Error(
+            `Funding error: Position ${position.positionId} has unsupported currency '${posCurrency}'`
+          );
         }
         if (options.currency && options.currency !== posCurrency) {
-          throw new Error(`Funding error: Position ${position.positionId} currency '${posCurrency}' does not match requested currency '${options.currency}'`);
+          throw new Error(
+            `Funding error: Position ${position.positionId} currency '${posCurrency}' does not match requested currency '${options.currency}'`
+          );
         }
 
         if (options.fundingRate != null) {
-          if (typeof options.fundingRate !== 'number' || isNaN(options.fundingRate) || !Number.isFinite(options.fundingRate)) {
+          if (
+            typeof options.fundingRate !== 'number' ||
+            isNaN(options.fundingRate) ||
+            !Number.isFinite(options.fundingRate)
+          ) {
             throw new Error('Invalid fundingRate: must be a valid finite number');
           }
           if (Math.abs(options.fundingRate) > 1.0) {
-            throw new Error(`Invalid fundingRate (${options.fundingRate}): exceeds maximum allowed range [-1.0, 1.0]`);
+            throw new Error(
+              `Invalid fundingRate (${options.fundingRate}): exceeds maximum allowed range [-1.0, 1.0]`
+            );
           }
         }
 
@@ -2287,46 +2493,70 @@ const orderRes = await client.query(
         let effectiveMarkPrice: number;
 
         if (snapshot) {
-          if (options.fundingRate != null && Math.abs(snapshot.fundingRate - options.fundingRate) > 1e-8) {
-            throw new Error(`Funding conflict: Existing funding rate (${snapshot.fundingRate}) does not match requested rate (${options.fundingRate})`);
+          if (
+            options.fundingRate != null &&
+            Math.abs(snapshot.fundingRate - options.fundingRate) > 1e-8
+          ) {
+            throw new Error(
+              `Funding conflict: Existing funding rate (${snapshot.fundingRate}) does not match requested rate (${options.fundingRate})`
+            );
           }
           effectiveFundingRate = snapshot.fundingRate;
           effectiveMarkPrice = snapshot.markPrice;
         } else if (options.overrideMarkPrice != null && options.fundingRate != null) {
           effectiveFundingRate = options.fundingRate;
           effectiveMarkPrice = options.overrideMarkPrice;
-          await this.createFundingPeriodSnapshot({
-            instrumentKey: position.instrumentKey,
-            currency: posCurrency,
-            fundingInterval,
-            fundingTimestamp,
-            fundingRate: effectiveFundingRate,
-            markPrice: effectiveMarkPrice
-          }, client);
+          await this.createFundingPeriodSnapshot(
+            {
+              instrumentKey: position.instrumentKey,
+              currency: posCurrency,
+              fundingInterval,
+              fundingTimestamp,
+              fundingRate: effectiveFundingRate,
+              markPrice: effectiveMarkPrice,
+            },
+            client
+          );
         } else if (!options.isCatchUp) {
           if (options.fundingRate == null) {
             throw new Error('Invalid fundingRate: must be a valid finite number');
           }
           effectiveFundingRate = options.fundingRate;
-          effectiveMarkPrice = options.overrideMarkPrice != null ? options.overrideMarkPrice : (position.markPrice != null && position.markPrice > 0 ? position.markPrice : position.avgEntryPrice);
-          await this.createFundingPeriodSnapshot({
-            instrumentKey: position.instrumentKey,
-            currency: posCurrency,
-            fundingInterval,
-            fundingTimestamp,
-            fundingRate: effectiveFundingRate,
-            markPrice: effectiveMarkPrice
-          }, client);
+          effectiveMarkPrice =
+            options.overrideMarkPrice != null
+              ? options.overrideMarkPrice
+              : position.markPrice != null && position.markPrice > 0
+                ? position.markPrice
+                : position.avgEntryPrice;
+          await this.createFundingPeriodSnapshot(
+            {
+              instrumentKey: position.instrumentKey,
+              currency: posCurrency,
+              fundingInterval,
+              fundingTimestamp,
+              fundingRate: effectiveFundingRate,
+              markPrice: effectiveMarkPrice,
+            },
+            client
+          );
         } else {
-          throw new Error(`MISSING_HISTORICAL_SNAPSHOT: No funding period snapshot found for instrument '${position.instrumentKey}', currency '${posCurrency}', interval '${fundingInterval}', timestamp ${fundingTimestamp}`);
+          throw new Error(
+            `MISSING_HISTORICAL_SNAPSHOT: No funding period snapshot found for instrument '${position.instrumentKey}', currency '${posCurrency}', interval '${fundingInterval}', timestamp ${fundingTimestamp}`
+          );
         }
 
-        if (typeof effectiveFundingRate !== 'number' || isNaN(effectiveFundingRate) || !Number.isFinite(effectiveFundingRate)) {
+        if (
+          typeof effectiveFundingRate !== 'number' ||
+          isNaN(effectiveFundingRate) ||
+          !Number.isFinite(effectiveFundingRate)
+        ) {
           throw new Error('Invalid fundingRate: must be a valid finite number');
         }
 
         if (Math.abs(effectiveFundingRate) > 1.0) {
-          throw new Error(`Invalid fundingRate (${effectiveFundingRate}): exceeds maximum allowed range [-1.0, 1.0]`);
+          throw new Error(
+            `Invalid fundingRate (${effectiveFundingRate}): exceeds maximum allowed range [-1.0, 1.0]`
+          );
         }
 
         const fundingRate = Number(effectiveFundingRate.toFixed(8));
@@ -2356,7 +2586,7 @@ const orderRes = await client.query(
             fundingAmount: Number(row.funding_amount),
             status: row.status,
             createdAt: Number(row.created_at),
-            processedAt: Number(row.processed_at)
+            processedAt: Number(row.processed_at),
           };
 
           const currentQty = position.qty;
@@ -2370,7 +2600,9 @@ const orderRes = await client.query(
           const currencyMismatch = existingPayment.currency !== currentCurrency;
 
           if (rateDiff > 1e-8 || priceDiff > 1e-8 || qtyDiff > 1e-8 || currencyMismatch) {
-            throw new Error(`Funding conflict: Existing funding payment for position ${position.positionId} at timestamp ${fundingTimestamp} has different parameters`);
+            throw new Error(
+              `Funding conflict: Existing funding payment for position ${position.positionId} at timestamp ${fundingTimestamp} has different parameters`
+            );
           }
 
           results.push(existingPayment);
@@ -2384,12 +2616,18 @@ const orderRes = await client.query(
 
         let qty = position.qty;
         if (options.isCatchUp) {
-          const posSnapshot = await this.getPositionSnapshotAt(position.positionId, fundingTimestamp, client);
+          const posSnapshot = await this.getPositionSnapshotAt(
+            position.positionId,
+            fundingTimestamp,
+            client
+          );
           if (posSnapshot) {
             qty = posSnapshot.qty;
             if (qty <= 0) continue; // Skip if position was closed at that time
           } else {
-            throw new Error(`MISSING_HISTORICAL_QTY: No position snapshot found for position ${position.positionId} at timestamp ${fundingTimestamp}`);
+            throw new Error(
+              `MISSING_HISTORICAL_QTY: No position snapshot found for position ${position.positionId} at timestamp ${fundingTimestamp}`
+            );
           }
         }
 
@@ -2401,7 +2639,7 @@ const orderRes = await client.query(
         if (position.side === 'Long') {
           fundingAmount = notional * fundingRate;
         } else {
-          fundingAmount = - (notional * fundingRate);
+          fundingAmount = -(notional * fundingRate);
         }
 
         // Lock & update user balance
@@ -2439,13 +2677,24 @@ const orderRes = await client.query(
         } else if (paymentStatus === 'FAILED') {
           // Pass state to existing margin-call logic
           const newStatus = 'MarginCall';
-          await client.query(
-            'UPDATE te_positions SET status = $1 WHERE position_id = $2',
-            [newStatus, position.positionId]
-          );
+          await client.query('UPDATE te_positions SET status = $1 WHERE position_id = $2', [
+            newStatus,
+            position.positionId,
+          ]);
           await client.query(
             'INSERT INTO te_outbox_events (event_type, user_id, payload, status, currency, created_at) VALUES ($1, $2, $3, $4, $5, $6)',
-            ['marginCall', position.userId, JSON.stringify({ userId: position.userId, instrumentKey: position.instrumentKey, status: newStatus }), 'pending', posCurrency, Date.now()]
+            [
+              'marginCall',
+              position.userId,
+              JSON.stringify({
+                userId: position.userId,
+                instrumentKey: position.instrumentKey,
+                status: newStatus,
+              }),
+              'pending',
+              posCurrency,
+              Date.now(),
+            ]
           );
         }
 
@@ -2473,7 +2722,7 @@ const orderRes = await client.query(
             paymentStatus,
             nowMs,
             nowMs,
-            errorReason || null
+            errorReason || null,
           ]
         );
 
@@ -2494,7 +2743,7 @@ const orderRes = await client.query(
           status: paymentStatus,
           errorReason,
           createdAt: nowMs,
-          processedAt: nowMs
+          processedAt: nowMs,
         };
 
         const commonPayload = {
@@ -2509,7 +2758,7 @@ const orderRes = await client.query(
           markPrice,
           availableBalance: newAvailableBalance,
           status: paymentStatus,
-          errorReason
+          errorReason,
         };
 
         // Outbox event: fundingUpdated (will reflect FAILED if it failed)
@@ -2521,7 +2770,7 @@ const orderRes = await client.query(
             JSON.stringify({ ...payment, ...commonPayload }),
             'pending',
             posCurrency,
-            nowMs
+            nowMs,
           ]
         );
 
@@ -2535,7 +2784,7 @@ const orderRes = await client.query(
               JSON.stringify({ ...payment, ...commonPayload }),
               'pending',
               posCurrency,
-              nowMs
+              nowMs,
             ]
           );
 
@@ -2548,11 +2797,11 @@ const orderRes = await client.query(
               JSON.stringify({
                 ...commonPayload,
                 previousBalance: currentBalance,
-                availableBalance: newAvailableBalance
+                availableBalance: newAvailableBalance,
               }),
               'pending',
               posCurrency,
-              nowMs
+              nowMs,
             ]
           );
 
@@ -2565,11 +2814,11 @@ const orderRes = await client.query(
               JSON.stringify({
                 ...commonPayload,
                 ledgerType: 'FUNDING',
-                amount: fundingAmount
+                amount: fundingAmount,
               }),
               'pending',
               posCurrency,
-              nowMs
+              nowMs,
             ]
           );
         }
@@ -2587,11 +2836,11 @@ const orderRes = await client.query(
                 avgEntryPrice: position.avgEntryPrice,
                 unrealizedPnl: position.unrealizedPnl,
                 realizedPnl: position.realizedPnl,
-                positionStatus: position.status
+                positionStatus: position.status,
               }),
               'pending',
               posCurrency,
-              nowMs
+              nowMs,
             ]
           );
         }
@@ -2606,7 +2855,9 @@ const orderRes = await client.query(
       return results;
     } catch (e) {
       if (ownClient) {
-        try { await client.query('ROLLBACK'); } catch(e) {}
+        try {
+          await client.query('ROLLBACK');
+        } catch (e) {}
       }
       throw e;
     } finally {
@@ -2621,7 +2872,7 @@ const orderRes = await client.query(
       `SELECT * FROM te_funding_payments WHERE user_id = $1 ORDER BY funding_timestamp DESC`,
       [userId]
     );
-    return res.rows.map(r => ({
+    return res.rows.map((r) => ({
       fundingId: r.funding_id,
       positionId: r.position_id,
       userId: r.user_id,
@@ -2638,7 +2889,7 @@ const orderRes = await client.query(
       status: r.status,
       createdAt: Number(r.created_at),
       processedAt: Number(r.processed_at),
-      errorReason: r.error_reason || undefined
+      errorReason: r.error_reason || undefined,
     }));
   }
 
@@ -2656,7 +2907,14 @@ const orderRes = await client.query(
     fundingInterval?: string;
     currency?: string;
     instrumentKey?: string;
-  }): Promise<{ timestamp: number; payments: FundingPayment[]; status?: 'PROCESSED' | 'SKIPPED'; errorReason?: string }[]> {
+  }): Promise<
+    {
+      timestamp: number;
+      payments: FundingPayment[];
+      status?: 'PROCESSED' | 'SKIPPED';
+      errorReason?: string;
+    }[]
+  > {
     const endTs = options.currentTimestamp || Date.now();
     const intervalMs = options.intervalMs;
     if (intervalMs <= 0) {
@@ -2679,7 +2937,7 @@ const orderRes = await client.query(
     }
 
     const posRes = await this.pool.query(queryStr, queryParams);
-    const openPositions = posRes.rows.map(r => this.mapPosition(r));
+    const openPositions = posRes.rows.map((r) => this.mapPosition(r));
 
     // Map timestamp -> array of positionIds that need funding at that timestamp
     const timestampToPositionsMap = new Map<number, string[]>();
@@ -2733,7 +2991,12 @@ const orderRes = await client.query(
 
     // Get sorted discrete timestamps in strict chronological order
     const sortedTimestamps = Array.from(timestampToPositionsMap.keys()).sort((a, b) => a - b);
-    const results: { timestamp: number; payments: FundingPayment[]; status?: 'PROCESSED' | 'SKIPPED'; errorReason?: string }[] = [];
+    const results: {
+      timestamp: number;
+      payments: FundingPayment[];
+      status?: 'PROCESSED' | 'SKIPPED';
+      errorReason?: string;
+    }[] = [];
 
     for (const ts of sortedTimestamps) {
       const targetPosIds = timestampToPositionsMap.get(ts)!;
@@ -2754,7 +3017,11 @@ const orderRes = await client.query(
           });
           paymentsAtTs.push(...payments);
         } catch (err: any) {
-          if (err.message && (err.message.includes('MISSING_HISTORICAL_SNAPSHOT') || err.message.includes('MISSING_HISTORICAL_QTY'))) {
+          if (
+            err.message &&
+            (err.message.includes('MISSING_HISTORICAL_SNAPSHOT') ||
+              err.message.includes('MISSING_HISTORICAL_QTY'))
+          ) {
             periodStatus = 'SKIPPED';
             periodErrorReason = err.message;
           } else {
@@ -2776,7 +3043,11 @@ const orderRes = await client.query(
             });
             paymentsAtTs.push(...payments);
           } catch (err: any) {
-            if (err.message && (err.message.includes('MISSING_HISTORICAL_SNAPSHOT') || err.message.includes('MISSING_HISTORICAL_QTY'))) {
+            if (
+              err.message &&
+              (err.message.includes('MISSING_HISTORICAL_SNAPSHOT') ||
+                err.message.includes('MISSING_HISTORICAL_QTY'))
+            ) {
               periodStatus = 'SKIPPED';
               periodErrorReason = err.message;
             } else {

@@ -9,7 +9,10 @@ content = content.replace(/'Open', 'OPEN', 'MarginCall', 'MARGIN_CALL'/g, "'Open
 
 // fix liquidateUser
 content = content.replace(/pos\.status = 'LIQUIDATED' as any;/g, "pos.status = 'Liquidated';");
-content = content.replace(/UPDATE te_positions SET status = 'LIQUIDATED'/g, "UPDATE te_positions SET status = 'Liquidated'");
+content = content.replace(
+  /UPDATE te_positions SET status = 'LIQUIDATED'/g,
+  "UPDATE te_positions SET status = 'Liquidated'"
+);
 
 fs.writeFileSync('server/tradingEngine.ts', content);
 

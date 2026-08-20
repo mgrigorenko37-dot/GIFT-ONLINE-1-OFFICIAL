@@ -13,19 +13,19 @@ const name = process.argv[2];
 const ts = parseInt(process.argv[3]);
 
 async function run() {
-   console.log(`[Worker ${name}] PID ${process.pid} starting funding...`);
-   try {
-      const res = await engine.processMissedFundingPeriods({
-         lastProcessedTimestamp: ts - 8 * 60 * 60 * 1000,
-         currentTimestamp: ts,
-         intervalMs: 8 * 60 * 60 * 1000
-      });
-      let count = 0;
-      if (res && res.length > 0) count = res[0].payments.length;
-      console.log(`[Worker ${name}] PID ${process.pid} successfully processed ${count} payments.`);
-   } catch (e: any) {
-      console.log(`[Worker ${name}] PID ${process.pid} failed with error: ${e.message}`);
-   }
-   process.exit(0);
+  console.log(`[Worker ${name}] PID ${process.pid} starting funding...`);
+  try {
+    const res = await engine.processMissedFundingPeriods({
+      lastProcessedTimestamp: ts - 8 * 60 * 60 * 1000,
+      currentTimestamp: ts,
+      intervalMs: 8 * 60 * 60 * 1000,
+    });
+    let count = 0;
+    if (res && res.length > 0) count = res[0].payments.length;
+    console.log(`[Worker ${name}] PID ${process.pid} successfully processed ${count} payments.`);
+  } catch (e: any) {
+    console.log(`[Worker ${name}] PID ${process.pid} failed with error: ${e.message}`);
+  }
+  process.exit(0);
 }
 run();

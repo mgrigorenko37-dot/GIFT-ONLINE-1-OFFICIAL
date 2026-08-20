@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import { acceptCompletedSale } from './marketState';
 
 export function simulateSales(io: any) {
@@ -23,10 +24,12 @@ export function simulateSales(io: any) {
   console.log('[mockMinter] Starting mock sales simulation engine...');
 
   setInterval(() => {
+    const randSuffix = crypto.randomBytes(4).toString('hex');
+    const priceDelta = (crypto.randomInt(0, 500) - 250) / 100;
     const sale: any = {
-      id: `mock_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      id: `mock_${Date.now()}_${randSuffix}`,
       collectionId: 'durov-cap',
-      price: (124 + Math.random() * 5 - 2.5).toFixed(2),
+      price: (124 + priceDelta).toFixed(2),
       quantity: '1',
       currency: 'TON',
       eventTime: Date.now(),

@@ -31,8 +31,11 @@
     "preview": "vite preview",
     "start": "node dist/server.cjs",
     "test": "vitest run",
+    "test:unit": "vitest run server/*.test.ts",
+    "test:integration": "vitest run tests/integration/*.test.ts",
     "typecheck": "tsc --noEmit",
     "lint": "eslint ./src ./server",
+    "check:security": "node scripts/security_audit.mjs",
     "eslint": "eslint ./src ./server",
     "prettier": "prettier --check .",
     "prettier fix": "prettier --write **"

@@ -1,1 +1,7 @@
-{"url": "https://giftx.app","name": "GiftX","iconUrl": "https://telegram.org/img/t_logo.png", "termsOfUseUrl": "https://giftx.app/terms","privacyPolicyUrl": "https://giftx.app/privacy"}
+{
+  "url": "https://giftx.app",
+  "name": "GiftX",
+  "iconUrl": "https://telegram.org/img/t_logo.png",
+  "termsOfUseUrl": "https://giftx.app/terms",
+  "privacyPolicyUrl": "https://giftx.app/privacy"
+}

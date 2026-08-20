@@ -30,7 +30,8 @@ export class WithdrawalWorker {
     this.intervalMs = options?.intervalMs ?? 3000;
     this.batchSize = options?.batchSize ?? 10;
     this.adapter = options?.adapter ?? new ProductionTonTransferAdapter();
-    this.workerId = options?.workerId ?? `worker_${process.pid}_${crypto.randomUUID().substring(0, 8)}`;
+    this.workerId =
+      options?.workerId ?? `worker_${process.pid}_${crypto.randomUUID().substring(0, 8)}`;
     this.maxAttempts = options?.maxAttempts ?? 3;
     this.retryDelayMs = options?.retryDelayMs ?? 15000;
     this.staleLockAgeMs = options?.staleLockAgeMs ?? 120000; // 2 mins
@@ -38,7 +39,9 @@ export class WithdrawalWorker {
 
   public start() {
     if (this.intervalId) return;
-    console.log(`[WithdrawalWorker] Starting background worker '${this.workerId}' (interval: ${this.intervalMs}ms)...`);
+    console.log(
+      `[WithdrawalWorker] Starting background worker '${this.workerId}' (interval: ${this.intervalMs}ms)...`
+    );
     this.intervalId = setInterval(() => {
       this.processCycle().catch((err) => {
         console.error('[WithdrawalWorker] Unhandled error during cycle:', err);
@@ -75,8 +78,14 @@ export class WithdrawalWorker {
   public async recoverStaleLocks(): Promise<number> {
     const client = await this.pool.connect();
     try {
-      return await WithdrawalStateMachine.recoverStaleProcessingRecords(client, this.staleLockAgeMs);
-    } catch (e) {
+      return await WithdrawalStateMachine.recoverStaleProcessingRecords(
+        client,
+        this.staleLockAgeMs
+      );
+    } catch (e: any) {
+      if (e?.code === '42P01' || e?.message?.includes('does not exist')) {
+        return 0;
+      }
       console.error('[WithdrawalWorker] Error during stale lock recovery:', e);
       return 0;
     } finally {
@@ -113,12 +122,99 @@ export class WithdrawalWorker {
 
       // Process each locked withdrawal
       for (const item of lockedBatch) {
-        const { id: withdrawalId, user_id: userId, amount, currency, address, attempts } = item;
-        console.log(`[WithdrawalWorker] [${this.workerId}] Transferring ${amount} ${currency} -> ${address} (attempt #${attempts})`);
+        const {
+          id: withdrawalId,
+          user_id: userId,
+          amount,
+          currency,
+          address,
+          attempts,
+          tx_hash,
+        } = item;
+        let operationId = item.operation_id;
 
-        const transferResult = await this.adapter.sendTon(address, amount, `Withdrawal #${withdrawalId}`);
+        // 1. Ensure persistent operation_id exists in DB BEFORE any broadcast
+        if (!operationId) {
+          operationId = `op_${withdrawalId}_${crypto.randomUUID().substring(0, 8)}`;
+          const opClient = await this.pool.connect();
+          try {
+            await opClient.query(
+              `UPDATE te_withdrawals SET operation_id = $1 WHERE id = $2 AND operation_id IS NULL`,
+              [operationId, withdrawalId]
+            );
+          } catch (e) {
+            console.error(
+              `[WithdrawalWorker] Error persisting operation_id for ${withdrawalId}:`,
+              e
+            );
+          } finally {
+            opClient.release();
+          }
+        }
+
+        // 2. Reconciliation check: Before broadcast (or re-broadcast), verify if tx was already published on-chain or recorded in DB
+        let existingTxHash = tx_hash;
+        if (!existingTxHash && this.adapter.checkTransactionByOperationId) {
+          try {
+            const checkRes = await this.adapter.checkTransactionByOperationId(operationId, address);
+            if (checkRes.found && checkRes.txHash) {
+              existingTxHash = checkRes.txHash;
+              console.log(
+                `[WithdrawalWorker] Reconciled on-chain transaction for ${withdrawalId} (op:${operationId}): ${existingTxHash}`
+              );
+            }
+          } catch (e) {
+            console.error(
+              `[WithdrawalWorker] Error during on-chain reconciliation for ${withdrawalId}:`,
+              e
+            );
+          }
+        }
+
+        // If transaction already exists on-chain or in DB, complete it immediately without re-calling adapter.sendTon
+        if (existingTxHash) {
+          const updateClient = await this.pool.connect();
+          try {
+            await updateClient.query('BEGIN');
+            await WithdrawalStateMachine.markCompleted(
+              updateClient,
+              withdrawalId,
+              existingTxHash,
+              this.workerId,
+              Date.now()
+            );
+            await updateClient.query('COMMIT');
+            console.log(
+              `[WithdrawalWorker] Completed withdrawal ${withdrawalId} via reconciled txHash: ${existingTxHash}`
+            );
+            processedCount++;
+            continue;
+          } catch (updateErr) {
+            try {
+              await updateClient.query('ROLLBACK');
+            } catch {}
+            console.error(
+              `[WithdrawalWorker] Error marking reconciled withdrawal ${withdrawalId} completed:`,
+              updateErr
+            );
+            continue;
+          } finally {
+            updateClient.release();
+          }
+        }
+
+        // 3. Execute broadcast passing the UNIQUE operation_id in memo/payload
+        console.log(
+          `[WithdrawalWorker] [${this.workerId}] Transferring ${amount} ${currency} -> ${address} (op:${operationId}, attempt #${attempts})`
+        );
+        const transferResult = await this.adapter.sendTon(
+          address,
+          amount,
+          `Withdrawal #${withdrawalId}`,
+          operationId
+        );
+
         const updateClient = await this.pool.connect();
-
         try {
           await updateClient.query('BEGIN');
 
@@ -131,7 +227,22 @@ export class WithdrawalWorker {
               this.workerId,
               Date.now()
             );
-            console.log(`[WithdrawalWorker] Successfully completed withdrawal ${withdrawalId}. TxHash: ${transferResult.txHash}`);
+            console.log(
+              `[WithdrawalWorker] Successfully completed withdrawal ${withdrawalId}. TxHash: ${transferResult.txHash}`
+            );
+          } else if (transferResult.isUnknown) {
+            // Unknown broadcast outcome (e.g., timeout / network partition)
+            // DO NOT blindly retry or release funds. Move to NEEDS_RECONCILIATION for manual / scheduled safety check.
+            await WithdrawalStateMachine.markNeedsReconciliation(
+              updateClient,
+              withdrawalId,
+              `Broadcast outcome unknown (network timeout): ${transferResult.error || 'Timeout'}`,
+              this.workerId,
+              Date.now()
+            );
+            console.warn(
+              `[WithdrawalWorker] Withdrawal ${withdrawalId} (op:${operationId}) broadcast status unknown. Transitioned to NEEDS_RECONCILIATION.`
+            );
           } else {
             const failureReason = transferResult.error || 'Unknown TON transfer failure';
 
@@ -145,7 +256,9 @@ export class WithdrawalWorker {
                 this.workerId,
                 Date.now()
               );
-              console.warn(`[WithdrawalWorker] Withdrawal ${withdrawalId} failed (${failureReason}). Marked RETRYING in ${this.retryDelayMs}ms.`);
+              console.warn(
+                `[WithdrawalWorker] Withdrawal ${withdrawalId} failed (${failureReason}). Marked RETRYING in ${this.retryDelayMs}ms.`
+              );
             } else {
               // Max attempts reached: State Machine Transition: PROCESSING -> FAILED
               await WithdrawalStateMachine.markFailed(
@@ -155,7 +268,9 @@ export class WithdrawalWorker {
                 this.workerId,
                 Date.now()
               );
-              console.warn(`[WithdrawalWorker] Withdrawal ${withdrawalId} FAILED permanently. Balance refunded.`);
+              console.warn(
+                `[WithdrawalWorker] Withdrawal ${withdrawalId} FAILED permanently. Balance refunded.`
+              );
             }
           }
 
@@ -165,15 +280,21 @@ export class WithdrawalWorker {
           try {
             await updateClient.query('ROLLBACK');
           } catch {}
-          console.error(`[WithdrawalWorker] Error updating state machine for ${withdrawalId}:`, updateErr);
+          console.error(
+            `[WithdrawalWorker] Error updating state machine for ${withdrawalId}:`,
+            updateErr
+          );
         } finally {
           updateClient.release();
         }
       }
-    } catch (e) {
+    } catch (e: any) {
       try {
         await client.query('ROLLBACK');
       } catch {}
+      if (e?.code === '42P01' || e?.message?.includes('does not exist')) {
+        return 0;
+      }
       console.error('[WithdrawalWorker] Error in processPendingWithdrawals:', e);
     } finally {
       client.release();
@@ -186,7 +307,10 @@ export class WithdrawalWorker {
 
 let globalWithdrawalWorker: WithdrawalWorker | null = null;
 
-export function startWithdrawalWorker(pool: Pool, options?: WithdrawalWorkerOptions): WithdrawalWorker {
+export function startWithdrawalWorker(
+  pool: Pool,
+  options?: WithdrawalWorkerOptions
+): WithdrawalWorker {
   if (!globalWithdrawalWorker) {
     globalWithdrawalWorker = new WithdrawalWorker(pool, options);
     globalWithdrawalWorker.start();

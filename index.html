@@ -1,14 +1,30 @@
 <!doctype html>
 <html lang="en">
   <head>
-<script>
-  window.addEventListener('error', function(e) {
-    fetch('/api/log-client-error', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message: e.message, filename: e.filename, lineno: e.lineno, error: e.error?.stack || e.error }) });
-  });
-  window.addEventListener('unhandledrejection', function(e) {
-    fetch('/api/log-client-error', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message: e.reason?.message || 'unhandledrejection', error: e.reason?.stack || e.reason }) });
-  });
-</script>
+    <script>
+      window.addEventListener('error', function (e) {
+        fetch('/api/log-client-error', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            message: e.message,
+            filename: e.filename,
+            lineno: e.lineno,
+            error: e.error?.stack || e.error,
+          }),
+        });
+      });
+      window.addEventListener('unhandledrejection', function (e) {
+        fetch('/api/log-client-error', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            message: e.reason?.message || 'unhandledrejection',
+            error: e.reason?.stack || e.reason,
+          }),
+        });
+      });
+    </script>
 
     <meta charset="utf-8" />
     <link rel="icon" href="/favicon.ico" />

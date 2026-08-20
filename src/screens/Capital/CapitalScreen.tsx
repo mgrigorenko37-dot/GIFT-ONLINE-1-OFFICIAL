@@ -8,12 +8,12 @@ type SortKey = 'floor' | 'change' | 'volume';
 
 const rarityOptions = ['All', 'Common', 'Rare', 'Epic', 'Limited', 'Legendary'];
 
-const GiftArtwork: React.FC<{ className: string; large?: boolean; emoji?: string; image_url?: string }> = ({
-  className,
-  large,
-  emoji,
-  image_url,
-}) => {
+const GiftArtwork: React.FC<{
+  className: string;
+  large?: boolean;
+  emoji?: string;
+  image_url?: string;
+}> = ({ className, large, emoji, image_url }) => {
   if (image_url) {
     return (
       <div
@@ -23,7 +23,7 @@ const GiftArtwork: React.FC<{ className: string; large?: boolean; emoji?: string
           alignItems: 'center',
           justifyContent: 'center',
           fontSize: large ? '48px' : '24px',
-          background: 'transparent'
+          background: 'transparent',
         }}
       >
         <img
@@ -314,7 +314,12 @@ const CapitalScreen: React.FC = () => {
               {visibleGifts.map((gift) => (
                 <article className='gx-market-card' key={gift.id}>
                   <div className='gx-card-art-wrap'>
-                    <GiftArtwork className={gift.className} large emoji={gift.emoji} image_url={gift.image_url} />
+                    <GiftArtwork
+                      className={gift.className}
+                      large
+                      emoji={gift.emoji}
+                      image_url={gift.image_url}
+                    />
                     <span
                       className={
                         gift.change > 0

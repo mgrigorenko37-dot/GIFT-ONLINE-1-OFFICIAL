@@ -7,4 +7,3 @@ if (pieces.length === 3) {
   // It happened twice! Wait, why twice?
   // Let's just restore the file from before I ran update_cancelOrder.js
 }
-

@@ -22,14 +22,17 @@ export interface GiftsApiResponse {
   warning?: string;
 }
 
-export const fetchTelegramGifts = async (): Promise<{ gifts: Gift[]; source: 'postgres' | 'mock' }> => {
+export const fetchTelegramGifts = async (): Promise<{
+  gifts: Gift[];
+  source: 'postgres' | 'mock';
+}> => {
   try {
     const res = await fetch('/api/gifts');
     if (res.ok) {
       const contentType = res.headers.get('content-type');
       if (contentType && contentType.includes('application/json')) {
         const json = await res.json();
-        
+
         // Handle new structured API response { source, count, data }
         if (json && Array.isArray(json.data)) {
           return {

@@ -29,7 +29,7 @@ const SplashScreen: React.FC = () => {
       }}
     >
       {/* Background glow effects */}
-      <div 
+      <div
         style={{
           position: 'absolute',
           top: '50%',
@@ -43,13 +43,13 @@ const SplashScreen: React.FC = () => {
         }}
       />
 
-      <div 
-        style={{ 
+      <div
+        style={{
           textAlign: 'center',
           animation: 'splash-fade-in-up 1s ease-out forwards',
         }}
       >
-        <div 
+        <div
           style={{
             fontSize: '48px',
             fontWeight: 800,
