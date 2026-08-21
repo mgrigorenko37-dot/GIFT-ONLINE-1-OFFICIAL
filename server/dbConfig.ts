@@ -81,3 +81,40 @@ export function getSanitizedDbTarget(): string {
   const db = process.env.SQL_DATABASE || process.env.SQL_DB_NAME || 'default';
   return `postgres://${host}:${port}/${db}`;
 }
+
+/**
+ * Returns detailed diagnostic information without exposing secrets.
+ */
+export function getDbDiagnostics(): Record<string, string | boolean> {
+  const { isConfigured, source, config } = getPostgresConfig();
+  if (!isConfigured || !config) {
+    return { status: 'Not Configured' };
+  }
+
+  if (source === 'DATABASE_URL' && config.connectionString) {
+    try {
+      const url = new URL(config.connectionString);
+      return {
+        host: url.hostname,
+        port: url.port || '5432',
+        database: url.pathname.replace('/', ''),
+        user: url.username || 'unknown',
+        hasPassword: !!url.password,
+      };
+    } catch {
+      return { error: 'Invalid DATABASE_URL format' };
+    }
+  }
+
+  if (source === 'SQL_LEGACY') {
+    return {
+      host: String(config.host),
+      port: String(config.port),
+      database: String(config.database),
+      user: String(config.user),
+      hasPassword: !!config.password,
+    };
+  }
+
+  return { status: 'Unknown State' };
+}

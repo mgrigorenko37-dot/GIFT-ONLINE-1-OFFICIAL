@@ -2,28 +2,29 @@ import { describe, it, expect, beforeEach, afterEach, afterAll, beforeAll } from
 import { PostgresTradingEngine, Order, FundingWorker } from '../server/tradingEngine';
 import { Pool } from 'pg';
 import { initDbSchema } from '../server/dbSchema';
+import { getPostgresConfig, getDbDiagnostics } from '../server/dbConfig';
 
 describe('Postgres Margin and Isolation Tests', () => {
   let pool: Pool;
   let engine: PostgresTradingEngine;
 
   beforeAll(async () => {
-    pool = new Pool({
-      host: process.env.SQL_HOST || 'localhost',
-      user: process.env.SQL_USER || 'ai_studio_app_user',
-      password: process.env.SQL_PASSWORD || 'password',
-      database: process.env.SQL_DB_NAME || 'cloud_sql_development_database',
-    });
+    const dbConf = getPostgresConfig();
+    console.log('[Diagnostic] DB Connection:', getDbDiagnostics());
+    if (dbConf.config) {
+      pool = new Pool(dbConf.config);
+    } else {
+      pool = new Pool({ connectionString: 'postgres://node@localhost:5432/gx_exchange_test' });
+    }
 
     const adminUser = process.env.SQL_ADMIN_USER;
     const adminPassword = process.env.SQL_ADMIN_PASSWORD;
     let adminPool = pool;
     if (adminUser && adminPassword) {
       adminPool = new Pool({
-        host: process.env.SQL_HOST || 'localhost',
+        connectionString: process.env.DATABASE_URL || 'postgres://node@localhost:5432/gx_exchange_test',
         user: adminUser,
         password: adminPassword,
-        database: process.env.SQL_DB_NAME || 'cloud_sql_development_database',
       });
     }
 

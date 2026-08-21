@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, beforeAll, afterAll } from 'vitest';
 import express from 'express';
 import { createServer, Server as HttpServer } from 'http';
 import { Server as SocketIOServer } from 'socket.io';
@@ -64,6 +64,18 @@ describe('Stage 10: Production Load & Stress Testing Harness', () => {
   let io: SocketIOServer;
   let baseUrl: string;
   let repository: InMemoryMarketRepository;
+  
+  const originalRedisUrl = process.env.REDIS_URL;
+
+  beforeAll(() => {
+    delete process.env.REDIS_URL;
+  });
+
+  afterAll(() => {
+    if (originalRedisUrl) {
+      process.env.REDIS_URL = originalRedisUrl;
+    }
+  });
 
   beforeEach(async () => {
     resetRateLimiters();

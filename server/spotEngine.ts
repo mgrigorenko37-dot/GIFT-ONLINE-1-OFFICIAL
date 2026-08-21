@@ -12,9 +12,9 @@ export interface Order {
   status?: 'OPEN' | 'FILLED' | 'PARTIAL' | 'CANCELLED';
 }
 
-const pool = new Pool({
-  // connection config
-});
+import { getPostgresConfig } from './dbConfig';
+const conf = getPostgresConfig();
+const pool = new Pool(conf.config || { connectionString: 'postgres://node@localhost:5432/gx_exchange_test' });
 
 // 1. Structure of Database
 export const DB_SCHEMA = `

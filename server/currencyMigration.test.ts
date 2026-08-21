@@ -3,18 +3,20 @@ import { Pool } from 'pg';
 import { resolveInstrumentCurrency, migrateBalancesAndCurrencies } from './currencyMigration';
 import { PostgresTradingEngine } from './tradingEngine';
 import { initDbSchema } from './dbSchema';
+import { getPostgresConfig, getDbDiagnostics } from './dbConfig';
 
 describe('Safe te_balances & Currency Migration', () => {
   let pool: Pool;
   let engine: PostgresTradingEngine;
 
   beforeAll(async () => {
-    pool = new Pool({
-      host: process.env.SQL_HOST || 'localhost',
-      user: process.env.SQL_USER || 'ai_studio_app_user',
-      password: process.env.SQL_PASSWORD || 'password',
-      database: process.env.SQL_DB_NAME || 'cloud_sql_development_database',
-    });
+    const dbConf = getPostgresConfig();
+    console.log('[Diagnostic] DB Connection:', getDbDiagnostics());
+    if (dbConf.config) {
+      pool = new Pool(dbConf.config);
+    } else {
+      pool = new Pool({ connectionString: 'postgres://node@localhost:5432/gx_exchange_test' });
+    }
 
     pool.on('error', (err) => {
       console.error('Unexpected error on idle SQL pool client:', err);
