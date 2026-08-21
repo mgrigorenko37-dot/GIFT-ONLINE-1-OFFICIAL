@@ -35,7 +35,7 @@ export function isOriginAllowed(
   }
 
   const list = allowedList ?? parseAllowedOrigins(process.env.ALLOWED_ORIGINS);
-  const isProd = isProduction ?? (process.env.NODE_ENV === 'production');
+  const isProd = isProduction ?? process.env.NODE_ENV === 'production';
 
   const cleanOrigin = origin.trim().replace(/\/+$/, '').toLowerCase();
 

@@ -167,17 +167,18 @@ describe('PostgresTradingEngine Financial Invariants & Concurrency Audit', () =>
     expect(finalOrder!.executedQty).toBe(10);
     expect(finalOrder!.remainingQty).toBe(0);
 
-    const tradesRes = await pool.query(
-      'SELECT * FROM te_trades WHERE order_id = $1',
-      [buyOrder.orderId]
-    );
+    const tradesRes = await pool.query('SELECT * FROM te_trades WHERE order_id = $1', [
+      buyOrder.orderId,
+    ]);
     const totalTradedQty = tradesRes.rows.reduce((sum, r) => sum + Number(r.qty), 0);
     expect(totalTradedQty).toBe(10);
   });
 
   it('Invariant 5: Liquidation under severe price drop triggers full closure, fee calculation, and audit logging', async () => {
     // Seed user balance to 100.25 TON
-    await pool.query("UPDATE te_balances SET available_balance = '100.25' WHERE user_id = 'inv_user1'");
+    await pool.query(
+      "UPDATE te_balances SET available_balance = '100.25' WHERE user_id = 'inv_user1'"
+    );
 
     const buyOrder = await engine.placeOrder({
       userId: 'inv_user1',
@@ -192,7 +193,9 @@ describe('PostgresTradingEngine Financial Invariants & Concurrency Audit', () =>
     expect(trade).not.toBeNull();
 
     // Deduct 0.98 from balance so walletBalance becomes 99.02 (after 0.25 fee = 99.02)
-    await pool.query("UPDATE te_balances SET available_balance = '99.02' WHERE user_id = 'inv_user1'");
+    await pool.query(
+      "UPDATE te_balances SET available_balance = '99.02' WHERE user_id = 'inv_user1'"
+    );
 
     // Update mark price to 0.1: unrealizedPnl = (0.1 - 10)*10 = -99. Equity = 99.02 - 99 = 0.02 <= maintenanceMargin (0.05)
     await engine.updateMarkPrice('TON', 0.1);
@@ -236,9 +239,7 @@ describe('PostgresTradingEngine Financial Invariants & Concurrency Audit', () =>
     const bal1Current = await engine.getBalance('inv_user1', 'TON');
     const bal2Current = await engine.getBalance('inv_user2', 'TON');
 
-    const totalFeesRes = await pool.query(
-      'SELECT SUM(total_fees) as fees FROM te_balances'
-    );
+    const totalFeesRes = await pool.query('SELECT SUM(total_fees) as fees FROM te_balances');
     const totalFees = Number(totalFeesRes.rows[0].fees || 0);
 
     // Current balances + total paid fees === systemStartTotal

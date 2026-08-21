@@ -1,7 +1,7 @@
 name: CI
 
 # GitHub Actions CI Workflow for GX Exchange
-# 
+#
 # Script Mapping Analysis (package.json):
 # - typecheck (npm run typecheck): EXECUTED in CI
 # - lint (npm run lint / npm run eslint): EXECUTED in CI via 'npm run lint'

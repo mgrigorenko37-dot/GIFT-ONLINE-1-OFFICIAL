@@ -3,10 +3,7 @@ import path from 'node:path';
 
 const EXPECTED_REPO = 'mgrigorenko37-dot/GIFT-ONLINE-1-OFFICIAL';
 const EXPECTED_PRODUCT_NAME = 'GX Exchange';
-const OUTDATED_REPOS = [
-  'mgrigorenko37-dot/gx-exchange',
-  'mgrigorenko37-dot/Gift-Exchange',
-];
+const OUTDATED_REPOS = ['mgrigorenko37-dot/gx-exchange', 'mgrigorenko37-dot/Gift-Exchange'];
 
 let errors = 0;
 
@@ -52,7 +49,9 @@ for (const item of filesToCheckProduct) {
     try {
       const data = JSON.parse(fs.readFileSync(item.path, 'utf8'));
       if (data[item.field] !== EXPECTED_PRODUCT_NAME) {
-        logError(`${item.path} field "${item.field}" is "${data[item.field]}", expected "${EXPECTED_PRODUCT_NAME}"`);
+        logError(
+          `${item.path} field "${item.field}" is "${data[item.field]}", expected "${EXPECTED_PRODUCT_NAME}"`
+        );
       } else {
         logOk(`${item.path} product name is "${EXPECTED_PRODUCT_NAME}".`);
       }

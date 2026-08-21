@@ -558,7 +558,9 @@ export async function initDbSchema(
         FROM information_schema.tables 
         WHERE table_schema = 'public'
       `);
-      const existing = new Set<string>((tablesRes?.rows || []).map((r: any) => r.table_name.toLowerCase()));
+      const existing = new Set<string>(
+        (tablesRes?.rows || []).map((r: any) => r.table_name.toLowerCase())
+      );
       const coreTables = [
         'te_users',
         'te_balances',
