@@ -2,11 +2,22 @@ import { Pool, Client } from 'pg';
 import crypto from 'crypto';
 import Decimal from 'decimal.js';
 import { initDbSchema } from '../../server/dbSchema';
+import { getPostgresConfig } from '../../server/dbConfig';
 
 let globalIntegrationPool: Pool | null = null;
 
+const dbConf = getPostgresConfig();
+let dbUrlFromConf = '';
+if (dbConf.config) {
+  if (dbConf.source === 'DATABASE_URL') {
+    dbUrlFromConf = process.env.DATABASE_URL || '';
+  } else if (dbConf.config.host) {
+    dbUrlFromConf = `postgres://${dbConf.config.user}:${dbConf.config.password}@${dbConf.config.host}:${dbConf.config.port}/${dbConf.config.database}`;
+  }
+}
+
 export const DEFAULT_TEST_DATABASE_URL =
-  process.env.DATABASE_URL || 'postgres://node@localhost:5432/gx_exchange_test';
+  dbUrlFromConf || 'postgres://node@localhost:5432/gx_exchange_test';
 
 /**
  * Initializes and returns the PostgreSQL Pool for integration tests.
@@ -17,13 +28,15 @@ export async function getTestDbPool(): Promise<Pool> {
     return globalIntegrationPool;
   }
 
-  const connectionString = DEFAULT_TEST_DATABASE_URL;
-  const pool = new Pool({
-    connectionString,
+  const poolConf = dbConf.config || {
+    connectionString: DEFAULT_TEST_DATABASE_URL,
     max: 20,
     idleTimeoutMillis: 10000,
     connectionTimeoutMillis: 5000,
-  });
+  };
+  if (!poolConf.max) poolConf.max = 20;
+
+  const pool = new Pool(poolConf);
 
   // Test database connection immediately
   let client;
@@ -33,7 +46,7 @@ export async function getTestDbPool(): Promise<Pool> {
   } catch (err: any) {
     await pool.end().catch(() => {});
     throw new Error(
-      `[PostgreSQL Integration Fixture Failure] Unable to connect to PostgreSQL at "${connectionString}": ${err?.message || err}. Integration tests require a running PostgreSQL instance.`
+      `[PostgreSQL Integration Fixture Failure] Unable to connect to PostgreSQL at "${DEFAULT_TEST_DATABASE_URL}": ${err?.message || err}. Integration tests require a running PostgreSQL instance.`
     );
   } finally {
     if (client) client.release();
@@ -50,9 +63,8 @@ export async function getTestDbPool(): Promise<Pool> {
  * Creates an independent, dedicated PostgreSQL client connection for testing concurrency (e.g., FOR UPDATE locking).
  */
 export async function createSeparateClient(): Promise<Client> {
-  const client = new Client({
-    connectionString: DEFAULT_TEST_DATABASE_URL,
-  });
+  const clientConf = dbConf.config ? { ...dbConf.config } : { connectionString: DEFAULT_TEST_DATABASE_URL };
+  const client = new Client(clientConf);
   await client.connect();
   return client;
 }
@@ -62,7 +74,10 @@ export async function createSeparateClient(): Promise<Client> {
  * Ensures compatibility with Telegram user.id numeric requirement.
  */
 export function createUniqueNumericUserId(): string {
-  const ts = Date.now().toString().slice(-8);
+  let ts = Date.now().toString().slice(-8);
+  if (ts.startsWith('0')) {
+    ts = '1' + ts.slice(1);
+  }
   const rand = Math.floor(100000 + Math.random() * 900000).toString();
   return `${ts}${rand}`;
 }
@@ -96,8 +111,8 @@ export async function seedTestUser(
     const now = Date.now();
     if (balances.TON !== undefined) {
       await client.query(
-        `INSERT INTO te_balances (user_id, currency, available_balance, locked_balance, updated_at)
-         VALUES ($1, $2, $3, $4, $5)
+        `INSERT INTO te_balances (user_id, currency, available_balance, locked_balance, updated_at, created_at)
+         VALUES ($1, $2, $3, $4, $5, $5)
          ON CONFLICT (user_id, currency) DO UPDATE
          SET available_balance = $3, locked_balance = $4, updated_at = $5`,
         [userId, 'TON', String(balances.TON), '0', now]
@@ -106,8 +121,8 @@ export async function seedTestUser(
 
     if (balances.STARS !== undefined) {
       await client.query(
-        `INSERT INTO te_balances (user_id, currency, available_balance, locked_balance, updated_at)
-         VALUES ($1, $2, $3, $4, $5)
+        `INSERT INTO te_balances (user_id, currency, available_balance, locked_balance, updated_at, created_at)
+         VALUES ($1, $2, $3, $4, $5, $5)
          ON CONFLICT (user_id, currency) DO UPDATE
          SET available_balance = $3, locked_balance = $4, updated_at = $5`,
         [userId, 'STARS', String(balances.STARS), '0', now]

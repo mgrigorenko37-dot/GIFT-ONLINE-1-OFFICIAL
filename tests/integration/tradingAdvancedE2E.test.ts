@@ -24,8 +24,8 @@ describe('Trading Advanced Flow (Margin, PnL, Liquidation, Funding, Partial)', (
     await seedTestUser(pool, marginTraderId, 'EQMargin', { TON: 50 }); // low balance for liquidation
     await pool.query('DELETE FROM te_orders');
     await pool.query('DELETE FROM te_trades');
-    await pool.query('DELETE FROM te_positions');
     await pool.query('DELETE FROM te_funding_payments');
+    await pool.query('DELETE FROM te_positions');
     await pool.query('DELETE FROM te_executions');
   });
 

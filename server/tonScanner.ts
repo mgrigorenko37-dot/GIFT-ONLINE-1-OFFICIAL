@@ -1,4 +1,5 @@
 import { Pool } from 'pg';
+import Decimal from 'decimal.js';
 
 export class TonScanner {
   private pool: Pool;
@@ -23,9 +24,14 @@ export class TonScanner {
     }
   }
 
-  private normalizeAddress(addr: string | null | undefined): string {
-    if (!addr) return '';
-    return addr.trim().toLowerCase();
+  private normalizeAddress(addr: string | null | undefined): string | null {
+    if (!addr) return null;
+    try {
+      const { Address } = require('@ton/core');
+      return Address.parse(addr.trim()).toRawString();
+    } catch {
+      return null;
+    }
   }
 
   private async getCursor(): Promise<number> {
@@ -103,6 +109,8 @@ export class TonScanner {
           continue;
         }
 
+        let processedOk = true;
+
         // Validate text comment format: Deposit_<userId>
         if (
           msg.decoded_op_name === 'text_comment' &&
@@ -112,13 +120,18 @@ export class TonScanner {
           const text = msg.decoded_body.text.trim();
           if (text.startsWith('Deposit_')) {
             const userId = text.substring('Deposit_'.length).trim();
-            const amount = Number(msg.value) / 1e9;
+            const amount = new Decimal(msg.value).div(1e9).toString();
             const senderRaw = msg.source?.address || msg.source || '';
 
-            if (userId && amount > 0) {
-              await this.processDeposit(txHash, txLt, userId, amount, senderRaw);
+            if (userId && new Decimal(amount).gt(0)) {
+              processedOk = await this.processDeposit(txHash, txLt, userId, amount, senderRaw);
             }
           }
+        }
+
+        if (!processedOk) {
+          console.warn(`[TonScanner] Halting scan due to system error in deposit processing (Tx: ${txHash})`);
+          break; // Stop scanning further, keep highestProcessedLt at the last successful one
         }
 
         if (txLt > highestProcessedLt) {
@@ -142,7 +155,7 @@ export class TonScanner {
     hash: string,
     lt: number,
     userId: string,
-    amount: number,
+    amount: string,
     senderRaw: string
   ) {
     const client = await this.pool.connect();
@@ -156,8 +169,18 @@ export class TonScanner {
       );
       if (existing.rowCount && existing.rowCount > 0) {
         await client.query('ROLLBACK');
-        return; // Already processed
+        return true; // Already processed
       }
+
+      const rejectDeposit = async (reason: string) => {
+        await client.query(
+          `INSERT INTO te_ton_deposits (hash, user_id, sender_address, amount, lt, status, reason, created_at)
+           VALUES ($1, $2, $3, $4, $5, 'rejected', $6, $7)`,
+          [hash, userId, senderRaw, amount, lt, reason, Date.now()]
+        );
+        await client.query('COMMIT');
+        return true;
+      };
 
       // 2. Sender Address Validation (C-04)
       // Check if user has a registered wallet address in te_users
@@ -168,8 +191,7 @@ export class TonScanner {
         console.warn(
           `[TonScanner] Rejected deposit: User ID ${userId} does not exist in exchange records (Tx: ${hash})`
         );
-        await client.query('ROLLBACK');
-        return;
+        return await rejectDeposit('User ID does not exist');
       }
 
       const registeredWallet = userRes.rows[0].wallet_address;
@@ -177,37 +199,74 @@ export class TonScanner {
         console.warn(
           `[TonScanner] Rejected deposit: User ${userId} has no registered wallet address (Tx: ${hash})`
         );
-        await client.query('ROLLBACK');
-        return;
+        return await rejectDeposit('User has no registered wallet address');
       }
 
       // Ensure transaction sender matches authenticated user's wallet address
       const normSender = this.normalizeAddress(senderRaw);
       const normRegistered = this.normalizeAddress(registeredWallet);
 
-      if (normSender && normRegistered && normSender !== normRegistered) {
+      if (!normSender) {
+        console.warn(
+          `[TonScanner] Rejected deposit: Missing or invalid sender address in tx (Tx: ${hash})`
+        );
+        return await rejectDeposit('Missing or invalid sender address in tx');
+      }
+      if (!normRegistered) {
+        console.warn(
+          `[TonScanner] Rejected deposit: Invalid registered wallet format for user ${userId} (Tx: ${hash})`
+        );
+        return await rejectDeposit('Invalid registered wallet format');
+      }
+
+      if (normSender !== normRegistered) {
         console.error(
           `[TonScanner] SECURITY ALERT: Deposit sender spoofing detected! Tx sender '${normSender}' does not match registered wallet '${normRegistered}' for userId '${userId}' (Tx: ${hash})`
         );
-        await client.query('ROLLBACK');
-        return;
+        return await rejectDeposit('Sender address mismatch (Spoofing detected)');
       }
 
       // 3. Mark deposit as processed
       await client.query(
-        'INSERT INTO te_ton_deposits (hash, user_id, sender_address, amount, lt, created_at) VALUES ($1, $2, $3, $4, $5, $6)',
-        [hash, userId, senderRaw, amount, lt, Date.now()]
+        'INSERT INTO te_ton_deposits (hash, user_id, sender_address, amount, lt, status, reason, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)',
+        [hash, userId, senderRaw, amount, lt, 'credited', null, Date.now()]
       );
 
       // 4. Update user balance atomically
-      await client.query(
-        `INSERT INTO te_balances (user_id, currency, available_balance, updated_at) 
-         VALUES ($1, 'TON', $2, $3) 
-         ON CONFLICT (user_id, currency) 
-         DO UPDATE SET 
-           available_balance = te_balances.available_balance + $2, 
-           updated_at = $3`,
+      const balanceRes = await client.query(
+        `INSERT INTO te_balances (user_id, currency, available_balance, locked_balance, updated_at, created_at)
+          VALUES ($1, 'TON', $2, 0, $3, $3)
+          ON CONFLICT (user_id, currency)
+          DO UPDATE SET
+            available_balance = te_balances.available_balance + $2,
+            updated_at = $3
+          RETURNING available_balance, locked_balance`,
         [userId, amount, Date.now()]
+      );
+
+      const newAvail = balanceRes.rows[0].available_balance;
+      const newLocked = balanceRes.rows[0].locked_balance;
+      const oldAvail = new Decimal(newAvail).minus(new Decimal(amount)).toString();
+
+      // 4.5. Insert Financial Audit
+      await client.query(
+        `INSERT INTO te_financial_audits (
+          event_type, user_id, reference_id, currency, amount,
+          available_before, available_after, locked_before, locked_after, metadata, created_at
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+        [
+          'TON_DEPOSIT',
+          userId,
+          hash,
+          'TON',
+          amount,
+          oldAvail,
+          newAvail,
+          newLocked,
+          newLocked,
+          JSON.stringify({ senderAddress: senderRaw }),
+          Date.now(),
+        ]
       );
 
       // 5. Emit outbox event for real-time notification
@@ -228,10 +287,12 @@ export class TonScanner {
       console.log(
         `[TonScanner] Successfully credited ${amount} TON to authenticated user ${userId} (Sender: ${senderRaw}, Tx: ${hash.substring(0, 10)}...)`
       );
+      return true;
     } catch (e: any) {
       await client.query('ROLLBACK');
-      if (e.code === '23505') return; // Unique violation concurrent skip
+      if (e.code === '23505') return true; // Unique violation concurrent skip
       console.error('[TonScanner] Error processing deposit transaction:', e?.message);
+      return false;
     } finally {
       client.release();
     }

@@ -408,7 +408,7 @@ export async function applyFundingRate(
         currentBalance = Number(balRes.rows[0].available_balance);
       } else {
         await client.query(
-          `INSERT INTO te_balances (user_id, currency, available_balance, locked_balance, updated_at) VALUES ($1, $2, $3, 0, $4)`,
+          `INSERT INTO te_balances (user_id, currency, available_balance, locked_balance, updated_at, created_at) VALUES ($1, $2, $3, 0, $4, $4)`,
           [position.userId, posCurrency, 0, Date.now()]
         );
       }

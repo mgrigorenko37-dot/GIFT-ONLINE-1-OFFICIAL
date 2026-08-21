@@ -1,1 +1,1 @@
-- [GX Telegram gift exchange](gx-direction.md) — interface-first exchange for collectible Telegram gifts, with GX as the internal balance.
+- [GX Exchange](gx-direction.md) — interface-first exchange for collectible Telegram gifts, with GX as the internal balance.

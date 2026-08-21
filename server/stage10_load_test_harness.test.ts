@@ -64,7 +64,7 @@ describe('Stage 10: Production Load & Stress Testing Harness', () => {
   let io: SocketIOServer;
   let baseUrl: string;
   let repository: InMemoryMarketRepository;
-  
+
   const originalRedisUrl = process.env.REDIS_URL;
 
   beforeAll(() => {

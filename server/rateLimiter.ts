@@ -206,6 +206,12 @@ export function validateTelegramWebhookSecret(req: Request, res: Response, next:
   const secretEnv = process.env.TELEGRAM_WEBHOOK_SECRET || process.env.TELEGRAM_SECRET_TOKEN;
 
   if (!secretEnv || secretEnv.trim() === '') {
+    if (process.env.NODE_ENV === 'production') {
+      console.error(
+        '[Security] CRITICAL: Webhook secret not configured in production environment.'
+      );
+      return res.status(500).json({ error: 'Server misconfiguration.' });
+    }
     return next();
   }
 

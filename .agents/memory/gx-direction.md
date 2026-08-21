@@ -1,5 +1,5 @@
 ---
-name: GX Telegram gift exchange
+name: GX Exchange
 description: Durable product direction for the imported React exchange project.
 ---
 

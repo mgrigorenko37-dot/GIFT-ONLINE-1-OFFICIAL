@@ -378,9 +378,12 @@ export function setupSocketServer(io: Server, tradingEngine: PostgresTradingEngi
           return;
         }
       } else if (isDemo) {
-        if (roomToJoin.startsWith('user_')) {
+        if (
+          roomToJoin.startsWith('user_') ||
+          (roomToJoin.startsWith('demo_user_') && roomToJoin !== privateRoom)
+        ) {
           socket.emit('error', {
-            message: 'Security violation: Demo context cannot join private user rooms.',
+            message: 'Security violation: Demo context cannot join other private user rooms.',
           });
           return;
         }
@@ -453,8 +456,19 @@ export function setupSocketServer(io: Server, tradingEngine: PostgresTradingEngi
         return;
       }
 
-      if (!data || !data.giftName || !data.amount || !data.side) {
+      if (
+        !data ||
+        typeof data.giftName !== 'string' ||
+        typeof data.amount !== 'number' ||
+        typeof data.price !== 'number' ||
+        !['buy', 'sell'].includes(data.side)
+      ) {
         socket.emit('orderRejected', { error: 'Invalid order parameters' });
+        return;
+      }
+
+      if (isNaN(data.amount) || data.amount <= 0 || isNaN(data.price) || data.price <= 0) {
+        socket.emit('orderRejected', { error: 'Amount and price must be positive numbers' });
         return;
       }
 

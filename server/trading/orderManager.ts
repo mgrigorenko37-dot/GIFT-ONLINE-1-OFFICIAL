@@ -1,3 +1,4 @@
+import Decimal from 'decimal.js';
 import { Pool } from 'pg';
 import { Order, Trade, Position } from './types';
 import { getInstrumentConfig } from './instrumentConfig';
@@ -135,7 +136,10 @@ export async function placeOrder(
       if (order.positionEffect === 'Open') {
         const margin = await calculateMargin(client, order.userId, order.collateralCurrency);
         const leverage = 1;
-        const requiredMargin = (order.qty * (order.price || 0)) / leverage;
+        const requiredMarginDec = new Decimal(order.qty)
+          .mul(new Decimal(order.price || 0))
+          .div(new Decimal(leverage));
+        const requiredMargin = requiredMarginDec.toNumber();
 
         if (requiredMargin > 0 && margin.availableBalance < requiredMargin) {
           order.status = 'Rejected';
@@ -678,7 +682,15 @@ export async function executeTrade(
     let currentRealizedPnl = balRes.rows.length > 0 ? Number(balRes.rows[0].realized_pnl) : 0;
     let currentTotalFees = balRes.rows.length > 0 ? Number(balRes.rows[0].total_fees) : 0;
 
-    const newBalance = currentBalance - fee + currentTradeRealizedPnl;
+    const currentBalanceDecimal = new Decimal(
+      balRes.rows.length > 0 ? balRes.rows[0].available_balance : 0
+    );
+    const usedMarginStr = balRes.rows.length > 0 ? balRes.rows[0].locked_balance : 0;
+    const usedMarginDec = new Decimal(usedMarginStr);
+    const feeDec = new Decimal(fee);
+    const pnlDec = new Decimal(currentTradeRealizedPnl);
+    const newBalanceDec = currentBalanceDecimal.minus(feeDec).plus(pnlDec);
+    const newBalance = newBalanceDec.toNumber();
 
     await client.query('SAVEPOINT execute_start_sp');
     await client.query(

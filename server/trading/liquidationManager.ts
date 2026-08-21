@@ -1,3 +1,4 @@
+import Decimal from 'decimal.js';
 import { Pool, PoolClient } from 'pg';
 import { getInstrumentConfig } from './instrumentConfig';
 import { mapPosition, mapOrder, mapTrade } from './mappers';
@@ -152,7 +153,9 @@ export async function liquidateUser(
     }
 
     let totalRealizedLoss = 0;
+    let totalRealizedLossDec = new Decimal(0);
     let totalLiquidationFee = 0;
+    let totalLiquidationFeeDec = new Decimal(0);
     let remainingEquity = marginInfo.equity;
     let lastTradeResult: any = null;
 
@@ -391,8 +394,15 @@ export async function liquidateUser(
     // 11. Обновить available balance.
     if (balRes.rows.length > 0) {
       const bal = balRes.rows[0];
-      const newBalance = Number(bal.available_balance) + totalRealizedLoss - totalLiquidationFee;
-      const finalBalance = newBalance <= 0 ? 0 : newBalance;
+      const availableBeforeDec = new Decimal(bal.available_balance);
+      const lockedBeforeDec = new Decimal(bal.locked_balance || 0);
+      const newBalanceDec = availableBeforeDec
+        .plus(totalRealizedLossDec)
+        .minus(totalLiquidationFeeDec);
+      const finalBalanceDec = newBalanceDec.lte(0) ? new Decimal(0) : newBalanceDec;
+
+      const newBalance = newBalanceDec.toNumber();
+      const finalBalance = finalBalanceDec.toNumber();
 
       // 10. Освободить locked/used margin.
       const updatedMargin = await calculateMargin(client, userId, currency);
@@ -400,13 +410,36 @@ export async function liquidateUser(
       await client.query(
         `UPDATE te_balances SET available_balance = $1, locked_balance = $2, total_fees = total_fees + $3, realized_pnl = realized_pnl + $4, updated_at = $5 WHERE user_id = $6 AND currency = $7`,
         [
-          finalBalance,
-          updatedMargin.usedMargin,
-          totalLiquidationFee,
-          totalRealizedLoss,
+          finalBalanceDec.toString(),
+          (updatedMargin.usedMarginDec || new Decimal(updatedMargin.usedMargin)).toString(),
+          totalLiquidationFeeDec.toString(),
+          totalRealizedLossDec.toString(),
           nowMs,
           userId,
           currency,
+        ]
+      );
+
+      await client.query(
+        `INSERT INTO te_financial_audits (
+          event_type, user_id, reference_id, currency, amount,
+          available_before, available_after, locked_before, locked_after, metadata, created_at
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+        [
+          'LIQUIDATION',
+          userId,
+          `liq_${nowMs}`,
+          currency,
+          totalRealizedLossDec.minus(totalLiquidationFeeDec).abs().toString(),
+          availableBeforeDec.toString(),
+          finalBalanceDec.toString(),
+          lockedBeforeDec.toString(),
+          (updatedMargin.usedMarginDec || new Decimal(updatedMargin.usedMargin)).toString(),
+          JSON.stringify({
+            totalRealizedLoss: totalRealizedLossDec.toString(),
+            totalLiquidationFee: totalLiquidationFeeDec.toString(),
+          }),
+          nowMs,
         ]
       );
 

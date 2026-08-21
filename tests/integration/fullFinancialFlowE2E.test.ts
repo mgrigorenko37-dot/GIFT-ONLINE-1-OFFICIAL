@@ -371,8 +371,8 @@ describe('GX Exchange — End-to-End Primary Financial Scenario (PostgreSQL & Mo
 
         // Update seller balance
         await client.query(
-          `INSERT INTO te_balances (user_id, currency, available_balance, locked_balance, updated_at)
-           VALUES ($1, $2, $3, $4, $5)
+          `INSERT INTO te_balances (user_id, currency, available_balance, locked_balance, updated_at, created_at)
+           VALUES ($1, $2, $3, $4, $5, $5)
            ON CONFLICT (user_id, currency) DO UPDATE
            SET available_balance = $3, updated_at = $5`,
           [sellerId, 'TON', newSellerAvailable.toString(), '0', now]

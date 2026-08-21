@@ -395,7 +395,7 @@ describe('Socket.IO Strict Telegram Auth & Zero Fallback Tests', () => {
     await new Promise((r) => setTimeout(r, 50));
 
     expect(roomError).toBeDefined();
-    expect(roomError.message).toContain('Demo context cannot join private user rooms');
+    expect(roomError.message).toContain('Demo context cannot join other private user rooms');
 
     delete process.env.ALLOW_DEMO_AUTH;
     client.close();

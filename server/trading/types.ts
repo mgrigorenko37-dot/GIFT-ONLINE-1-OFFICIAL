@@ -1,4 +1,10 @@
+import Decimal from 'decimal.js';
 export interface Order {
+  qtyDec?: Decimal;
+  priceDec?: Decimal;
+  remainingQtyDec?: Decimal;
+  executedQtyDec?: Decimal;
+  avgFillPriceDec?: Decimal;
   orderId: string;
   userId: string;
   instrumentKey: string;
@@ -23,6 +29,9 @@ export interface Order {
 }
 
 export interface Position {
+  qtyDec?: Decimal;
+  avgEntryPriceDec?: Decimal;
+  markPriceDec?: Decimal;
   positionId: string;
   userId: string;
   instrumentKey: string;
@@ -142,6 +151,15 @@ export interface InstrumentCurrencyConfig {
 }
 
 export interface MarginInfo {
+  walletBalanceDec?: Decimal;
+  equityDec?: Decimal;
+  usedMarginDec?: Decimal;
+  availableBalanceDec?: Decimal;
+  totalUnrealizedPnlDec?: Decimal;
+  totalUsedMarginDec?: Decimal;
+  totalOrderMarginDec?: Decimal;
+  maintenanceMarginDec?: Decimal;
+  marginRatioDec?: Decimal;
   walletBalance: number;
   equity: number;
   usedMargin: number;

@@ -29,8 +29,12 @@ router.post('/user/wallet', async (req: express.Request, res: express.Response) 
   }
 
   const verifiedUserId = String(authResult.user.id);
-  if (!walletAddress || typeof walletAddress !== 'string' || walletAddress.trim().length < 10) {
-    return res.status(400).json({ error: 'Invalid wallet address.' });
+  let normalizedWallet: string;
+  try {
+    const { Address } = require('@ton/core');
+    normalizedWallet = Address.parse(walletAddress.trim()).toRawString();
+  } catch {
+    return res.status(400).json({ error: 'Invalid TON wallet address format.' });
   }
 
   const client = await getPgPool().connect();
@@ -40,10 +44,10 @@ router.post('/user/wallet', async (req: express.Request, res: express.Response) 
        VALUES ($1, $2)
        ON CONFLICT (id) DO UPDATE
        SET wallet_address = $2`,
-      [verifiedUserId, walletAddress.trim()]
+      [verifiedUserId, normalizedWallet]
     );
 
-    return res.json({ success: true, userId: verifiedUserId, walletAddress: walletAddress.trim() });
+    return res.json({ success: true, userId: verifiedUserId, walletAddress: normalizedWallet });
   } catch (e) {
     console.error('[UserWallet] Error saving wallet:', e);
     return res.status(500).json({ error: 'Internal error' });
@@ -54,7 +58,7 @@ router.post('/user/wallet', async (req: express.Request, res: express.Response) 
 
 // 2. Withdrawal Request with State Machine & Balance Locking
 router.post('/withdraw', async (req: express.Request, res: express.Response) => {
-  const { amount, address, initData } = req.body;
+  const { amount, address, initData, idempotencyKey } = req.body;
   const headerInitData = (req.headers['x-telegram-init-data'] as string) || initData;
 
   if (!headerInitData) {
@@ -88,8 +92,12 @@ router.post('/withdraw', async (req: express.Request, res: express.Response) => 
     return res.status(400).json({ error: 'Minimum withdrawal is 0.1 TON.' });
   }
 
-  if (!address || typeof address !== 'string' || address.trim().length < 10) {
-    return res.status(400).json({ error: 'Invalid destination wallet address.' });
+  let normalizedAddress: string;
+  try {
+    const { Address } = require('@ton/core');
+    normalizedAddress = Address.parse(address.trim()).toRawString();
+  } catch {
+    return res.status(400).json({ error: 'Invalid TON destination wallet address format.' });
   }
 
   const client = await getPgPool().connect();
@@ -107,7 +115,10 @@ router.post('/withdraw', async (req: express.Request, res: express.Response) => 
         .json({ error: 'No wallet registered for this user. Please connect wallet first.' });
     }
 
-    if (userCheck.rows[0].wallet_address.trim().toLowerCase() !== address.trim().toLowerCase()) {
+    if (
+      userCheck.rows[0].wallet_address &&
+      userCheck.rows[0].wallet_address.toLowerCase() !== normalizedAddress.toLowerCase()
+    ) {
       await client.query('ROLLBACK');
       return res
         .status(400)
@@ -135,7 +146,7 @@ router.post('/withdraw', async (req: express.Request, res: express.Response) => 
 
     // 3. Move funds from available to locked in ACID transaction (Withdrawal State Machine)
     const withdrawalId = `wd_${crypto.randomUUID()}`;
-    const operationId = `op_wd_${withdrawalId.replace(/^wd_/, '')}`;
+    const operationId = idempotencyKey ? String(idempotencyKey) : `op_wd_${withdrawalId.replace(/^wd_/, '')}`;
     const now = Date.now();
 
     await client.query(
@@ -159,7 +170,7 @@ router.post('/withdraw', async (req: express.Request, res: express.Response) => 
       availableAfter,
       lockedBefore,
       lockedAfter,
-      { address: address.trim(), operationId },
+      { address: normalizedAddress, operationId },
       now
     );
 
@@ -173,7 +184,7 @@ router.post('/withdraw', async (req: express.Request, res: express.Response) => 
         verifiedUserId,
         amountDecimal.toString(),
         'TON',
-        address.trim(),
+        normalizedAddress,
         'PENDING',
         false,
         now,
@@ -193,7 +204,7 @@ router.post('/withdraw', async (req: express.Request, res: express.Response) => 
           userId: verifiedUserId,
           amount: amountDecimal.toString(),
           currency: 'TON',
-          address: address.trim(),
+          address: normalizedAddress,
           status: 'PENDING',
         }),
         'pending',
@@ -214,10 +225,15 @@ router.post('/withdraw', async (req: express.Request, res: express.Response) => 
       amount: amountDecimal.toString(),
       message: 'Withdrawal queued successfully.',
     });
-  } catch (e) {
+  } catch (e: any) {
     try {
       await client.query('ROLLBACK');
     } catch {}
+    
+    if (e.code === '23505' && e.constraint === 'te_withdrawals_operation_id_key') {
+      return res.status(409).json({ error: 'Duplicate withdrawal request.', code: 'DUPLICATE_OPERATION' });
+    }
+    
     console.error('[Withdraw] Error in withdrawal creation:', e);
     return res.status(500).json({ error: 'Internal error processing withdrawal request.' });
   } finally {

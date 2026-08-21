@@ -544,7 +544,31 @@ export class WithdrawalStateMachine {
       );
     }
 
-    return this.mapRowToRecord(updateRes.rows[0]);
+    const current = this.mapRowToRecord(updateRes.rows[0]);
+
+    await client.query(
+      `INSERT INTO te_outbox_events (event_type, user_id, payload, status, currency, created_at)
+       VALUES ($1, $2, $3, $4, $5, $6)`,
+      [
+        'withdrawalRetrying',
+        current.user_id,
+        JSON.stringify({
+          withdrawalId,
+          userId: current.user_id,
+          amount: current.amount,
+          currency: current.currency,
+          address: current.address,
+          failureReason: failureReason.trim(),
+          nextAttemptAt: nextAttemptAt,
+          status: 'RETRYING',
+        }),
+        'pending',
+        current.currency,
+        now,
+      ]
+    );
+
+    return current;
   }
 
   /**
@@ -702,7 +726,30 @@ export class WithdrawalStateMachine {
       return this.mapRowToRecord(checkRes.rows[0]);
     }
 
-    return this.mapRowToRecord(updateRes.rows[0]);
+    const current = this.mapRowToRecord(updateRes.rows[0]);
+
+    await client.query(
+      `INSERT INTO te_outbox_events (event_type, user_id, payload, status, currency, created_at)
+       VALUES ($1, $2, $3, $4, $5, $6)`,
+      [
+        'withdrawalNeedsReconciliation',
+        current.user_id,
+        JSON.stringify({
+          withdrawalId,
+          userId: current.user_id,
+          amount: current.amount,
+          currency: current.currency,
+          address: current.address,
+          failureReason: reason.trim(),
+          status: 'NEEDS_RECONCILIATION',
+        }),
+        'pending',
+        current.currency,
+        now,
+      ]
+    );
+
+    return current;
   }
 
   public static mapRowToRecord(row: any): WithdrawalRecord {

@@ -1,31 +1,18 @@
-import Decimal from 'decimal.js';
-import { Pool, PoolClient } from 'pg';
-import { MarginInfo } from './types';
-import { getInstrumentConfig } from './instrumentConfig';
+import re
 
-export async function lockMarginResources(
+with open('server/trading/balanceManager.ts', 'r') as f:
+    content = f.read()
+
+if "import Decimal" not in content:
+    content = "import Decimal from 'decimal.js';\n" + content
+
+target = """export async function calculateMargin(
   client: PoolClient | any,
   userId: string,
   currency: string
-): Promise<void> {
-  // 1. Lock currency Balance with FOR UPDATE
-  await client.query(
-    'SELECT available_balance FROM te_balances WHERE user_id = $1 AND currency = $2 FOR UPDATE',
-    [userId, currency]
-  );
-  // 2. Lock Position with FOR UPDATE
-  await client.query(
-    'SELECT position_id FROM te_positions WHERE user_id = $1 AND collateral_currency = $2 FOR UPDATE',
-    [userId, currency]
-  );
-  // 3. Lock Order with FOR UPDATE
-  await client.query(
-    'SELECT order_id FROM te_orders WHERE user_id = $1 AND collateral_currency = $2 FOR UPDATE',
-    [userId, currency]
-  );
-}
+): Promise<MarginInfo> {"""
 
-export async function calculateMargin(
+replacement = """export async function calculateMargin(
   client: PoolClient | any,
   userId: string,
   currency: string
@@ -35,8 +22,7 @@ export async function calculateMargin(
     [userId, currency]
   );
 
-  const walletBalanceDec =
-    balRes.rows.length > 0 ? new Decimal(balRes.rows[0].available_balance) : new Decimal(0);
+  const walletBalanceDec = balRes.rows.length > 0 ? new Decimal(balRes.rows[0].available_balance) : new Decimal(0);
   const walletBalance = walletBalanceDec.toNumber();
 
   const posRes = await client.query(
@@ -68,9 +54,7 @@ export async function calculateMargin(
     maintenanceMarginDec = maintenanceMarginDec.plus(notionalDec.mul(maintenanceMarginRateDec));
 
     const pnlMultiplierDec = side === 'Long' ? new Decimal(1) : new Decimal(-1);
-    totalUnrealizedPnlDec = totalUnrealizedPnlDec.plus(
-      markPriceDec.minus(entryPriceDec).mul(qtyDec).mul(pnlMultiplierDec)
-    );
+    totalUnrealizedPnlDec = totalUnrealizedPnlDec.plus(markPriceDec.minus(entryPriceDec).mul(qtyDec).mul(pnlMultiplierDec));
   }
 
   const ordRes = await client.query(
@@ -89,9 +73,7 @@ export async function calculateMargin(
   const usedMarginDec = totalUsedMarginDec.plus(totalOrderMarginDec);
   const equityDec = walletBalanceDec.plus(totalUnrealizedPnlDec);
   const availableBalanceDec = equityDec.minus(usedMarginDec);
-  const marginRatioDec = totalPositionNotionalDec.gt(0)
-    ? equityDec.div(totalPositionNotionalDec)
-    : new Decimal(0);
+  const marginRatioDec = totalPositionNotionalDec.gt(0) ? equityDec.div(totalPositionNotionalDec) : new Decimal(0);
 
   return {
     walletBalance,
@@ -113,30 +95,11 @@ export async function calculateMargin(
     marginRatio: marginRatioDec.toNumber(),
     marginRatioDec,
   };
-}
+}"""
 
-export async function getMarginInfo(
-  pool: Pool,
-  userId: string,
-  currency: string
-): Promise<MarginInfo> {
-  const client = await pool.connect();
-  try {
-    return await calculateMargin(client, userId, currency);
-  } finally {
-    client.release();
-  }
-}
+# Remove old calculateMargin
+content = re.sub(r'export async function calculateMargin.*?return \{.*?\};\n\}', replacement, content, flags=re.DOTALL)
 
-export async function getBalance(
-  pool: Pool,
-  userId: string,
-  currency: string = 'TON'
-): Promise<number> {
-  const res = await pool.query(
-    'SELECT available_balance FROM te_balances WHERE user_id = $1 AND currency = $2',
-    [userId, currency]
-  );
-  if (res.rows.length === 0) return 0;
-  return Number(res.rows[0].available_balance);
-}
+with open('server/trading/balanceManager.ts', 'w') as f:
+    f.write(content)
+

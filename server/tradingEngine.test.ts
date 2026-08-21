@@ -45,8 +45,29 @@ describe('PostgresTradingEngine Atomicity and Multi-Instance', () => {
       if (q.includes('SELECT * FROM te_positions')) {
         return Promise.resolve({ rows: [] });
       }
-      if (q.includes('SELECT balance FROM te_balances')) {
-        return Promise.resolve({ rows: [{ balance: 1000 }] });
+      if (q.includes('SELECT available_balance, locked_balance')) {
+        return Promise.resolve({
+          rows: [
+            {
+              available_balance: 2000,
+              locked_balance: 0,
+              realized_pnl: 0,
+              total_fees: 0,
+            },
+          ],
+        });
+      }
+      if (q.includes('SELECT * FROM te_balances')) {
+        return Promise.resolve({
+          rows: [
+            {
+              available_balance: 2000,
+              locked_balance: 0,
+              realized_pnl: 0,
+              total_fees: 0,
+            },
+          ],
+        });
       }
       if (q.includes('INSERT INTO te_outbox_events')) {
         return Promise.resolve();
@@ -56,6 +77,15 @@ describe('PostgresTradingEngine Atomicity and Multi-Instance', () => {
 
     const engine = new PostgresTradingEngine(pool);
     const trade = await engine.executeTrade('ord1', 5, 100);
+    console.log('TRADE:', trade);
+    console.log(
+      'CALLS:',
+      client.query.mock.calls.map((c) => c[0])
+    );
+    const updateOrderCall = client.query.mock.calls.find((c) => c[0].includes('UPDATE te_orders'));
+    if (updateOrderCall) {
+      console.log('UPDATE ORDER REJECTION REASON:', updateOrderCall[1][6]);
+    }
 
     expect(client.query).toHaveBeenCalledWith('BEGIN');
     expect(client.query).toHaveBeenCalledWith('COMMIT');
