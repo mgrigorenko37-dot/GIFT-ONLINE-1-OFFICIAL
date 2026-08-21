@@ -1,47 +1,71 @@
 # GX Exchange — Telegram Gift Trading Mini App
 
-## Project overview
+## Project Overview
 
-This project is a React and TypeScript frontend for GX, a Telegram Mini App concept for trading collectible Telegram gifts with an internal GX balance. The main route is a dark exchange terminal with gift markets, chart, order book, buy/sell form, portfolio links, and responsive mobile behavior.
+**GX Exchange** is a high-performance Telegram Mini App and trading terminal designed for fractional and whole collectible Telegram Gifts trading. The project features a React 19 frontend, Express 5 full-stack server (`server.ts`), real-time Socket.IO communication, PostgreSQL ACID trading persistence, Telegram HMAC authentication, Telegram Stars payment processing, TON deposit tracking, and a withdrawal state machine.
 
-The current gift prices, orders, balances, and order submission are demo data. No custody, real trading, Telegram Stars, USDT, withdrawal bot, or backend API is configured yet.
+---
 
-## Telegram Mini App support
+## Architecture & Implemented Modules
 
-The frontend loads Telegram's official Web Apps bridge from `https://telegram.org/js/telegram-web-app.js`. When opened inside Telegram it:
+### 1. Implemented Modules
 
-- calls `ready()` and `expand()`;
-- reads the Telegram theme and applies it to the app;
-- reads the Telegram user profile for the account display;
-- uses Telegram safe-area viewport metadata through the responsive layout.
+- **Express 5 Backend & Server Entry (`server.ts`)**: Serves REST endpoints and integrates Vite middleware in development mode, while providing static file serving for production builds.
+- **PostgreSQL Database & Trading Engine (`PostgresTradingEngine`)**:
+  - Handles ACID atomic order matching, balance reservation, position updates, margin management, and PnL calculations across `te_orders`, `te_executions`, `te_positions`, and `te_balances`.
+  - Database schema runner (`server/db/migrateRunner.ts`) for applying migrations.
+  - Multi-currency isolation (`TON`, `STARS`, `GX`).
+- **Telegram HMAC Authentication (`server/telegramAuth.ts`)**:
+  - Validates `Telegram.WebApp.initData` cryptographic signatures via HMAC-SHA256 to prevent user impersonation.
+- **Telegram Stars Invoices & Payment Lifecycle (`invoiceService.ts`)**:
+  - Server-authoritative invoice generation and pre-storage in `te_invoices`.
+  - Webhook handler (`/api/telegram/payment-webhook`) with `SELECT ... FOR UPDATE` row locks, idempotency checks, and atomic `STARS` balance crediting in `te_payments` and `te_balances`.
+- **TON Deposit Scanner (`TonScanner`)**:
+  - Cursor-based Logical Time (`lt`) blockchain scanning via TonAPI.
+  - Verification of sender wallet addresses against registered user records (`te_users`).
+  - Idempotent deposit crediting with outbox notification events.
+- **Withdrawal State Machine & Worker (`server/withdrawalWorker.ts`)**:
+  - Multi-stage withdrawal state machine (`PENDING` -> `PROCESSING` -> `COMPLETED` / `NEEDS_RECONCILIATION` / `FAILED`) with balance locking and idempotency against double-withdrawals.
+- **Realtime Socket.IO Communication**:
+  - Live order book streaming, trade execution events, candlestick updates, and optional Redis Pub/Sub adapter clustering (`@socket.io/redis-adapter`).
 
-When opened directly in a browser, it uses a clearly labeled browser-preview fallback and demo profile data.
+---
 
-To launch this as a real Mini App, the deployed HTTPS URL must be registered with a Telegram bot as its Web App URL. The bot token must stay server-side in Replit Secrets; it must never be placed in React code or `public/`.
+## Development & Mock Modes
 
-The next backend phase must validate `Telegram.WebApp.initData` on the server before trusting the Telegram user, then add the bot, Stars, USDT, wallet, and gift marketplace integrations.
+- **Local / Test Database Fallback**: In development or testing environments when `DATABASE_URL` is omitted, fallback configurations or test mock adapters (e.g., `MockTonTransferAdapter`) can be utilized. In production (`NODE_ENV=production`), PostgreSQL (`DATABASE_URL`) is strictly required and file-based storage is strictly prohibited.
+- **Browser Preview Fallback**: When opened outside the Telegram WebApp iframe, the frontend uses a clearly labeled browser-preview mode with mock Telegram user profiles.
+- **TON Scanner & Withdrawal Test Mocks**: The test suite includes mock TON adapters (`MockTonTransferAdapter`, `FaultInjectionTonAdapter`) for unit and integration testing without live on-chain dependencies.
 
-## Running on Replit
+---
 
-The project runs with the `Start application` workflow:
+## Production Prerequisites & Secrets Management
 
-```bash
-BROWSER=none HOST=0.0.0.0 PORT=5000 npm start
-```
+To run GX Exchange in production, the following environment variables must be configured:
 
-This runs `vite` (see `vite.config.ts`), which serves the React development app on port 5000 for the Replit preview. The project was migrated from `react-scripts` (CRA) to Vite to resolve dependency incompatibilities with Node.js 20.
+- `DATABASE_URL`: PostgreSQL connection string (strictly required in production mode).
+- `TELEGRAM_BOT_TOKEN`: Bot token for validating `initData` HMAC and issuing Telegram Stars invoices.
+- `EXCHANGE_HOT_WALLET_ADDRESS`: TON hot wallet address for deposit scanning and withdrawals.
+- `ALLOWED_ORIGINS`: Comma-separated CORS allowed origins.
 
-The Telegram bot runs with the `Telegram bot` workflow:
+> **Security Note**: All secrets (bot tokens, database connection strings, private keys, API keys) MUST be stored exclusively in environment variables or Replit Secrets. Never place sensitive credentials in source code or client-side assets.
 
-```bash
-npm run bot
-```
+---
 
-It uses the `BOT_TOKEN` secret and opens the Mini App at `WEB_APP_URL`, or at the
-current Replit development domain when `WEB_APP_URL` is not set. The bot supports
-`/start`, `/app`, and `/help`. For a real Telegram Mini App, set `WEB_APP_URL` to
-the deployed HTTPS URL and configure that URL through BotFather.
+## Items Requiring Further Setup or Verification
 
-## User preferences
+- Registering the deployed HTTPS WebApp URL with Telegram BotFather.
+- Provisioning a production PostgreSQL instance and running database migrations (`npm run db:migrate`).
+- Verifying the TON Hot Wallet configuration, TonAPI RPC key/rate limits, and hot wallet balance before enabling live withdrawal processing.
 
-- Keep the existing React and TypeScript structure and dependencies unless a requested feature requires otherwise.
+---
+
+## Environment & Development Commands
+
+- `npm run dev`: Starts the development server using `tsx server.ts` (Express server with Vite development middleware on port 3000).
+- `npm run build`: Builds the production frontend bundle via Vite (`vite build`) and bundles the backend server via esbuild into `dist/server.cjs`.
+- `npm start`: Starts the production server using Node.js (`node dist/server.cjs`).
+- `npm run typecheck`: Runs TypeScript type checking without emitting files (`tsc --noEmit`).
+- `npm run test:unit`: Runs unit test suite via Vitest (`server/*.test.ts src/**/*.test.ts`).
+- `npm run test:integration`: Runs integration test suite via Vitest (`tests/integration/*.test.ts`).
+- `npm run db:migrate`: Executes database schema migrations (`tsx server/db/migrateRunner.ts`).

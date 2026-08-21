@@ -293,7 +293,8 @@ export class MockTonTransferAdapter implements TonTransferAdapter {
   }
 
   async checkTransactionByOperationId(
-    operationId: string
+    operationId: string,
+    destinationAddress?: string
   ): Promise<{ found: boolean; txHash?: string }> {
     if (this.publishedTxByOpId.has(operationId)) {
       return { found: true, txHash: this.publishedTxByOpId.get(operationId) };
