@@ -4,6 +4,7 @@ import path from 'path';
 import crypto from 'crypto';
 import { Pool, PoolConfig } from 'pg';
 import { getPostgresConfig, isPostgresConfigured } from './dbConfig';
+import { initDbSchema } from './dbSchema';
 
 declare global {
   var _postgresPool: Pool | undefined;
@@ -463,110 +464,8 @@ export class PostgresMarketRepository implements IMarketRepository {
       return;
     }
 
-    const client = await this.pool.connect();
-    try {
-      try {
-        const userRes = await client.query('SELECT current_user');
-        const user = userRes?.rows?.[0]?.current_user;
-
-        if (user) {
-          try {
-            await client.query(`CREATE SCHEMA IF NOT EXISTS "${user}" AUTHORIZATION "${user}"`);
-          } catch (schemaErr: any) {}
-
-          await client.query(`SET search_path TO "${user}", public`);
-        }
-      } catch (err: any) {}
-
-      try {
-        await client.query('BEGIN');
-
-        await client.query(`
-          CREATE TABLE IF NOT EXISTS completed_sales (
-            sale_id TEXT PRIMARY KEY,
-            dedupe_key TEXT UNIQUE NOT NULL,
-            collection_id TEXT NOT NULL,
-            gift_id TEXT,
-            model_id TEXT,
-            backdrop_id TEXT,
-            currency TEXT NOT NULL,
-            instrument_key TEXT NOT NULL,
-            price NUMERIC NOT NULL,
-            quantity NUMERIC NOT NULL,
-            event_time BIGINT NOT NULL,
-            created_at BIGINT NOT NULL,
-            status TEXT NOT NULL,
-            transaction_hash TEXT,
-            source TEXT NOT NULL DEFAULT 'real',
-            simulation BOOLEAN NOT NULL DEFAULT false,
-            inserted_at BIGINT NOT NULL
-          );
-
-          CREATE TABLE IF NOT EXISTS candles (
-            instrument_key TEXT NOT NULL,
-            timeframe TEXT NOT NULL,
-            start_time BIGINT NOT NULL,
-            end_time BIGINT NOT NULL,
-            open NUMERIC NOT NULL,
-            high NUMERIC NOT NULL,
-            low NUMERIC NOT NULL,
-            close NUMERIC NOT NULL,
-            volume NUMERIC NOT NULL,
-            quote_volume NUMERIC NOT NULL,
-            sum_quote NUMERIC NOT NULL,
-            sum_quantity NUMERIC NOT NULL,
-            item_count NUMERIC NOT NULL,
-            trade_count INTEGER NOT NULL,
-            first_sale_id TEXT NOT NULL,
-            last_sale_id TEXT NOT NULL,
-            confirmed BOOLEAN NOT NULL,
-            revision INTEGER NOT NULL,
-            updated_at BIGINT NOT NULL,
-            PRIMARY KEY (instrument_key, timeframe, start_time)
-          );
-
-          CREATE TABLE IF NOT EXISTS market_snapshots (
-            id SERIAL PRIMARY KEY,
-            version INTEGER NOT NULL,
-            timestamp BIGINT NOT NULL,
-            snapshot JSONB NOT NULL,
-            is_simulation BOOLEAN NOT NULL DEFAULT false
-          );
-
-          CREATE TABLE IF NOT EXISTS outbox_events (
-            id SERIAL PRIMARY KEY,
-            event_id TEXT UNIQUE NOT NULL,
-            event_type TEXT NOT NULL,
-            aggregate_type TEXT NOT NULL,
-            aggregate_id TEXT NOT NULL,
-            instrument_key TEXT NOT NULL,
-            timeframe TEXT,
-            payload JSONB NOT NULL,
-            sequence BIGINT,
-            status TEXT NOT NULL DEFAULT 'pending',
-            attempts INTEGER NOT NULL DEFAULT 0,
-            available_at BIGINT NOT NULL,
-            locked_at BIGINT,
-            published_at BIGINT,
-            last_error TEXT,
-            created_at BIGINT NOT NULL,
-            updated_at BIGINT NOT NULL
-          );
-
-          CREATE INDEX IF NOT EXISTS idx_outbox_events_pending ON outbox_events (status, available_at) WHERE status IN ('pending', 'processing');
-        `);
-        await client.query('COMMIT');
-      } catch (ddlErr: any) {
-        await client.query('ROLLBACK').catch(() => {});
-        console.warn('PostgresMarketRepository initSchema DDL notice:', ddlErr?.message);
-      }
-      this.initialized = true;
-    } catch (err: any) {
-      console.warn('PostgresMarketRepository initSchema connection notice:', err?.message || err);
-      this.initialized = true;
-    } finally {
-      client.release();
-    }
+    await initDbSchema(this.pool);
+    this.initialized = true;
   }
 
   public async saveSnapshot(snapshot: MarketSnapshot): Promise<void> {

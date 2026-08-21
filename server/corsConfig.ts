@@ -34,33 +34,41 @@ export function isOriginAllowed(
     return true;
   }
 
-  const prod = isProduction ?? process.env.NODE_ENV === 'production';
   const list = allowedList ?? parseAllowedOrigins(process.env.ALLOWED_ORIGINS);
+  const isProd = isProduction ?? (process.env.NODE_ENV === 'production');
 
   const cleanOrigin = origin.trim().replace(/\/+$/, '').toLowerCase();
 
-  // 2. Check explicit allowlist (case-insensitive match)
-  if (list.some((allowed) => allowed.toLowerCase() === cleanOrigin)) {
+  // Check explicit allowlist
+  if (list.includes('*') || list.some((allowed) => allowed.toLowerCase() === cleanOrigin)) {
     return true;
   }
 
-  // 3. Localhost & 127.0.0.1 allowed in dev / test environments
-  if (!prod) {
-    try {
-      const url = new URL(origin);
-      if (
-        url.hostname === 'localhost' ||
-        url.hostname === '127.0.0.1' ||
-        url.hostname === '0.0.0.0'
-      ) {
-        return true;
-      }
-    } catch {
-      return false;
-    }
+  // In production, strictly deny if not explicitly in allowlist
+  if (isProd) {
+    return false;
   }
 
-  // 4. Production strictly rejects anything not in ALLOWED_ORIGINS
+  // In development / test mode, permit localhost and recognized dev hostnames
+  try {
+    const url = new URL(origin);
+    const host = url.hostname.toLowerCase();
+
+    if (
+      host === 'localhost' ||
+      host === '127.0.0.1' ||
+      host === '0.0.0.0' ||
+      host.endsWith('.run.app') ||
+      host.endsWith('.telegram.org') ||
+      host.endsWith('.t.me') ||
+      host.endsWith('.github.io')
+    ) {
+      return true;
+    }
+  } catch {
+    return false;
+  }
+
   return false;
 }
 
@@ -77,7 +85,7 @@ export function corsOriginDelegate(
   if (isOriginAllowed(origin, allowedOrigins, isProd)) {
     callback(null, true);
   } else {
-    callback(new Error(`CORS blocked: Origin ${origin || 'unknown'} is not allowed by policy.`));
+    callback(new Error(`CORS blocked: Origin ${origin} not allowed`));
   }
 }
 

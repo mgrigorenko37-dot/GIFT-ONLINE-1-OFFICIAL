@@ -9,14 +9,15 @@ let sharedSocket: Socket | null = null;
 export function getMarketSocket(): Socket {
   if (!sharedSocket) {
     const origin = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000';
-    const initData = typeof window !== 'undefined' ? window.Telegram?.WebApp?.initData : '';
 
     sharedSocket = io(origin, {
-      transports: ['websocket'],
+      transports: ['websocket', 'polling'],
       autoConnect: true,
       reconnection: true,
-      reconnectionAttempts: Infinity,
-      reconnectionDelay: 1000,
+      reconnectionAttempts: 15,
+      reconnectionDelay: 3000,
+      reconnectionDelayMax: 15000,
+      randomizationFactor: 0.5,
       auth: (cb) => {
         const latestInitData =
           typeof window !== 'undefined' ? window.Telegram?.WebApp?.initData : '';

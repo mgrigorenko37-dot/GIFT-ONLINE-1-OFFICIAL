@@ -57,18 +57,19 @@ declare global {
 const getTelegramWebApp = () => window.Telegram?.WebApp;
 
 const supportsVersion = (webApp: TelegramWebApp, minimum: string) => {
+  if (!webApp?.version || typeof webApp.version !== 'string') return false;
   const current = webApp.version.split('.').map(Number);
   const required = minimum.split('.').map(Number);
 
   return (
-    current[0] > required[0] ||
-    (current[0] === required[0] && (current[1] ?? 0) >= (required[1] ?? 0))
+    (current[0] ?? 0) > (required[0] ?? 0) ||
+    ((current[0] ?? 0) === (required[0] ?? 0) && (current[1] ?? 0) >= (required[1] ?? 0))
   );
 };
 
 const applyTelegramTheme = (webApp: TelegramWebApp) => {
   const root = document.documentElement;
-  const theme = webApp.themeParams;
+  const theme = webApp?.themeParams || {};
 
   root.style.setProperty('--tg-bg-color', theme.bg_color ?? '#0e0d15');
   root.style.setProperty('--tg-secondary-bg-color', theme.secondary_bg_color ?? '#15131e');
@@ -83,30 +84,34 @@ export const useTelegramWebApp = () => {
   const [user, setUser] = useState<TelegramUser | null>(null);
 
   useEffect(() => {
-    const telegramWebApp = getTelegramWebApp();
+    try {
+      const telegramWebApp = getTelegramWebApp();
 
-    if (!telegramWebApp) {
-      return undefined;
+      if (!telegramWebApp) {
+        return undefined;
+      }
+
+      const handleThemeChanged = () => applyTelegramTheme(telegramWebApp);
+
+      telegramWebApp.ready?.();
+      telegramWebApp.expand?.();
+      if (supportsVersion(telegramWebApp, '6.1')) {
+        telegramWebApp.setHeaderColor?.('#0e0d15');
+        telegramWebApp.setBackgroundColor?.('#0e0d15');
+      }
+      if (supportsVersion(telegramWebApp, '7.6')) {
+        telegramWebApp.setBottomBarColor?.('#0e0d15');
+      }
+      applyTelegramTheme(telegramWebApp);
+      telegramWebApp.onEvent?.('themeChanged', handleThemeChanged);
+
+      setWebApp(telegramWebApp);
+      setUser(telegramWebApp.initDataUnsafe?.user ?? null);
+
+      return () => telegramWebApp.offEvent?.('themeChanged', handleThemeChanged);
+    } catch (err) {
+      console.warn('Telegram WebApp init warning:', err);
     }
-
-    const handleThemeChanged = () => applyTelegramTheme(telegramWebApp);
-
-    telegramWebApp.ready();
-    telegramWebApp.expand();
-    if (supportsVersion(telegramWebApp, '6.1')) {
-      telegramWebApp.setHeaderColor('#0e0d15');
-      telegramWebApp.setBackgroundColor('#0e0d15');
-    }
-    if (supportsVersion(telegramWebApp, '7.6')) {
-      telegramWebApp.setBottomBarColor?.('#0e0d15');
-    }
-    applyTelegramTheme(telegramWebApp);
-    telegramWebApp.onEvent('themeChanged', handleThemeChanged);
-
-    setWebApp(telegramWebApp);
-    setUser(telegramWebApp.initDataUnsafe.user ?? null);
-
-    return () => telegramWebApp.offEvent('themeChanged', handleThemeChanged);
   }, []);
 
   return {

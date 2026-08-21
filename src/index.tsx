@@ -6,6 +6,7 @@ import ReactDOM from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
 import { TonConnectUIProvider } from '@tonconnect/ui-react';
 import App from './App';
+import { ErrorBoundary } from './components/ErrorBoundary';
 
 window.addEventListener('error', (e) => {
   if (
@@ -38,13 +39,29 @@ console.error = (...args) => {
   originalConsoleError(...args);
 };
 
-const manifestUrl = 'https://ton-connect.github.io/demo-dapp/tonconnect-manifest.json';
+const getManifestUrl = () => {
+  try {
+    if (
+      typeof window !== 'undefined' &&
+      window.location &&
+      window.location.origin &&
+      window.location.origin !== 'null' &&
+      (window.location.origin.startsWith('http://') ||
+        window.location.origin.startsWith('https://'))
+    ) {
+      return `${window.location.origin}/tonconnect-manifest.json`;
+    }
+  } catch (_) {}
+  return '/tonconnect-manifest.json';
+};
 
 const root = ReactDOM.createRoot(document.getElementById('root') as HTMLElement);
 root.render(
-  <TonConnectUIProvider manifestUrl={manifestUrl}>
-    <BrowserRouter>
-      <App />
-    </BrowserRouter>
-  </TonConnectUIProvider>
+  <ErrorBoundary>
+    <TonConnectUIProvider manifestUrl={getManifestUrl()}>
+      <BrowserRouter>
+        <App />
+      </BrowserRouter>
+    </TonConnectUIProvider>
+  </ErrorBoundary>
 );

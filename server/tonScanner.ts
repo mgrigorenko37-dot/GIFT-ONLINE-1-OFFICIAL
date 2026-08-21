@@ -130,7 +130,9 @@ export class TonScanner {
         }
 
         if (!processedOk) {
-          console.warn(`[TonScanner] Halting scan due to system error in deposit processing (Tx: ${txHash})`);
+          console.warn(
+            `[TonScanner] Halting scan due to system error in deposit processing (Tx: ${txHash})`
+          );
           break; // Stop scanning further, keep highestProcessedLt at the last successful one
         }
 

@@ -157,13 +157,12 @@ describe('Telegram Stars Invoices & Payment Lifecycle Protection', () => {
     // 1: BEGIN
     // 2: SELECT invoice FOR UPDATE
     // 3: SELECT te_payments
-    // 4: SELECT te_balances FOR UPDATE
-    // 5: INSERT INTO te_balances ON CONFLICT
-    // 6: UPDATE te_invoices SET status = 'PAID'
-    // 7: INSERT INTO te_payments
-    // 8: INSERT INTO te_financial_audits
-    // 9: INSERT INTO te_outbox_events
-    // 10: COMMIT
+    // 4: INSERT INTO te_balances ON CONFLICT ... RETURNING
+    // 5: UPDATE te_invoices SET status = 'PAID'
+    // 6: INSERT INTO te_payments
+    // 7: INSERT INTO te_financial_audits
+    // 8: INSERT INTO te_outbox_events
+    // 9: COMMIT
     mockClient.query
       .mockResolvedValueOnce({}) // BEGIN
       .mockResolvedValueOnce({
@@ -171,9 +170,10 @@ describe('Telegram Stars Invoices & Payment Lifecycle Protection', () => {
       }) // SELECT invoice
       .mockResolvedValueOnce({ rows: [] }) // SELECT te_payments
       .mockResolvedValueOnce({
-        rows: [{ available_balance: '50', locked_balance: '0' }],
-      }) // SELECT te_balances
-      .mockResolvedValueOnce({}) // INSERT te_balances
+        rows: [
+          { available_before: '50', available_after: '300', locked_before: '0', locked_after: '0' },
+        ],
+      }) // INSERT te_balances RETURNING
       .mockResolvedValueOnce({}) // UPDATE te_invoices
       .mockResolvedValueOnce({}) // INSERT te_payments
       .mockResolvedValueOnce({}) // INSERT te_financial_audits
@@ -198,13 +198,15 @@ describe('Telegram Stars Invoices & Payment Lifecycle Protection', () => {
     const balanceUpdate = mockClient.query.mock.calls.find((c: any[]) =>
       c[0].includes('INSERT INTO te_balances')
     );
-    expect(balanceUpdate[1][1]).toBe('300');
+    expect(balanceUpdate[1][1]).toBe('250');
 
     const auditCall = mockClient.query.mock.calls.find((c: any[]) =>
       c[0].includes('INSERT INTO te_financial_audits')
     );
     expect(auditCall[1][0]).toBe('STARS_DEPOSIT_COMPLETED');
     expect(auditCall[1][4]).toBe('250');
+    expect(auditCall[1][5]).toBe('50'); // available_before
+    expect(auditCall[1][6]).toBe('300'); // available_after
   });
 
   it('7. Повторный successful payment (Duplicate webhook): не увеличивает баланс повторно', async () => {

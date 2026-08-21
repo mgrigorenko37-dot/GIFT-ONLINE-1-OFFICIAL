@@ -138,15 +138,19 @@ export class WithdrawalWorker {
           operationId = `op_${withdrawalId}_${crypto.randomUUID().substring(0, 8)}`;
           const opClient = await this.pool.connect();
           try {
-            await opClient.query(
-              `UPDATE te_withdrawals SET operation_id = $1 WHERE id = $2 AND operation_id IS NULL`,
+            const updateOpRes = await opClient.query(
+              `UPDATE te_withdrawals SET operation_id = $1 WHERE id = $2 AND operation_id IS NULL RETURNING operation_id`,
               [operationId, withdrawalId]
             );
+            if (updateOpRes.rows.length > 0 && updateOpRes.rows[0].operation_id) {
+              operationId = updateOpRes.rows[0].operation_id;
+            }
           } catch (e) {
             console.error(
-              `[WithdrawalWorker] Error persisting operation_id for ${withdrawalId}:`,
+              `[WithdrawalWorker] Error persisting operation_id for withdrawal ${withdrawalId} (op:${operationId}):`,
               e
             );
+            continue; // Do NOT proceed to broadcast if operation_id failed to persist
           } finally {
             opClient.release();
           }
@@ -154,20 +158,33 @@ export class WithdrawalWorker {
 
         // 2. Reconciliation check: Before broadcast (or re-broadcast), verify if tx was already published on-chain or recorded in DB
         let existingTxHash = tx_hash;
-        if (!existingTxHash && this.adapter.checkTransactionByOperationId) {
-          try {
-            const checkRes = await this.adapter.checkTransactionByOperationId(operationId, address);
-            if (checkRes.found && checkRes.txHash) {
-              existingTxHash = checkRes.txHash;
-              console.log(
-                `[WithdrawalWorker] Reconciled on-chain transaction for ${withdrawalId} (op:${operationId}): ${existingTxHash}`
+        let reconciliationError = false;
+        let negativeReconciliationConfirmed = false;
+
+        if (!existingTxHash) {
+          if (this.adapter.checkTransactionByOperationId) {
+            try {
+              const checkRes = await this.adapter.checkTransactionByOperationId(
+                operationId,
+                address
+              );
+              if (checkRes.found && checkRes.txHash) {
+                existingTxHash = checkRes.txHash;
+                console.log(
+                  `[WithdrawalWorker] Reconciled on-chain transaction for ${withdrawalId} (op:${operationId}): ${existingTxHash}`
+                );
+              } else if (!checkRes.found) {
+                negativeReconciliationConfirmed = true;
+              }
+            } catch (e) {
+              reconciliationError = true;
+              console.error(
+                `[WithdrawalWorker] Error during on-chain reconciliation for withdrawal ${withdrawalId} (op:${operationId}):`,
+                e
               );
             }
-          } catch (e) {
-            console.error(
-              `[WithdrawalWorker] Error during on-chain reconciliation for ${withdrawalId}:`,
-              e
-            );
+          } else {
+            negativeReconciliationConfirmed = false;
           }
         }
 
@@ -185,7 +202,7 @@ export class WithdrawalWorker {
             );
             await updateClient.query('COMMIT');
             console.log(
-              `[WithdrawalWorker] Completed withdrawal ${withdrawalId} via reconciled txHash: ${existingTxHash}`
+              `[WithdrawalWorker] Completed withdrawal ${withdrawalId} (op:${operationId}) via reconciled txHash: ${existingTxHash}`
             );
             processedCount++;
             continue;
@@ -194,12 +211,47 @@ export class WithdrawalWorker {
               await updateClient.query('ROLLBACK');
             } catch {}
             console.error(
-              `[WithdrawalWorker] Error marking reconciled withdrawal ${withdrawalId} completed:`,
+              `[WithdrawalWorker] Error marking reconciled withdrawal ${withdrawalId} (op:${operationId}) completed:`,
               updateErr
             );
             continue;
           } finally {
             updateClient.release();
+          }
+        }
+
+        // 3. On retry attempts (attempts > 1), DO NOT re-broadcast unless reconciliation explicitly confirmed negative result
+        if (attempts > 1 && !negativeReconciliationConfirmed) {
+          const reconClient = await this.pool.connect();
+          try {
+            await reconClient.query('BEGIN');
+            const reason = reconciliationError
+              ? `Reconciliation service unavailable during retry check (op:${operationId}, attempt #${attempts})`
+              : `On-chain status unconfirmed before retry broadcast (op:${operationId}, attempt #${attempts})`;
+            await WithdrawalStateMachine.markNeedsReconciliation(
+              reconClient,
+              withdrawalId,
+              reason,
+              this.workerId,
+              Date.now()
+            );
+            await reconClient.query('COMMIT');
+            console.warn(
+              `[WithdrawalWorker] Withdrawal ${withdrawalId} (op:${operationId}, attempt #${attempts}) transitioned to NEEDS_RECONCILIATION due to on-chain uncertainty.`
+            );
+            processedCount++;
+            continue;
+          } catch (reconErr) {
+            try {
+              await reconClient.query('ROLLBACK');
+            } catch {}
+            console.error(
+              `[WithdrawalWorker] Error setting NEEDS_RECONCILIATION for withdrawal ${withdrawalId}:`,
+              reconErr
+            );
+            continue;
+          } finally {
+            reconClient.release();
           }
         }
 

@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { type Gift, fetchTelegramGifts } from '../services/telegramGifts';
+import { gifts as defaultGifts } from '../data/gifts';
 
 type GiftsContextType = {
   gifts: Gift[];
@@ -8,20 +9,22 @@ type GiftsContextType = {
 };
 
 const GiftsContext = createContext<GiftsContextType>({
-  gifts: [],
+  gifts: defaultGifts,
   source: 'postgres',
   loading: false,
 });
 
 export const GiftsProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [gifts, setGifts] = useState<Gift[]>([]);
+  const [gifts, setGifts] = useState<Gift[]>(defaultGifts);
   const [source, setSource] = useState<'postgres' | 'mock'>('postgres');
-  const [loading, setLoading] = useState<boolean>(true);
+  const [loading, setLoading] = useState<boolean>(false);
 
   useEffect(() => {
     fetchTelegramGifts().then((res) => {
-      setGifts(res.gifts);
-      setSource(res.source);
+      if (res.gifts && res.gifts.length > 0) {
+        setGifts(res.gifts);
+        setSource(res.source);
+      }
       setLoading(false);
     });
   }, []);

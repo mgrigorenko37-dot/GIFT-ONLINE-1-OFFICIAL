@@ -279,4 +279,37 @@ router.get(['/collections', '/gifts'], async (req: express.Request, res: express
   }
 });
 
+// Variants API Endpoint
+router.get(
+  ['/variants', '/variants/:collectionId'],
+  async (req: express.Request, res: express.Response) => {
+    const collectionId = req.params.collectionId || (req.query.collectionId as string);
+
+    try {
+      const pool = getPgPool();
+      const client = await pool.connect();
+
+      try {
+        let query = `SELECT id, collection_id, model_name, symbol_name, backdrop_color, rarity_percentage, current_price_gx, image_url, last_synced_at FROM gift_variants`;
+        const params: any[] = [];
+
+        if (collectionId) {
+          query += ` WHERE collection_id = $1`;
+          params.push(collectionId);
+        }
+
+        query += ` ORDER BY id ASC`;
+
+        const result = await client.query(query, params);
+        return res.json(result.rows);
+      } finally {
+        client.release();
+      }
+    } catch (error: any) {
+      console.error('[MarketRoutes] Error fetching variants:', error?.message);
+      return res.json([]);
+    }
+  }
+);
+
 export default router;

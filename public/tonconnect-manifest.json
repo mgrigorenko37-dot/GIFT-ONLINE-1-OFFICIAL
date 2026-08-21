@@ -1,7 +1,7 @@
 {
-  "url": "https://giftx.app",
+  "url": "/",
   "name": "GX Exchange",
   "iconUrl": "https://telegram.org/img/t_logo.png",
-  "termsOfUseUrl": "https://giftx.app/terms",
-  "privacyPolicyUrl": "https://giftx.app/privacy"
+  "termsOfUseUrl": "/terms",
+  "privacyPolicyUrl": "/privacy"
 }

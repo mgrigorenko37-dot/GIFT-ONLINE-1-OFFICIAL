@@ -53,7 +53,24 @@ export async function getTestDbPool(): Promise<Pool> {
   }
 
   // Initialize DB Schema (tables, indexes, check constraints)
-  await initDbSchema(pool);
+  const adminUser = process.env.SQL_ADMIN_USER;
+  const adminPassword = process.env.SQL_ADMIN_PASSWORD;
+  let adminPool = pool;
+  if (adminUser && adminPassword) {
+    adminPool = new Pool({
+      connectionString: DEFAULT_TEST_DATABASE_URL,
+      user: adminUser,
+      password: adminPassword,
+    });
+  }
+
+  try {
+    await initDbSchema(adminPool);
+  } finally {
+    if (adminPool !== pool) {
+      await adminPool.end().catch(() => {});
+    }
+  }
 
   globalIntegrationPool = pool;
   return globalIntegrationPool;
@@ -63,7 +80,9 @@ export async function getTestDbPool(): Promise<Pool> {
  * Creates an independent, dedicated PostgreSQL client connection for testing concurrency (e.g., FOR UPDATE locking).
  */
 export async function createSeparateClient(): Promise<Client> {
-  const clientConf = dbConf.config ? { ...dbConf.config } : { connectionString: DEFAULT_TEST_DATABASE_URL };
+  const clientConf = dbConf.config
+    ? { ...dbConf.config }
+    : { connectionString: DEFAULT_TEST_DATABASE_URL };
   const client = new Client(clientConf);
   await client.connect();
   return client;

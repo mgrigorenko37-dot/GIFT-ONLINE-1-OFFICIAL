@@ -17,20 +17,22 @@ describe('TonScanner Production Tests', () => {
     mockClient = {
       query: vi.fn(async (text, params) => {
         queries.push({ text, params });
-        
+
         if (text.includes('SELECT last_lt')) return { rows: [{ last_lt: '100' }] };
         if (text.includes('SELECT hash FROM te_ton_deposits WHERE hash = $1 FOR UPDATE')) {
-           // We will mock this specifically in tests if needed
-           return { rowCount: 0 };
+          // We will mock this specifically in tests if needed
+          return { rowCount: 0 };
         }
-        if (text.includes('SELECT wallet_address')) return { rows: [{ wallet_address: validAddress }] };
-        if (text.includes('RETURNING available_balance')) return { rows: [{ available_balance: '100', locked_balance: '0' }] };
-        
+        if (text.includes('SELECT wallet_address'))
+          return { rows: [{ wallet_address: validAddress }] };
+        if (text.includes('RETURNING available_balance'))
+          return { rows: [{ available_balance: '100', locked_balance: '0' }] };
+
         return { rowCount: 1, rows: [] };
       }),
       release: vi.fn(),
     };
-    
+
     mockPool = {
       connect: vi.fn().mockResolvedValue(mockClient),
       query: vi.fn(async (text, params) => {
@@ -41,9 +43,9 @@ describe('TonScanner Production Tests', () => {
     };
 
     scanner = new TonScanner(mockPool);
-    
+
     process.env.EXCHANGE_HOT_WALLET_ADDRESS = '0:hotwallet';
-    
+
     fetchMock = vi.fn();
     global.fetch = fetchMock;
   });
@@ -67,24 +69,25 @@ describe('TonScanner Production Tests', () => {
       source: { address: source },
       decoded_op_name: 'text_comment',
       decoded_body: { text },
-    }
+    },
   });
 
   it('1. should process valid deposit, update cursor, credit balance, and emit event', async () => {
-    mockTransactions([
-      createTx(101, 'hash1', '1000000000', 'Deposit_user1', validAddress),
-    ]);
-    
+    mockTransactions([createTx(101, 'hash1', '1000000000', 'Deposit_user1', validAddress)]);
+
     await (scanner as any).scan();
-    
-    const commits = queries.filter(q => q.text === 'COMMIT');
+
+    const commits = queries.filter((q) => q.text === 'COMMIT');
     expect(commits.length).toBe(1);
-    
-    const depositInsert = queries.find(q => q.text.includes('INSERT INTO te_ton_deposits') && q.params && q.params[5] === 'credited');
+
+    const depositInsert = queries.find(
+      (q) =>
+        q.text.includes('INSERT INTO te_ton_deposits') && q.params && q.params[5] === 'credited'
+    );
     expect(depositInsert).toBeDefined();
     expect(depositInsert.params[3]).toBe('1'); // amount 1 TON
 
-    const cursorUpdate = queries.find(q => q.text.includes('INSERT INTO te_ton_scanner_cursor'));
+    const cursorUpdate = queries.find((q) => q.text.includes('INSERT INTO te_ton_scanner_cursor'));
     expect(cursorUpdate).toBeDefined();
     expect(cursorUpdate.params[0]).toBe(101); // highest lt
   });
@@ -94,46 +97,45 @@ describe('TonScanner Production Tests', () => {
     mockClient.query = vi.fn(async (text, params) => {
       queries.push({ text, params });
       if (text.includes('SELECT hash FROM te_ton_deposits WHERE hash = $1 FOR UPDATE')) {
-         return { rowCount: 1, rows: [{ hash: 'hash_dup' }] };
+        return { rowCount: 1, rows: [{ hash: 'hash_dup' }] };
       }
       return { rowCount: 1, rows: [] };
     });
 
-    mockTransactions([
-      createTx(102, 'hash_dup', '1000000000', 'Deposit_user1', validAddress),
-    ]);
+    mockTransactions([createTx(102, 'hash_dup', '1000000000', 'Deposit_user1', validAddress)]);
 
     await (scanner as any).scan();
 
-    const commits = queries.filter(q => q.text === 'COMMIT');
+    const commits = queries.filter((q) => q.text === 'COMMIT');
     expect(commits.length).toBe(0); // Because it rolls back and skips
 
-    const balanceUpdate = queries.find(q => q.text.includes('INSERT INTO te_balances'));
+    const balanceUpdate = queries.find((q) => q.text.includes('INSERT INTO te_balances'));
     expect(balanceUpdate).toBeUndefined(); // Balance should not update
 
-    const cursorUpdate = queries.find(q => q.text.includes('INSERT INTO te_ton_scanner_cursor'));
+    const cursorUpdate = queries.find((q) => q.text.includes('INSERT INTO te_ton_scanner_cursor'));
     expect(cursorUpdate).toBeDefined();
     expect(cursorUpdate.params[0]).toBe(102); // LT still advanced!
   });
 
   it('3. should reject deposit from spoofed sender (sender != registered wallet)', async () => {
-    mockTransactions([
-      createTx(103, 'hash_spoof', '1000000000', 'Deposit_user1', spoofAddress),
-    ]);
+    mockTransactions([createTx(103, 'hash_spoof', '1000000000', 'Deposit_user1', spoofAddress)]);
 
     await (scanner as any).scan();
 
-    const commits = queries.filter(q => q.text === 'COMMIT');
+    const commits = queries.filter((q) => q.text === 'COMMIT');
     expect(commits.length).toBe(1); // the rejectDeposit commits the rejection!
 
-    const depositInsert = queries.find(q => q.text.includes('INSERT INTO te_ton_deposits') && q.params && q.text.includes('rejected'));
+    const depositInsert = queries.find(
+      (q) =>
+        q.text.includes('INSERT INTO te_ton_deposits') && q.params && q.text.includes('rejected')
+    );
     expect(depositInsert).toBeDefined();
     expect(depositInsert.params[5]).toContain('mismatch');
 
-    const balanceUpdate = queries.find(q => q.text.includes('INSERT INTO te_balances'));
+    const balanceUpdate = queries.find((q) => q.text.includes('INSERT INTO te_balances'));
     expect(balanceUpdate).toBeUndefined(); // Balance should not update
 
-    const cursorUpdate = queries.find(q => q.text.includes('INSERT INTO te_ton_scanner_cursor'));
+    const cursorUpdate = queries.find((q) => q.text.includes('INSERT INTO te_ton_scanner_cursor'));
     expect(cursorUpdate).toBeDefined();
     expect(cursorUpdate.params[0]).toBe(103); // LT advanced!
   });
@@ -148,21 +150,23 @@ describe('TonScanner Production Tests', () => {
     mockClient.query = vi.fn(async (text, params) => {
       queries.push({ text, params });
       if (text.includes('SELECT hash FROM te_ton_deposits')) {
-         if (params[0] === 'hash_fail') throw new Error('DB Deadlock or crash');
-         return { rowCount: 0 };
+        if (params[0] === 'hash_fail') throw new Error('DB Deadlock or crash');
+        return { rowCount: 0 };
       }
-      if (text.includes('SELECT wallet_address')) return { rows: [{ wallet_address: validAddress }] };
-      if (text.includes('RETURNING available_balance')) return { rows: [{ available_balance: '100', locked_balance: '0' }] };
+      if (text.includes('SELECT wallet_address'))
+        return { rows: [{ wallet_address: validAddress }] };
+      if (text.includes('RETURNING available_balance'))
+        return { rows: [{ available_balance: '100', locked_balance: '0' }] };
       return { rowCount: 1, rows: [] };
     });
 
     await (scanner as any).scan();
 
     // Loop should break on hash_fail, so hash_ok is never processed!
-    const hashOkQuery = queries.find(q => q.text.includes('hash_ok'));
+    const hashOkQuery = queries.find((q) => q.text.includes('hash_ok'));
     expect(hashOkQuery).toBeUndefined();
 
-    const cursorUpdate = queries.find(q => q.text.includes('INSERT INTO te_ton_scanner_cursor'));
+    const cursorUpdate = queries.find((q) => q.text.includes('INSERT INTO te_ton_scanner_cursor'));
     expect(cursorUpdate).toBeUndefined(); // Cursor should NOT update because NO transactions succeeded above 100
   });
 
@@ -173,7 +177,10 @@ describe('TonScanner Production Tests', () => {
 
     await (scanner as any).scan();
 
-    const depositInsert = queries.find(q => q.text.includes('INSERT INTO te_ton_deposits') && q.params && q.params[5] === 'credited');
+    const depositInsert = queries.find(
+      (q) =>
+        q.text.includes('INSERT INTO te_ton_deposits') && q.params && q.params[5] === 'credited'
+    );
     expect(depositInsert).toBeDefined();
     expect(depositInsert.params[3]).toBe('1.23456789'); // Validated string format
   });
@@ -192,7 +199,10 @@ describe('TonScanner Production Tests', () => {
 
     await (scanner as any).scan();
 
-    const depositInsert = queries.find(q => q.text.includes('INSERT INTO te_ton_deposits') && q.params && q.text.includes('rejected'));
+    const depositInsert = queries.find(
+      (q) =>
+        q.text.includes('INSERT INTO te_ton_deposits') && q.params && q.text.includes('rejected')
+    );
     expect(depositInsert).toBeDefined();
     expect(depositInsert.params[5]).toContain('User ID does not exist');
   });
@@ -205,10 +215,13 @@ describe('TonScanner Production Tests', () => {
 
     await (scanner as any).scan();
 
-    const depositInserts = queries.filter(q => q.text.includes('INSERT INTO te_ton_deposits') && q.params && q.params[5] === 'credited');
+    const depositInserts = queries.filter(
+      (q) =>
+        q.text.includes('INSERT INTO te_ton_deposits') && q.params && q.params[5] === 'credited'
+    );
     expect(depositInserts.length).toBe(2);
 
-    const cursorUpdate = queries.find(q => q.text.includes('INSERT INTO te_ton_scanner_cursor'));
+    const cursorUpdate = queries.find((q) => q.text.includes('INSERT INTO te_ton_scanner_cursor'));
     expect(cursorUpdate).toBeDefined();
     expect(cursorUpdate.params[0]).toBe(109); // Cursor updated to the highest successful LT
   });

@@ -673,18 +673,12 @@ export async function executeTrade(
       'SELECT available_balance, locked_balance, realized_pnl, total_fees FROM te_balances WHERE user_id = $1 AND currency = $2',
       [order.userId, currency]
     );
-    let currentBalance =
-      balRes.rows.length > 0
-        ? Number(balRes.rows[0].available_balance)
-        : currency === 'TON'
-          ? 12480.5
-          : 0;
-    let currentRealizedPnl = balRes.rows.length > 0 ? Number(balRes.rows[0].realized_pnl) : 0;
-    let currentTotalFees = balRes.rows.length > 0 ? Number(balRes.rows[0].total_fees) : 0;
-
     const currentBalanceDecimal = new Decimal(
       balRes.rows.length > 0 ? balRes.rows[0].available_balance : 0
     );
+    let currentBalance = currentBalanceDecimal.toNumber();
+    let currentRealizedPnl = balRes.rows.length > 0 ? Number(balRes.rows[0].realized_pnl) : 0;
+    let currentTotalFees = balRes.rows.length > 0 ? Number(balRes.rows[0].total_fees) : 0;
     const usedMarginStr = balRes.rows.length > 0 ? balRes.rows[0].locked_balance : 0;
     const usedMarginDec = new Decimal(usedMarginStr);
     const feeDec = new Decimal(fee);

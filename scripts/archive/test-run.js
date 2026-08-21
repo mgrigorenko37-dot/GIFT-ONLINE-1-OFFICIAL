@@ -60,7 +60,7 @@ async function test() {
     release: () => {},
   };
   const pool = {
-    connect: async () => client
+    connect: async () => client,
   };
   const engine = new PostgresTradingEngine(pool);
   const trade = await engine.executeTrade('ord1', 5, 100);

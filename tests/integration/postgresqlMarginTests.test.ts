@@ -22,7 +22,8 @@ describe('Postgres Margin and Isolation Tests', () => {
     let adminPool = pool;
     if (adminUser && adminPassword) {
       adminPool = new Pool({
-        connectionString: process.env.DATABASE_URL || 'postgres://node@localhost:5432/gx_exchange_test',
+        connectionString:
+          process.env.DATABASE_URL || 'postgres://node@localhost:5432/gx_exchange_test',
         user: adminUser,
         password: adminPassword,
       });

@@ -8,13 +8,13 @@ const webAppUrl =
 const apiBase = token ? `https://api.telegram.org/bot${token}` : '';
 
 if (!token) {
-  console.error('BOT_TOKEN is required to start the Telegram bot.');
-  process.exit(1);
+  console.warn('BOT_TOKEN is not set. Telegram bot polling is disabled.');
+  process.exit(0);
 }
 
 if (!webAppUrl) {
-  console.error('WEB_APP_URL or REPLIT_DEV_DOMAIN is required to create the Mini App button.');
-  process.exit(1);
+  console.warn('WEB_APP_URL is not set. Telegram bot polling is disabled.');
+  process.exit(0);
 }
 
 const request = (method, body = {}) =>

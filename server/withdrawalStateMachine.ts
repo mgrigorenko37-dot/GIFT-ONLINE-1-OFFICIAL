@@ -121,6 +121,7 @@ export class WithdrawalStateMachine {
            worker_id = $1,
            locked_at = $2,
            attempts = attempts + 1,
+           operation_id = COALESCE(operation_id, 'op_' || id),
            updated_at = $2
        WHERE id = ANY($3) AND status IN ('PENDING', 'RETRYING')
        RETURNING *`,
@@ -160,6 +161,7 @@ export class WithdrawalStateMachine {
            worker_id = $1,
            locked_at = $2,
            attempts = $3,
+           operation_id = COALESCE(operation_id, 'op_' || id),
            updated_at = $2
        WHERE id = $4 AND status IN ('PENDING', 'RETRYING')
        RETURNING *`,
@@ -174,7 +176,7 @@ export class WithdrawalStateMachine {
   }
 
   /**
-   * Transition PROCESSING -> COMPLETED.
+   * Transition PROCESSING / RETRYING / NEEDS_RECONCILIATION -> COMPLETED.
    * Requires valid tx_hash.
    * Decreases locked_balance permanently without returning funds to available_balance.
    * Strictly idempotent.
@@ -207,9 +209,13 @@ export class WithdrawalStateMachine {
       return current; // Idempotent
     }
 
-    if (current.status !== 'PROCESSING' && current.status !== 'RETRYING') {
+    if (
+      current.status !== 'PROCESSING' &&
+      current.status !== 'RETRYING' &&
+      current.status !== 'NEEDS_RECONCILIATION'
+    ) {
       throw new WithdrawalTransitionError(
-        `Cannot transition to COMPLETED from status '${current.status}'. Must be in 'PROCESSING' or 'RETRYING'.`,
+        `Cannot transition to COMPLETED from status '${current.status}'. Must be in 'PROCESSING', 'RETRYING', or 'NEEDS_RECONCILIATION'.`,
         'INVALID_CURRENT_STATUS'
       );
     }
@@ -252,7 +258,7 @@ export class WithdrawalStateMachine {
       availableAfter,
       lockedBefore,
       lockedAfter,
-      { txHash: txHash.trim(), workerId },
+      { txHash: txHash.trim(), workerId, operationId: current.operation_id },
       now
     );
 
@@ -265,7 +271,7 @@ export class WithdrawalStateMachine {
            failure_reason = NULL,
            locked_at = NULL,
            updated_at = $2
-       WHERE id = $3 AND status IN ('PROCESSING', 'RETRYING')
+       WHERE id = $3 AND status IN ('PROCESSING', 'RETRYING', 'NEEDS_RECONCILIATION')
        RETURNING *`,
       [txHash.trim(), now, withdrawalId]
     );
@@ -344,10 +350,15 @@ export class WithdrawalStateMachine {
       return { released: false, withdrawal: current };
     }
 
-    // Must be in FAILED status or transitioning to FAILED from PROCESSING
-    if (current.status !== 'FAILED' && current.status !== 'PROCESSING') {
+    // Must be in FAILED status or transitioning to FAILED from PROCESSING, RETRYING, or NEEDS_RECONCILIATION
+    if (
+      current.status !== 'FAILED' &&
+      current.status !== 'PROCESSING' &&
+      current.status !== 'RETRYING' &&
+      current.status !== 'NEEDS_RECONCILIATION'
+    ) {
       throw new WithdrawalTransitionError(
-        `Cannot release funds for withdrawal in '${current.status}' status. Must be FAILED or PROCESSING.`,
+        `Cannot release funds for withdrawal in '${current.status}' status. Must be FAILED, PROCESSING, RETRYING, or NEEDS_RECONCILIATION.`,
         'INVALID_STATUS_FOR_RELEASE'
       );
     }
@@ -451,9 +462,13 @@ export class WithdrawalStateMachine {
       return current;
     }
 
-    if (current.status !== 'PROCESSING') {
+    if (
+      current.status !== 'PROCESSING' &&
+      current.status !== 'RETRYING' &&
+      current.status !== 'NEEDS_RECONCILIATION'
+    ) {
       throw new WithdrawalTransitionError(
-        `Cannot transition to FAILED from status '${current.status}'. Must be in 'PROCESSING'.`,
+        `Cannot transition to FAILED from status '${current.status}'. Must be in 'PROCESSING', 'RETRYING', or 'NEEDS_RECONCILIATION'.`,
         'INVALID_CURRENT_STATUS'
       );
     }
@@ -469,7 +484,7 @@ export class WithdrawalStateMachine {
            processed_at = $2,
            locked_at = NULL,
            updated_at = $2
-       WHERE id = $3 AND status = 'PROCESSING'
+       WHERE id = $3 AND status IN ('PROCESSING', 'RETRYING', 'NEEDS_RECONCILIATION')
        RETURNING *`,
       [failureReason.trim(), now, withdrawalId]
     );

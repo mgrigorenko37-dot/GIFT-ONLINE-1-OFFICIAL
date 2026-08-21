@@ -8,8 +8,51 @@ const router = express.Router();
 let cachedGramPrice = 5.5;
 let lastGramPriceFetch = 0;
 
+// Dynamic tonconnect-manifest.json
+router.get(['/tonconnect-manifest.json', '/api/tonconnect-manifest.json'], (req, res) => {
+  const referer = (req.headers['referer'] || req.headers['origin']) as string | undefined;
+  let origin = '';
+
+  if (referer && typeof referer === 'string' && referer.startsWith('http')) {
+    try {
+      const u = new URL(referer);
+      if (u.origin && u.origin !== 'null') {
+        origin = u.origin;
+      }
+    } catch (_) {}
+  }
+
+  if (!origin) {
+    const forwardedHost = (req.headers['x-forwarded-host'] as string | undefined)
+      ?.split(',')[0]
+      .trim();
+    const hostHeader = req.get('host');
+    const host = forwardedHost || hostHeader || 'localhost:3000';
+    const protocol =
+      (req.headers['x-forwarded-proto'] as string)?.split(',')[0].trim() === 'https' ||
+      req.protocol === 'https'
+        ? 'https'
+        : 'http';
+    origin = `${protocol}://${host}`;
+  }
+
+  if (process.env.APP_URL && process.env.APP_URL.startsWith('http')) {
+    if (origin.includes('localhost') && !process.env.APP_URL.includes('localhost')) {
+      origin = process.env.APP_URL.replace(/\/+$/, '');
+    }
+  }
+
+  res.json({
+    url: origin,
+    name: 'GX Exchange',
+    iconUrl: 'https://telegram.org/img/t_logo.png',
+    termsOfUseUrl: `${origin}/terms`,
+    privacyPolicyUrl: `${origin}/privacy`,
+  });
+});
+
 // Currency exchange rate (TON/USDT)
-router.get('/rates', async (req, res) => {
+router.get(['/rates', '/api/rates'], async (req, res) => {
   const now = Date.now();
   if (now - lastGramPriceFetch > 30000) {
     try {
@@ -29,10 +72,16 @@ router.get('/rates', async (req, res) => {
 });
 
 // App configuration for frontend
-router.get('/config', (req, res) => {
+router.get(['/config', '/api/config'], (req, res) => {
   res.json({
     hotWalletAddress: process.env.EXCHANGE_HOT_WALLET_ADDRESS || '',
   });
+});
+
+// Client error logging
+router.post('/api/log-client-error', (req, res) => {
+  console.warn('[Client Error]', req.body);
+  res.status(200).json({ status: 'logged' });
 });
 
 // Health check probe

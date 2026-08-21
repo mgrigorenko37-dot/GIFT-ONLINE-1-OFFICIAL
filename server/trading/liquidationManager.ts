@@ -170,6 +170,7 @@ export async function liquidateUser(
       const unrealizedPnl = (pos.markPrice - pos.avgEntryPrice) * pos.qty * pnlMultiplier;
       const loss = unrealizedPnl;
       totalRealizedLoss += loss;
+      totalRealizedLossDec = totalRealizedLossDec.plus(new Decimal(loss));
 
       // 7. Рассчитать liquidation fee.
       const notional = pos.qty * pos.markPrice;
@@ -189,6 +190,7 @@ export async function liquidateUser(
 
       const liquidationFee = actualFee;
       totalLiquidationFee += liquidationFee;
+      totalLiquidationFeeDec = totalLiquidationFeeDec.plus(new Decimal(liquidationFee));
 
       // 8 & 9. Закрыть позицию с qty=0. Установить status=LIQUIDATED.
       const closedQty = pos.qty;

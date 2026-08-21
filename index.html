@@ -3,26 +3,42 @@
   <head>
     <script>
       window.addEventListener('error', function (e) {
-        fetch('/api/log-client-error', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            message: e.message,
-            filename: e.filename,
-            lineno: e.lineno,
-            error: e.error?.stack || e.error,
-          }),
-        });
+        if (
+          e.message &&
+          (e.message.indexOf('ResizeObserver') !== -1 || e.message.indexOf('WebSocket') !== -1)
+        )
+          return;
+        try {
+          fetch('/api/log-client-error', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              message: e.message,
+              filename: e.filename,
+              lineno: e.lineno,
+              error: e.error?.stack || e.error,
+            }),
+          }).catch(function () {});
+        } catch (_) {}
       });
       window.addEventListener('unhandledrejection', function (e) {
-        fetch('/api/log-client-error', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            message: e.reason?.message || 'unhandledrejection',
-            error: e.reason?.stack || e.reason,
-          }),
-        });
+        var msg = (e.reason && (e.reason.message || e.reason.toString())) || '';
+        if (
+          msg.indexOf('WebSocket') !== -1 ||
+          msg.indexOf('ResizeObserver') !== -1 ||
+          msg.indexOf('analytics') !== -1
+        )
+          return;
+        try {
+          fetch('/api/log-client-error', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              message: e.reason?.message || 'unhandledrejection',
+              error: e.reason?.stack || e.reason,
+            }),
+          }).catch(function () {});
+        } catch (_) {}
       });
     </script>
 
@@ -39,7 +55,7 @@
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <title>GX Exchange</title>
   </head>
-  <body>
+  <body style="background-color: #0e0d15; color: #f5f2fc; margin: 0">
     <noscript>You need to enable JavaScript to run this app.</noscript>
     <div id="root"></div>
     <script type="module" src="/src/index.tsx"></script>

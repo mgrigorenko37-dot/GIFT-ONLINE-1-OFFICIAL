@@ -25,8 +25,9 @@
     "socket.io-client": "^4.8.3"
   },
   "scripts": {
-    "dev": "concurrently \"tsx server.ts\" \"npm run bot\"",
+    "dev": "tsx server.ts",
     "bot": "node server/telegram-bot.js",
+    "db:migrate": "tsx server/db/migrateRunner.ts",
     "build": "vite build && esbuild server.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/server.cjs",
     "preview": "vite preview",
     "start": "node dist/server.cjs",
@@ -36,6 +37,7 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint ./src ./server",
     "check:security": "node scripts/security_audit.mjs",
+    "check:branding": "node scripts/check_branding.mjs",
     "eslint": "eslint ./src ./server",
     "prettier": "prettier --check .",
     "prettier fix": "prettier --write **"

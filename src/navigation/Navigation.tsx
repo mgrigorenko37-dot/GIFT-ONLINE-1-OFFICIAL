@@ -14,7 +14,7 @@ import GXTerminalScreen from '../screens/GXTerminal/GXTerminalScreen';
 
 const Navigation: React.FC = () => (
   <Routes>
-    <Route path='/' element={<SplashScreen />} />
+    <Route path='/' element={<GXTerminalScreen />} />
     <Route path='/market' element={<GXTerminalScreen />} />
     <Route path='/profile' element={<ProfileScreen />} />
     <Route path='/members' element={<Navigate to='/portfolio' replace />} />
@@ -24,6 +24,7 @@ const Navigation: React.FC = () => (
     <Route path='/members/signup' element={<SignupScreen />} />
     <Route path='/transactions' element={<TransactionsScreen />} />
     <Route path='/members/forgot-password' element={<ForgotScreen />} />
+    <Route path='/splash' element={<SplashScreen />} />
     <Route path='*' element={<NotFoundScreen />} />
   </Routes>
 );

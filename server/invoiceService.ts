@@ -379,151 +379,82 @@ export async function processSuccessfulStarsPayment(
   }
 
   const pool = getPgPool();
-  const client = await pool.connect();
+  const maxRetries = 3;
 
-  try {
-    await client.query('BEGIN');
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    const client = await pool.connect();
 
-    // 1. Lock invoice row for update
-    const invoiceRes = await client.query(
-      `SELECT id, user_id, stars_amount, currency, status, telegram_payment_charge_id 
-       FROM te_invoices 
-       WHERE id = $1 FOR UPDATE`,
-      [invoiceId]
-    );
-
-    if (invoiceRes.rows.length === 0) {
-      await client.query('ROLLBACK');
-      return {
-        success: false,
-        duplicate: false,
-        error: 'Invoice not found in database',
-        code: 'INVOICE_NOT_FOUND',
-      };
-    }
-
-    const invoice = invoiceRes.rows[0];
-
-    // 2. Check for duplicate processing or invalid status
-    if (invoice.status === 'PAID') {
-      await client.query('ROLLBACK');
-      console.log(
-        `[InvoicePayment] Duplicate payment webhook ignored for invoice ${invoiceId} (Already PAID).`
-      );
-      return {
-        success: true,
-        duplicate: true,
-        invoiceId,
-        userId: String(userId),
-        starsCredited: Number(invoice.stars_amount),
-      };
-    }
-
-    if (invoice.status === 'FAILED' || invoice.status === 'EXPIRED') {
-      await client.query('ROLLBACK');
-      return {
-        success: false,
-        duplicate: false,
-        error: `Cannot process payment for invoice in ${invoice.status} status`,
-        code: 'INVALID_INVOICE_STATUS',
-      };
-    }
-
-    if (
-      String(invoice.user_id) !== String(userId) ||
-      Number(invoice.stars_amount) !== Number(stars)
-    ) {
-      await client.query('ROLLBACK');
-      return {
-        success: false,
-        duplicate: false,
-        error: 'Invoice attributes mismatch in database',
-        code: 'INVOICE_MISMATCH',
-      };
-    }
-
-    // 3. Check for telegram_payment_charge_id duplication across te_payments table
-    const paymentCheck = await client.query(
-      `SELECT id FROM te_payments WHERE telegram_payment_charge_id = $1`,
-      [payment.telegram_payment_charge_id]
-    );
-
-    if (paymentCheck.rows.length > 0) {
-      await client.query('ROLLBACK');
-      console.log(
-        `[InvoicePayment] Duplicate charge_id ${payment.telegram_payment_charge_id} ignored.`
-      );
-      return {
-        success: true,
-        duplicate: true,
-        invoiceId,
-        userId: String(userId),
-      };
-    }
-
-    const now = Date.now();
-    const starsAmountDecimal = new Decimal(Number(stars));
-
-    // 4. Lock & update user balance for STARS currency
-    const balanceRes = await client.query(
-      `SELECT available_balance, locked_balance FROM te_balances WHERE user_id = $1 AND currency = $2 FOR UPDATE`,
-      [String(userId), 'STARS']
-    );
-
-    const availableBefore = new Decimal(balanceRes.rows[0]?.available_balance || 0);
-    const lockedBefore = new Decimal(balanceRes.rows[0]?.locked_balance || 0);
-    const availableAfter = availableBefore.plus(starsAmountDecimal);
-
-    await client.query(
-      `INSERT INTO te_balances (user_id, currency, available_balance, locked_balance, updated_at, created_at)
-       VALUES ($1, 'STARS', $2, 0, $3, $3)
-       ON CONFLICT (user_id, currency) DO UPDATE
-       SET available_balance = $2,
-           updated_at = $3`,
-      [String(userId), availableAfter.toString(), now]
-    );
-
-    // 5. Update invoice to PAID status
-    await client.query(
-      `UPDATE te_invoices 
-       SET status = 'PAID',
-           telegram_payment_charge_id = $1,
-           telegram_provider_charge_id = $2,
-           paid_at = $3,
-           updated_at = $3
-       WHERE id = $4`,
-      [
-        payment.telegram_payment_charge_id,
-        payment.provider_payment_charge_id || null,
-        now,
-        invoiceId,
-      ]
-    );
-
-    // 6. Record payment in te_payments audit table
-    const paymentRecordId = `pay_${crypto.randomUUID()}`;
     try {
-      await client.query(
-        `INSERT INTO te_payments (
-          id, invoice_id, user_id, amount, currency, telegram_payment_charge_id,
-          telegram_provider_charge_id, status, created_at
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, 'COMPLETED', $8)`,
-        [
-          paymentRecordId,
-          invoiceId,
-          String(userId),
-          starsAmountDecimal.toString(),
-          'STARS',
-          payment.telegram_payment_charge_id,
-          payment.provider_payment_charge_id || null,
-          now,
-        ]
+      await client.query('BEGIN');
+
+      // 1. Lock invoice row for update
+      const invoiceRes = await client.query(
+        `SELECT id, user_id, stars_amount, currency, status, telegram_payment_charge_id 
+         FROM te_invoices 
+         WHERE id = $1 FOR UPDATE`,
+        [invoiceId]
       );
-    } catch (e: any) {
-      if (e.code === '23505') {
+
+      if (invoiceRes.rows.length === 0) {
+        await client.query('ROLLBACK');
+        return {
+          success: false,
+          duplicate: false,
+          error: 'Invoice not found in database',
+          code: 'INVOICE_NOT_FOUND',
+        };
+      }
+
+      const invoice = invoiceRes.rows[0];
+
+      // 2. Check for duplicate processing or invalid status
+      if (invoice.status === 'PAID') {
         await client.query('ROLLBACK');
         console.log(
-          `[InvoicePayment] Duplicate charge_id ${payment.telegram_payment_charge_id} caught on insert.`
+          `[InvoicePayment] Duplicate payment webhook ignored for invoice ${invoiceId} (Already PAID).`
+        );
+        return {
+          success: true,
+          duplicate: true,
+          invoiceId,
+          userId: String(userId),
+          starsCredited: Number(invoice.stars_amount),
+        };
+      }
+
+      if (invoice.status === 'FAILED' || invoice.status === 'EXPIRED') {
+        await client.query('ROLLBACK');
+        return {
+          success: false,
+          duplicate: false,
+          error: `Cannot process payment for invoice in ${invoice.status} status`,
+          code: 'INVALID_INVOICE_STATUS',
+        };
+      }
+
+      if (
+        String(invoice.user_id) !== String(userId) ||
+        Number(invoice.stars_amount) !== Number(stars)
+      ) {
+        await client.query('ROLLBACK');
+        return {
+          success: false,
+          duplicate: false,
+          error: 'Invoice attributes mismatch in database',
+          code: 'INVOICE_MISMATCH',
+        };
+      }
+
+      // 3. Check for telegram_payment_charge_id duplication across te_payments table
+      const paymentCheck = await client.query(
+        `SELECT id FROM te_payments WHERE telegram_payment_charge_id = $1`,
+        [payment.telegram_payment_charge_id]
+      );
+
+      if (paymentCheck.rows.length > 0) {
+        await client.query('ROLLBACK');
+        console.log(
+          `[InvoicePayment] Duplicate charge_id ${payment.telegram_payment_charge_id} ignored.`
         );
         return {
           success: true,
@@ -532,82 +463,179 @@ export async function processSuccessfulStarsPayment(
           userId: String(userId),
         };
       }
-      throw e;
-    }
 
-    // 7. Record financial audit trail
-    await client.query(
-      `INSERT INTO te_financial_audits (
-        event_type, user_id, reference_id, currency, amount,
-        available_before, available_after, locked_before, locked_after, metadata, created_at
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
-      [
-        'STARS_DEPOSIT_COMPLETED',
-        String(userId),
+      const now = Date.now();
+      const starsAmountDecimal = new Decimal(Number(stars));
+
+      // 4. Atomically insert or increment user balance for STARS currency
+      // Atomic SQL increment handles concurrency without losing updates for new/existing users.
+      const upsertRes = await client.query(
+        `INSERT INTO te_balances (
+          user_id, currency, available_balance, locked_balance, updated_at, created_at
+        ) VALUES ($1, 'STARS', $2, 0, $3, $3)
+        ON CONFLICT (user_id, currency) DO UPDATE
+        SET available_balance = te_balances.available_balance + EXCLUDED.available_balance,
+            updated_at = EXCLUDED.updated_at
+        RETURNING 
+          (te_balances.available_balance - EXCLUDED.available_balance)::text AS available_before,
+          te_balances.available_balance::text AS available_after,
+          te_balances.locked_balance::text AS locked_before,
+          te_balances.locked_balance::text AS locked_after`,
+        [String(userId), starsAmountDecimal.toString(), now]
+      );
+
+      const balanceRow = upsertRes.rows[0];
+      const availableBefore = new Decimal(balanceRow?.available_before || '0');
+      const availableAfter = new Decimal(
+        balanceRow?.available_after || starsAmountDecimal.toString()
+      );
+      const lockedBefore = new Decimal(balanceRow?.locked_before || '0');
+      const lockedAfter = new Decimal(balanceRow?.locked_after || '0');
+
+      // 5. Update invoice to PAID status
+      await client.query(
+        `UPDATE te_invoices 
+         SET status = 'PAID',
+             telegram_payment_charge_id = $1,
+             telegram_provider_charge_id = $2,
+             paid_at = $3,
+             updated_at = $3
+         WHERE id = $4`,
+        [
+          payment.telegram_payment_charge_id,
+          payment.provider_payment_charge_id || null,
+          now,
+          invoiceId,
+        ]
+      );
+
+      // 6. Record payment in te_payments audit table
+      const paymentRecordId = `pay_${crypto.randomUUID()}`;
+      try {
+        await client.query(
+          `INSERT INTO te_payments (
+            id, invoice_id, user_id, amount, currency, telegram_payment_charge_id,
+            telegram_provider_charge_id, status, created_at
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, 'COMPLETED', $8)`,
+          [
+            paymentRecordId,
+            invoiceId,
+            String(userId),
+            starsAmountDecimal.toString(),
+            'STARS',
+            payment.telegram_payment_charge_id,
+            payment.provider_payment_charge_id || null,
+            now,
+          ]
+        );
+      } catch (e: any) {
+        if (e.code === '23505') {
+          await client.query('ROLLBACK');
+          console.log(
+            `[InvoicePayment] Duplicate charge_id ${payment.telegram_payment_charge_id} caught on insert.`
+          );
+          return {
+            success: true,
+            duplicate: true,
+            invoiceId,
+            userId: String(userId),
+          };
+        }
+        throw e;
+      }
+
+      // 7. Record financial audit trail
+      await client.query(
+        `INSERT INTO te_financial_audits (
+          event_type, user_id, reference_id, currency, amount,
+          available_before, available_after, locked_before, locked_after, metadata, created_at
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+        [
+          'STARS_DEPOSIT_COMPLETED',
+          String(userId),
+          invoiceId,
+          'STARS',
+          starsAmountDecimal.toString(),
+          availableBefore.toString(),
+          availableAfter.toString(),
+          lockedBefore.toString(),
+          lockedAfter.toString(),
+          JSON.stringify({
+            chargeId: payment.telegram_payment_charge_id,
+            providerChargeId: payment.provider_payment_charge_id,
+            paymentRecordId,
+          }),
+          now,
+        ]
+      );
+
+      // 8. Publish outbox event for realtime balance propagation
+      await client.query(
+        `INSERT INTO te_outbox_events (event_type, user_id, payload, status, currency, created_at)
+         VALUES ($1, $2, $3, 'pending', 'STARS', $4)`,
+        [
+          'balanceUpdated',
+          String(userId),
+          JSON.stringify({
+            userId: String(userId),
+            currency: 'STARS',
+            availableBalance: availableAfter.toString(),
+            lockedBalance: lockedAfter.toString(),
+            reason: 'STARS_DEPOSIT',
+            referenceId: invoiceId,
+            amount: starsAmountDecimal.toString(),
+          }),
+          now,
+        ]
+      );
+
+      await client.query('COMMIT');
+
+      console.log(
+        `[InvoicePayment] Successfully credited ${stars} STARS to user #${userId} for invoice ${invoiceId}. Balance: ${availableAfter.toString()} STARS.`
+      );
+
+      return {
+        success: true,
+        duplicate: false,
         invoiceId,
-        'STARS',
-        starsAmountDecimal.toString(),
-        availableBefore.toString(),
-        availableAfter.toString(),
-        lockedBefore.toString(),
-        lockedBefore.toString(),
-        JSON.stringify({
-          chargeId: payment.telegram_payment_charge_id,
-          providerChargeId: payment.provider_payment_charge_id,
-          paymentRecordId,
-        }),
-        now,
-      ]
-    );
+        userId: String(userId),
+        starsCredited: Number(stars),
+        balanceAfter: availableAfter.toString(),
+      };
+    } catch (err: any) {
+      try {
+        await client.query('ROLLBACK');
+      } catch (rollbackErr) {
+        // Ignore rollback error if transaction/client is already terminated
+      }
 
-    // 8. Publish outbox event for realtime balance propagation
-    await client.query(
-      `INSERT INTO te_outbox_events (event_type, user_id, payload, status, currency, created_at)
-       VALUES ($1, $2, $3, 'pending', 'STARS', $4)`,
-      [
-        'balanceUpdated',
-        String(userId),
-        JSON.stringify({
-          userId: String(userId),
-          currency: 'STARS',
-          availableBalance: availableAfter.toString(),
-          lockedBalance: lockedBefore.toString(),
-          reason: 'STARS_DEPOSIT',
-          referenceId: invoiceId,
-          amount: starsAmountDecimal.toString(),
-        }),
-        now,
-      ]
-    );
+      const isRetryable = err?.code === '40P01' || err?.code === '40001';
+      if (isRetryable && attempt < maxRetries) {
+        console.warn(
+          `[InvoicePayment] Retryable transaction conflict (${err?.code}), retrying attempt ${attempt + 1}/${maxRetries}...`
+        );
+        const jitter = crypto.randomInt(0, 20);
+        await new Promise((r) => setTimeout(r, 20 * attempt + jitter));
+        continue;
+      }
 
-    await client.query('COMMIT');
-
-    console.log(
-      `[InvoicePayment] Successfully credited ${stars} STARS to user #${userId} for invoice ${invoiceId}. Balance: ${availableAfter.toString()} STARS.`
-    );
-
-    return {
-      success: true,
-      duplicate: false,
-      invoiceId,
-      userId: String(userId),
-      starsCredited: Number(stars),
-      balanceAfter: availableAfter.toString(),
-    };
-  } catch (err: any) {
-    try {
-      await client.query('ROLLBACK');
-    } catch (rollbackErr) {
-      // Ignore rollback error if transaction/client is already terminated
+      console.error('[InvoicePayment] Error processing successful payment:', err);
+      return {
+        success: false,
+        duplicate: false,
+        error: err?.message || 'Database error processing payment',
+        code: 'DB_ERROR',
+      };
+    } finally {
+      client.release();
     }
-    console.error('[InvoicePayment] Error processing successful payment:', err);
-    return {
-      success: false,
-      duplicate: false,
-      error: err?.message || 'Database error processing payment',
-      code: 'DB_ERROR',
-    };
-  } finally {
-    client.release();
   }
+
+  return {
+    success: false,
+    duplicate: false,
+    error: 'Exceeded max transaction retries due to serialization/deadlock conflict',
+    code: 'DB_ERROR',
+  };
 }

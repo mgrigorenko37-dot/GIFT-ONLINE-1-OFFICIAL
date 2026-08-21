@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach, beforeAll, afterAll } 
 import express from 'express';
 import supertest from 'supertest';
 import { Pool } from 'pg';
+import Decimal from 'decimal.js';
 import financialRoutes from '../../server/routes/financialRoutes';
 import * as telegramAuth from '../../server/telegramAuth';
 import * as marketRepository from '../../server/marketRepository';
@@ -790,5 +791,342 @@ describe('Dedicated Real PostgreSQL Integration Tests — Telegram Stars Payment
     expect(responseStr).not.toContain('777888999');
 
     fetchSpy.mockRestore();
+  });
+
+  // =========================================================================
+  // 14. CONCURRENCY: TWO PARALLEL PAYMENTS FOR NEW STARS BALANCE
+  // =========================================================================
+  it('14. Two parallel payments for a new STARS user credit total atomically without losing updates', async () => {
+    const userId = await spawnTestUser();
+    const invoiceId1 = `inv_p1_${createUniqueUserId()}`;
+    const invoiceId2 = `inv_p2_${createUniqueUserId()}`;
+    const chargeId1 = `ch_p1_${createUniqueUserId()}`;
+    const chargeId2 = `ch_p2_${createUniqueUserId()}`;
+    const now = Date.now();
+
+    // Confirm user currently has NO STARS balance row
+    const initialBal = await queryBalance(pool, userId, 'STARS');
+    expect(initialBal).toBeNull();
+
+    // Insert two valid pending invoices for this new user
+    await pool.query(
+      `INSERT INTO te_invoices (id, user_id, stars_amount, currency, payload, nonce, status, created_at)
+       VALUES 
+         ($1, $2, 250, 'XTR', $3, $4, 'PENDING', $5),
+         ($6, $2, 750, 'XTR', $7, $8, 'PENDING', $5)`,
+      [
+        invoiceId1,
+        userId,
+        JSON.stringify({ invoiceId: invoiceId1, userId, stars: 250 }),
+        `nonce_${invoiceId1}`,
+        now,
+        invoiceId2,
+        JSON.stringify({ invoiceId: invoiceId2, userId, stars: 750 }),
+        `nonce_${invoiceId2}`,
+      ]
+    );
+
+    // Process both payments simultaneously in parallel
+    const [res1, res2] = await Promise.all([
+      processSuccessfulStarsPayment(
+        {
+          currency: 'XTR',
+          total_amount: 250,
+          invoice_payload: JSON.stringify({ invoiceId: invoiceId1, userId, stars: 250 }),
+          telegram_payment_charge_id: chargeId1,
+        },
+        userId
+      ),
+      processSuccessfulStarsPayment(
+        {
+          currency: 'XTR',
+          total_amount: 750,
+          invoice_payload: JSON.stringify({ invoiceId: invoiceId2, userId, stars: 750 }),
+          telegram_payment_charge_id: chargeId2,
+        },
+        userId
+      ),
+    ]);
+
+    expect(res1.success).toBe(true);
+    expect(res1.duplicate).toBe(false);
+    expect(res2.success).toBe(true);
+    expect(res2.duplicate).toBe(false);
+
+    // Verify final balance is exactly 250 + 750 = 1000 STARS
+    const finalBal = await queryBalance(pool, userId, 'STARS');
+    expect(finalBal).not.toBeNull();
+    expect(finalBal!.available_balance.toString()).toBe('1000');
+
+    // Both invoices must be PAID
+    const inv1 = await queryInvoiceById(pool, invoiceId1);
+    const inv2 = await queryInvoiceById(pool, invoiceId2);
+    expect(inv1.status).toBe('PAID');
+    expect(inv2.status).toBe('PAID');
+
+    // Both payments must be recorded
+    const payments = await queryPayments(pool, userId);
+    expect(payments.length).toBe(2);
+
+    // Both financial audits must exist and reflect valid balance continuity
+    const audits = await queryFinancialAudits(pool, userId);
+    expect(audits.length).toBe(2);
+
+    // Verify audits before/after arithmetic consistency
+    const totalCredited = audits.reduce(
+      (sum, a) => sum.plus(new Decimal(a.amount.toString())),
+      new Decimal(0)
+    );
+    expect(totalCredited.toString()).toBe('1000');
+
+    // Outbox events published for both payments
+    const outboxEvents = await queryOutboxEvents(pool, userId);
+    expect(outboxEvents.length).toBe(2);
+  });
+
+  // =========================================================================
+  // 15. CONCURRENCY: TWO PARALLEL WEBHOOKS FOR SAME CHARGE ID
+  // =========================================================================
+  it('15. Two parallel webhooks with identical charge ID credit balance exactly once', async () => {
+    const userId = await spawnTestUser();
+    const invoiceId = `inv_samecharge_${createUniqueUserId()}`;
+    const chargeId = `ch_same_${createUniqueUserId()}`;
+    const now = Date.now();
+
+    await pool.query(
+      `INSERT INTO te_invoices (id, user_id, stars_amount, currency, payload, nonce, status, created_at)
+       VALUES ($1, $2, 500, 'XTR', $3, $4, 'PENDING', $5)`,
+      [
+        invoiceId,
+        userId,
+        JSON.stringify({ invoiceId, userId, stars: 500 }),
+        `nonce_${invoiceId}`,
+        now,
+      ]
+    );
+
+    const paymentPayload = {
+      currency: 'XTR',
+      total_amount: 500,
+      invoice_payload: JSON.stringify({ invoiceId, userId, stars: 500 }),
+      telegram_payment_charge_id: chargeId,
+    };
+
+    // Execute two simultaneous webhook calls for the exact same charge ID
+    const [res1, res2] = await Promise.all([
+      processSuccessfulStarsPayment(paymentPayload, userId),
+      processSuccessfulStarsPayment(paymentPayload, userId),
+    ]);
+
+    // Both should report success, but exactly one must be a duplicate
+    expect(res1.success).toBe(true);
+    expect(res2.success).toBe(true);
+    const duplicates = [res1.duplicate, res2.duplicate].filter(Boolean);
+    const nonDuplicates = [res1.duplicate, res2.duplicate].filter((d) => !d);
+    expect(duplicates.length).toBe(1);
+    expect(nonDuplicates.length).toBe(1);
+
+    // Balance must be credited only once (500 STARS, not 1000)
+    const bal = await queryBalance(pool, userId, 'STARS');
+    expect(bal!.available_balance.toString()).toBe('500');
+
+    // Only 1 payment row in te_payments
+    const payments = await queryPayments(pool, userId);
+    expect(payments.length).toBe(1);
+
+    // Only 1 audit record
+    const audits = await queryFinancialAudits(pool, userId);
+    expect(audits.length).toBe(1);
+  });
+
+  // =========================================================================
+  // 16. CONCURRENCY: TWO DIFFERENT PAYMENTS FOR EXISTING USER
+  // =========================================================================
+  it('16. Two different parallel payments for an existing user update balance accurately', async () => {
+    const userId = await spawnTestUser();
+    const invoiceId1 = `inv_ex1_${createUniqueUserId()}`;
+    const invoiceId2 = `inv_ex2_${createUniqueUserId()}`;
+    const chargeId1 = `ch_ex1_${createUniqueUserId()}`;
+    const chargeId2 = `ch_ex2_${createUniqueUserId()}`;
+    const now = Date.now();
+
+    // Pre-seed user with 100 STARS
+    await pool.query(
+      `INSERT INTO te_balances (user_id, currency, available_balance, locked_balance, updated_at, created_at)
+       VALUES ($1, 'STARS', 100, 0, $2, $2)`,
+      [userId, now]
+    );
+
+    // Insert two pending invoices: 200 STARS and 300 STARS
+    await pool.query(
+      `INSERT INTO te_invoices (id, user_id, stars_amount, currency, payload, nonce, status, created_at)
+       VALUES 
+         ($1, $2, 200, 'XTR', $3, $4, 'PENDING', $5),
+         ($6, $2, 300, 'XTR', $7, $8, 'PENDING', $5)`,
+      [
+        invoiceId1,
+        userId,
+        JSON.stringify({ invoiceId: invoiceId1, userId, stars: 200 }),
+        `nonce_${invoiceId1}`,
+        now,
+        invoiceId2,
+        JSON.stringify({ invoiceId: invoiceId2, userId, stars: 300 }),
+        `nonce_${invoiceId2}`,
+      ]
+    );
+
+    // Process both concurrently
+    const [r1, r2] = await Promise.all([
+      processSuccessfulStarsPayment(
+        {
+          currency: 'XTR',
+          total_amount: 200,
+          invoice_payload: JSON.stringify({ invoiceId: invoiceId1, userId, stars: 200 }),
+          telegram_payment_charge_id: chargeId1,
+        },
+        userId
+      ),
+      processSuccessfulStarsPayment(
+        {
+          currency: 'XTR',
+          total_amount: 300,
+          invoice_payload: JSON.stringify({ invoiceId: invoiceId2, userId, stars: 300 }),
+          telegram_payment_charge_id: chargeId2,
+        },
+        userId
+      ),
+    ]);
+
+    expect(r1.success).toBe(true);
+    expect(r2.success).toBe(true);
+
+    // Final balance: 100 (initial) + 200 + 300 = 600 STARS
+    const finalBal = await queryBalance(pool, userId, 'STARS');
+    expect(finalBal!.available_balance.toString()).toBe('600');
+
+    const payments = await queryPayments(pool, userId);
+    expect(payments.length).toBe(2);
+  });
+
+  // =========================================================================
+  // 17. REPEAT WEBHOOK AFTER PAID INVOICE
+  // =========================================================================
+  it('17. Repeat webhook after invoice is already PAID returns duplicate and does not change balance', async () => {
+    const userId = await spawnTestUser();
+    const invoiceId = `inv_alreadypaid_${createUniqueUserId()}`;
+    const chargeId = `ch_paid_${createUniqueUserId()}`;
+    const now = Date.now();
+
+    await pool.query(
+      `INSERT INTO te_invoices (id, user_id, stars_amount, currency, payload, nonce, status, created_at)
+       VALUES ($1, $2, 400, 'XTR', $3, $4, 'PENDING', $5)`,
+      [
+        invoiceId,
+        userId,
+        JSON.stringify({ invoiceId, userId, stars: 400 }),
+        `nonce_${invoiceId}`,
+        now,
+      ]
+    );
+
+    const paymentPayload = {
+      currency: 'XTR',
+      total_amount: 400,
+      invoice_payload: JSON.stringify({ invoiceId, userId, stars: 400 }),
+      telegram_payment_charge_id: chargeId,
+    };
+
+    // First payment execution
+    const firstRes = await processSuccessfulStarsPayment(paymentPayload, userId);
+    expect(firstRes.success).toBe(true);
+    expect(firstRes.duplicate).toBe(false);
+
+    const balAfterFirst = await queryBalance(pool, userId, 'STARS');
+    expect(balAfterFirst!.available_balance.toString()).toBe('400');
+
+    // Repeated webhook for the same paid invoice
+    const repeatRes = await processSuccessfulStarsPayment(paymentPayload, userId);
+    expect(repeatRes.success).toBe(true);
+    expect(repeatRes.duplicate).toBe(true);
+
+    const balAfterRepeat = await queryBalance(pool, userId, 'STARS');
+    expect(balAfterRepeat!.available_balance.toString()).toBe('400'); // Unchanged
+
+    const audits = await queryFinancialAudits(pool, userId);
+    expect(audits.length).toBe(1); // Still only 1 audit record
+  });
+
+  // =========================================================================
+  // 18. ROLLBACK ON OUTBOX ERROR
+  // =========================================================================
+  it('18. Mid-transaction failure on outbox insert triggers full rollback without crediting balance', async () => {
+    const userId = await spawnTestUser();
+    const invoiceId = `inv_outboxerr_${createUniqueUserId()}`;
+    const chargeId = `ch_outboxerr_${createUniqueUserId()}`;
+    const now = Date.now();
+
+    await pool.query(
+      `INSERT INTO te_invoices (id, user_id, stars_amount, currency, payload, nonce, status, created_at)
+       VALUES ($1, $2, 1000, 'XTR', $3, $4, 'PENDING', $5)`,
+      [
+        invoiceId,
+        userId,
+        JSON.stringify({ invoiceId, userId, stars: 1000 }),
+        `nonce_${invoiceId}`,
+        now,
+      ]
+    );
+
+    // Mock pool.connect to fail on te_outbox_events insert
+    const realConnect = pool.connect.bind(pool);
+    const spy = vi.spyOn(pool, 'connect').mockImplementation(async () => {
+      const client = await realConnect();
+      const realQuery = client.query.bind(client);
+      const realRelease = client.release.bind(client);
+
+      client.query = (async (sql: any, params: any) => {
+        if (typeof sql === 'string' && sql.includes('INSERT INTO te_outbox_events')) {
+          throw new Error('Simulated outbox insert failure');
+        }
+        return realQuery(sql, params);
+      }) as any;
+
+      client.release = ((destroy?: boolean | Error) => {
+        client.query = realQuery;
+        client.release = realRelease;
+        return realRelease(true);
+      }) as any;
+
+      return client;
+    });
+
+    const result = await processSuccessfulStarsPayment(
+      {
+        currency: 'XTR',
+        total_amount: 1000,
+        invoice_payload: JSON.stringify({ invoiceId, userId, stars: 1000 }),
+        telegram_payment_charge_id: chargeId,
+      },
+      userId
+    );
+
+    spy.mockRestore();
+    vi.spyOn(marketRepository, 'getPgPool').mockReturnValue(pool);
+
+    expect(result.success).toBe(false);
+    expect(result.code).toBe('DB_ERROR');
+
+    // Confirm full rollback
+    const inv = await queryInvoiceById(pool, invoiceId);
+    expect(inv.status).toBe('PENDING');
+
+    const bal = await queryBalance(pool, userId, 'STARS');
+    expect(bal).toBeNull();
+
+    const pmts = await queryPayments(pool, userId);
+    expect(pmts.length).toBe(0);
+
+    const audits = await queryFinancialAudits(pool, userId);
+    expect(audits.length).toBe(0);
   });
 });

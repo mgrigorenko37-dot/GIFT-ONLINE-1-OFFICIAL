@@ -137,14 +137,14 @@ export function createRateLimiter(options: RateLimiterOptions) {
  */
 export const webhookRateLimiter = createRateLimiter({
   windowMs: 60 * 1000,
-  max: 60,
+  max: 300,
   prefix: 'webhook',
   message: 'Rate limit exceeded for Telegram Webhook ingestion.',
 });
 
 export const restApiRateLimiter = createRateLimiter({
   windowMs: 60 * 1000,
-  max: 100,
+  max: 600,
   prefix: 'rest',
   message: 'Rate limit exceeded for REST API endpoints.',
 });

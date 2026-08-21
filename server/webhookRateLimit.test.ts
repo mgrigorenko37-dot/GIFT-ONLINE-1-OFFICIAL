@@ -12,8 +12,8 @@ vi.mock('./rateLimiter', async () => {
       windowMs: 1000, // 1 second for test speed
       max: 2, // Max 2 requests per second
       prefix: 'test-webhook',
-    })
-  }
+    }),
+  };
 });
 
 import { webhookRateLimiter, resetRateLimiters } from './rateLimiter';
@@ -39,7 +39,7 @@ describe('Webhook Rate Limiting', () => {
   it('should block requests over the limit and return 429', async () => {
     await request(app).post('/webhook').send({});
     await request(app).post('/webhook').send({});
-    
+
     const res3 = await request(app).post('/webhook').send({});
     expect(res3.status).toBe(429);
     expect(res3.body.error).toContain('Too many requests');
@@ -48,12 +48,12 @@ describe('Webhook Rate Limiting', () => {
   it('should reset limit after window time', async () => {
     await request(app).post('/webhook').send({});
     await request(app).post('/webhook').send({});
-    
+
     let res3 = await request(app).post('/webhook').send({});
     expect(res3.status).toBe(429);
 
     // Wait for the sliding window to pass
-    await new Promise(r => setTimeout(r, 1100));
+    await new Promise((r) => setTimeout(r, 1100));
 
     res3 = await request(app).post('/webhook').send({});
     expect(res3.status).toBe(200);

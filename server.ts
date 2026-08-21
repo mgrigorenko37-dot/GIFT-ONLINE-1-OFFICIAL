@@ -49,25 +49,19 @@ app.use('/api', (req, res, next) => {
 // Modular Routes Registration
 app.use('/api', financialRoutes);
 app.use('/api', marketRoutes);
+app.use('/api', systemRoutes);
 app.use(systemRoutes);
 
 // Database Bootstrap
-async function setupDatabaseSchema() {
+export async function setupDatabaseSchema() {
   if (!isPostgresConfigured()) {
     console.log('[DB Setup] PostgreSQL not configured. Skipping schema bootstrap.');
     return;
   }
-  try {
-    const pool = getPgPool();
-    await initDbSchema(pool);
-    console.log('[DB Setup] Ensured all TE tables and schemas exist.');
-  } catch (err: any) {
-    console.warn('[DB Setup] Skipped or error:', err?.message);
-  }
+  const pool = getPgPool();
+  await initDbSchema(pool);
+  console.log('[DB Setup] Ensured all TE tables and schemas exist.');
 }
-setupDatabaseSchema().catch((err) => {
-  console.error('[DB Setup] Critical Error:', err);
-});
 
 // Singletons & Accessors
 let tradingEngineInstance: PostgresTradingEngine | null = null;
@@ -154,8 +148,20 @@ process.on('SIGINT', () => {
   stopServerGracefully('SIGINT').then(() => process.exit(0));
 });
 
-async function startServer() {
-  await setupDatabaseSchema();
+export async function startServer() {
+  try {
+    await setupDatabaseSchema();
+  } catch (err: any) {
+    console.error(
+      '[Server Startup Fatal] Database schema initialization failed:',
+      err?.message || err
+    );
+    if (process.env.NODE_ENV === 'test' || process.env.VITEST) {
+      throw err;
+    }
+    process.exit(1);
+  }
+
   initMarketStateRepository();
   initOutboxWorker(getMarketRepository());
 
@@ -189,6 +195,29 @@ async function startServer() {
   }
 
   startGiftSyncWorker();
+
+  // Telegram Bot Process Worker
+  const botToken = process.env.BOT_TOKEN || process.env.TELEGRAM_BOT_TOKEN;
+  if (botToken) {
+    try {
+      const { fork } = await import('child_process');
+      const botScriptPath = path.join(process.cwd(), 'server', 'telegram-bot.js');
+      const botProcess = fork(botScriptPath, [], {
+        env: {
+          ...process.env,
+          BOT_TOKEN: botToken,
+          APP_URL: process.env.APP_URL || `http://localhost:${PORT}`,
+        },
+        stdio: 'inherit',
+      });
+      botProcess.on('error', (err) => console.error('[Telegram Bot Process Error]', err));
+      console.log('[Server Startup] Launched Telegram Bot background process.');
+    } catch (err) {
+      console.error('[Server Startup] Failed to launch Telegram Bot process:', err);
+    }
+  } else {
+    console.log('[Server Startup] TELEGRAM_BOT_TOKEN is not set. Telegram Bot polling disabled.');
+  }
 
   // Vite Development / Production Static Server
   if (

@@ -1,5 +1,19 @@
 name: CI
 
+# GitHub Actions CI Workflow for GX Exchange
+# 
+# Script Mapping Analysis (package.json):
+# - typecheck (npm run typecheck): EXECUTED in CI
+# - lint (npm run lint / npm run eslint): EXECUTED in CI via 'npm run lint'
+# - prettier (npm run prettier): EXECUTED in CI via 'npm run prettier'
+# - check:security (npm run check:security): EXECUTED in CI
+# - test:unit (npm run test:unit): EXECUTED in CI
+# - test:integration (npm run test:integration): EXECUTED in CI (requires PostgreSQL service)
+# - build (npm run build): EXECUTED in CI
+# - test (npm test): Alias for vitest run; separated into test:unit and test:integration for clear step diagnostics
+# - dev / bot / db:migrate / preview / start: Local/runtime/deployment commands, not executed during CI validation
+# - prettier fix: Auto-fix utility for local development, not executed in CI checks
+
 on:
   push:
     branches: [main]
@@ -12,6 +26,7 @@ concurrency:
 
 jobs:
   build-and-test:
+    name: Build, Lint & Test
     runs-on: ubuntu-latest
 
     services:
@@ -29,20 +44,9 @@ jobs:
           --health-timeout 5s
           --health-retries 5
 
-      redis:
-        image: redis:7-alpine
-        ports:
-          - 6379:6379
-        options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-
     env:
       NODE_ENV: test
       DATABASE_URL: postgres://postgres:postgrespassword@localhost:5432/gx_exchange_test
-      REDIS_URL: redis://localhost:6379
       TELEGRAM_BOT_TOKEN: test_bot_token_123456789
       USE_MOCK_GIFTS: 'true'
 
@@ -62,34 +66,26 @@ jobs:
       - name: Typecheck (npm run typecheck)
         run: npm run typecheck
 
-      - name: Build application (npm run build)
-        run: npm run build
-
       - name: Lint check (npm run lint)
         run: npm run lint
+
+      - name: Prettier check (npm run prettier)
+        run: npm run prettier
+
+      - name: Security & Randomness Audit (npm run check:security)
+        run: npm run check:security
+
+      - name: Branding & Repository Integrity Check (npm run check:branding)
+        run: npm run check:branding
 
       - name: Run unit tests (npm run test:unit)
         run: npm run test:unit
 
-      - name: Wait for PostgreSQL readiness
-        run: |
-          for i in {1..30}; do
-            if pg_isready -h localhost -p 5432 -U postgres -d gx_exchange_test; then
-              echo "PostgreSQL is ready!"
-              break
-            fi
-            echo "Waiting for PostgreSQL..."
-            sleep 1
-          done
-
-      - name: Initialize PostgreSQL test schema
-        run: node -e "const { Pool } = require('pg'); const { initDbSchema } = require('./server/dbSchema'); const pool = new Pool({ connectionString: process.env.DATABASE_URL }); initDbSchema(pool).then(() => pool.end()).then(() => console.log('Schema initialized successfully')).catch(e => { console.error('Schema init failed:', e); process.exit(1); })"
-
       - name: Run integration tests (npm run test:integration)
         run: npm run test:integration
 
-      - name: Security & Randomness Audit (npm run check:security)
-        run: npm run check:security
+      - name: Production build (npm run build)
+        run: npm run build
 
       - name: Upload test artifacts on failure
         if: ${{ failure() }}

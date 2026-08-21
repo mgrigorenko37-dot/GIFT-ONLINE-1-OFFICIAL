@@ -1,2 +1,2 @@
 import { test } from 'vitest';
-console.log("HELLO");
+console.log('HELLO');

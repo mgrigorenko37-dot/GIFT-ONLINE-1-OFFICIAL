@@ -118,7 +118,9 @@ router.post('/withdraw', async (req: express.Request, res: express.Response) => 
     let registeredRaw = '';
     try {
       const { Address } = require('@ton/core');
-      registeredRaw = Address.parse(userCheck.rows[0].wallet_address.trim()).toRawString().toLowerCase();
+      registeredRaw = Address.parse(userCheck.rows[0].wallet_address.trim())
+        .toRawString()
+        .toLowerCase();
     } catch {
       registeredRaw = userCheck.rows[0].wallet_address.trim().toLowerCase();
     }
@@ -151,7 +153,9 @@ router.post('/withdraw', async (req: express.Request, res: express.Response) => 
 
     // 3. Move funds from available to locked in ACID transaction (Withdrawal State Machine)
     const withdrawalId = `wd_${crypto.randomUUID()}`;
-    const operationId = idempotencyKey ? String(idempotencyKey) : `op_wd_${withdrawalId.replace(/^wd_/, '')}`;
+    const operationId = idempotencyKey
+      ? String(idempotencyKey)
+      : `op_wd_${withdrawalId.replace(/^wd_/, '')}`;
     const now = Date.now();
 
     await client.query(
@@ -234,11 +238,13 @@ router.post('/withdraw', async (req: express.Request, res: express.Response) => 
     try {
       await client.query('ROLLBACK');
     } catch {}
-    
+
     if (e.code === '23505' && e.constraint === 'te_withdrawals_operation_id_key') {
-      return res.status(409).json({ error: 'Duplicate withdrawal request.', code: 'DUPLICATE_OPERATION' });
+      return res
+        .status(409)
+        .json({ error: 'Duplicate withdrawal request.', code: 'DUPLICATE_OPERATION' });
     }
-    
+
     console.error('[Withdraw] Error in withdrawal creation:', e);
     return res.status(500).json({ error: 'Internal error processing withdrawal request.' });
   } finally {

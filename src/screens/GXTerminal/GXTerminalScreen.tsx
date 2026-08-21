@@ -7,7 +7,6 @@ import {
   CandlestickSeries,
   UTCTimestamp,
 } from 'lightweight-charts';
-import { io } from 'socket.io-client';
 import { useTelegramWebApp } from '../../hooks/useTelegramWebApp';
 import { formatUSDT } from '../../data/gifts';
 import { useGifts } from '../../context/GiftsContext';
@@ -15,7 +14,7 @@ import { useLanguage } from '../../context/LanguageContext';
 import { Timeframe, Currency, buildInstrumentKey, msToSeconds } from '../../types/market';
 import { fetchMarketCandles } from '../../lib/marketApi';
 import { processCandlesForChart } from '../../lib/chartHistory';
-import { useMarketSocket } from '../../hooks/useMarketSocket';
+import { useMarketSocket, getMarketSocket } from '../../hooks/useMarketSocket';
 
 type OpenOrder = {
   id: string;
@@ -49,6 +48,8 @@ const GiftArtwork = ({
   small?: boolean;
   emoji?: string;
 }) => {
+  const [imgError, setImgError] = useState(false);
+
   if (emoji) {
     return (
       <div
@@ -62,15 +63,16 @@ const GiftArtwork = ({
           borderRadius: '12px',
         }}
       >
-        <img
-          src={`https://emojik.vercel.app/s/${emoji}`}
-          alt='emoji'
-          style={{ width: small ? '24px' : '48px', height: small ? '24px' : '48px' }}
-          onError={(e) => {
-            e.currentTarget.style.display = 'none';
-            e.currentTarget.parentElement!.innerHTML = emoji;
-          }}
-        />
+        {!imgError ? (
+          <img
+            src={`https://emojik.vercel.app/s/${emoji}`}
+            alt={emoji}
+            style={{ width: small ? '24px' : '48px', height: small ? '24px' : '48px' }}
+            onError={() => setImgError(true)}
+          />
+        ) : (
+          <span>{emoji}</span>
+        )}
       </div>
     );
   }
@@ -202,23 +204,15 @@ const GXTerminalScreen = () => {
     setOrderBook({ bids: [], asks: [] });
     setRecentTrades([]);
 
-    const socket = io({
-      path: '/socket.io',
-      transports: ['websocket'],
-      auth: {
-        initData: initData || '',
-        userId: user?.id ? String(user.id) : undefined,
-      },
-    });
+    const socket = getMarketSocket();
     socketRef.current = socket;
 
-    socket.on('orderBook', (book: any) => setOrderBook(book));
-    socket.on('recentTrades', (trades: any) => setRecentTrades(trades));
-    socket.on('userOrders', (orders: any) => setUserOrders(orders));
-    socket.on('balance', (bal: number) => setBalance(bal));
-    socket.on('balanceUpdated', (bal: number) => setBalance(bal));
-    socket.on('positions', (pos: any[]) => setPositions(pos));
-    socket.on('orderUpdated', (engineOrder: any) => {
+    const handleOrderBook = (book: any) => setOrderBook(book);
+    const handleRecentTrades = (trades: any) => setRecentTrades(trades);
+    const handleUserOrders = (orders: any) => setUserOrders(orders);
+    const handleBalance = (bal: number) => setBalance(bal);
+    const handlePositions = (pos: any[]) => setPositions(pos);
+    const handleOrderUpdated = (engineOrder: any) => {
       setUserOrders((prev) => {
         const existing = prev.find((o) => o.id === engineOrder.orderId);
         const mapped = {
@@ -250,8 +244,8 @@ const GXTerminalScreen = () => {
         }
         return [mapped, ...prev];
       });
-    });
-    socket.on('positionUpdated', (position: any) => {
+    };
+    const handlePositionUpdated = (position: any) => {
       setPositions((prev) => {
         if (position.status === 'Closed') {
           return prev.filter((p) => p.positionId !== position.positionId);
@@ -264,29 +258,48 @@ const GXTerminalScreen = () => {
         }
         return [...prev, position];
       });
-    });
-    socket.on('tradeHistory', (trades: any[]) => {
-      setTradeHistory(trades.reverse()); // latest first
-    });
-    socket.on('historyUpdated', (trade: any) => {
+    };
+    const handleTradeHistory = (trades: any[]) => setTradeHistory(trades.reverse());
+    const handleHistoryUpdated = (trade: any) => {
       setTradeHistory((prev) => {
         if (prev.some((t) => t.tradeId === trade.tradeId)) return prev;
         return [trade, ...prev];
       });
-    });
-    socket.on('trade', (trade: Trade) => {
-      setRecentTrades((prev) => [trade, ...prev].slice(0, 50));
-    });
+    };
+    const handleTrade = (trade: Trade) => setRecentTrades((prev) => [trade, ...prev].slice(0, 50));
+
+    socket.on('orderBook', handleOrderBook);
+    socket.on('recentTrades', handleRecentTrades);
+    socket.on('userOrders', handleUserOrders);
+    socket.on('balance', handleBalance);
+    socket.on('balanceUpdated', handleBalance);
+    socket.on('positions', handlePositions);
+    socket.on('orderUpdated', handleOrderUpdated);
+    socket.on('positionUpdated', handlePositionUpdated);
+    socket.on('tradeHistory', handleTradeHistory);
+    socket.on('historyUpdated', handleHistoryUpdated);
+    socket.on('trade', handleTrade);
 
     socket.emit('subscribe', activeGift?.id || '');
     socket.emit('market_subscribe', { channel: 'gift_market', instrumentKey: activeInstrumentKey });
 
     return () => {
+      socket.off('orderBook', handleOrderBook);
+      socket.off('recentTrades', handleRecentTrades);
+      socket.off('userOrders', handleUserOrders);
+      socket.off('balance', handleBalance);
+      socket.off('balanceUpdated', handleBalance);
+      socket.off('positions', handlePositions);
+      socket.off('orderUpdated', handleOrderUpdated);
+      socket.off('positionUpdated', handlePositionUpdated);
+      socket.off('tradeHistory', handleTradeHistory);
+      socket.off('historyUpdated', handleHistoryUpdated);
+      socket.off('trade', handleTrade);
+
       socket.emit('market_unsubscribe', {
         channel: 'gift_market',
         instrumentKey: activeInstrumentKey,
       });
-      socket.disconnect();
     };
   }, [activeGift?.id, activeInstrumentKey, initData, user?.id]);
 

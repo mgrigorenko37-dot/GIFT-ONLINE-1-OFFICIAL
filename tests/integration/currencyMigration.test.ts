@@ -1,6 +1,9 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import { Pool } from 'pg';
-import { resolveInstrumentCurrency, migrateBalancesAndCurrencies } from '../../server/currencyMigration';
+import {
+  resolveInstrumentCurrency,
+  migrateBalancesAndCurrencies,
+} from '../../server/currencyMigration';
 import { PostgresTradingEngine } from '../../server/tradingEngine';
 import { initDbSchema } from '../../server/dbSchema';
 import { getPostgresConfig, getDbDiagnostics } from '../../server/dbConfig';

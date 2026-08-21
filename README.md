@@ -1,6 +1,6 @@
 # GX Exchange — Telegram Mini App for Collectible Gift Trading
 
-[![CI](https://github.com/mgrigorenko37-dot/gx-exchange/actions/workflows/ci.yml/badge.svg)](https://github.com/mgrigorenko37-dot/gx-exchange/actions/workflows/ci.yml)
+[![CI](https://github.com/mgrigorenko37-dot/GIFT-ONLINE-1-OFFICIAL/actions/workflows/ci.yml/badge.svg)](https://github.com/mgrigorenko37-dot/GIFT-ONLINE-1-OFFICIAL/actions/workflows/ci.yml)
 
 **GX Exchange** is a high-performance Telegram Mini App and trading terminal designed specifically for fractional and whole collectible Telegram Gifts trading. It combines a modern React 19 frontend, real-time WebSocket matching, PostgreSQL trading persistence, and robust TON blockchain integration.
 
