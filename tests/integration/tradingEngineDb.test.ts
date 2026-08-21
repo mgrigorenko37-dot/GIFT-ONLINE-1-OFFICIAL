@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeEach, afterAll, beforeAll } from 'vitest';
-import { PostgresTradingEngine, Order } from './tradingEngine';
+import { PostgresTradingEngine, Order } from '../../server/tradingEngine';
 import { Pool } from 'pg';
-import { initDbSchema } from './dbSchema';
-import { getPostgresConfig, getDbDiagnostics } from './dbConfig';
+import { initDbSchema } from '../../server/dbSchema';
+import { getPostgresConfig, getDbDiagnostics } from '../../server/dbConfig';
 
 describe('PostgresTradingEngine Real DB Tests', () => {
   let pool: Pool;

@@ -47,7 +47,7 @@ router.post('/user/wallet', async (req: express.Request, res: express.Response) 
       [verifiedUserId, normalizedWallet]
     );
 
-    return res.json({ success: true, userId: verifiedUserId, walletAddress: normalizedWallet });
+    return res.json({ success: true, userId: verifiedUserId, walletAddress: walletAddress.trim() });
   } catch (e) {
     console.error('[UserWallet] Error saving wallet:', e);
     return res.status(500).json({ error: 'Internal error' });
@@ -115,10 +115,15 @@ router.post('/withdraw', async (req: express.Request, res: express.Response) => 
         .json({ error: 'No wallet registered for this user. Please connect wallet first.' });
     }
 
-    if (
-      userCheck.rows[0].wallet_address &&
-      userCheck.rows[0].wallet_address.toLowerCase() !== normalizedAddress.toLowerCase()
-    ) {
+    let registeredRaw = '';
+    try {
+      const { Address } = require('@ton/core');
+      registeredRaw = Address.parse(userCheck.rows[0].wallet_address.trim()).toRawString().toLowerCase();
+    } catch {
+      registeredRaw = userCheck.rows[0].wallet_address.trim().toLowerCase();
+    }
+
+    if (registeredRaw !== normalizedAddress.toLowerCase()) {
       await client.query('ROLLBACK');
       return res
         .status(400)

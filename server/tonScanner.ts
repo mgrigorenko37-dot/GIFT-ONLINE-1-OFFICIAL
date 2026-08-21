@@ -28,9 +28,9 @@ export class TonScanner {
     if (!addr) return null;
     try {
       const { Address } = require('@ton/core');
-      return Address.parse(addr.trim()).toRawString();
+      return Address.parse(addr.trim()).toRawString().toLowerCase();
     } catch {
-      return null;
+      return addr.trim().toLowerCase();
     }
   }
 

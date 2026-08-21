@@ -329,9 +329,6 @@ export async function initDbSchema(pool: Pool) {
       'ALTER TABLE te_ton_deposits ADD COLUMN IF NOT EXISTS lt BIGINT',
       'ALTER TABLE te_ton_deposits ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT \'credited\'',
       'ALTER TABLE te_ton_deposits ADD COLUMN IF NOT EXISTS reason TEXT',
-
-      'GRANT ALL ON ALL TABLES IN SCHEMA public TO PUBLIC',
-      'GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO PUBLIC',
     ];
 
     for (const query of alterQueries) {

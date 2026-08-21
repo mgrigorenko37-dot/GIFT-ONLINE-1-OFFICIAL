@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { PostgresTradingEngine, Order } from '../server/tradingEngine';
+import { PostgresTradingEngine, Order } from './tradingEngine';
 import { Pool } from 'pg';
 
 describe('Negative Balance Execution Rejection', () => {

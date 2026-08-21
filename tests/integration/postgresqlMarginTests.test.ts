@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach, afterAll, beforeAll } from 'vitest';
-import { PostgresTradingEngine, Order, FundingWorker } from '../server/tradingEngine';
+import { PostgresTradingEngine, Order, FundingWorker } from '../../server/tradingEngine';
 import { Pool } from 'pg';
-import { initDbSchema } from '../server/dbSchema';
-import { getPostgresConfig, getDbDiagnostics } from '../server/dbConfig';
+import { initDbSchema } from '../../server/dbSchema';
+import { getPostgresConfig, getDbDiagnostics } from '../../server/dbConfig';
 
 describe('Postgres Margin and Isolation Tests', () => {
   let pool: Pool;

@@ -1,9 +1,9 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import { Pool } from 'pg';
-import { resolveInstrumentCurrency, migrateBalancesAndCurrencies } from './currencyMigration';
-import { PostgresTradingEngine } from './tradingEngine';
-import { initDbSchema } from './dbSchema';
-import { getPostgresConfig, getDbDiagnostics } from './dbConfig';
+import { resolveInstrumentCurrency, migrateBalancesAndCurrencies } from '../../server/currencyMigration';
+import { PostgresTradingEngine } from '../../server/tradingEngine';
+import { initDbSchema } from '../../server/dbSchema';
+import { getPostgresConfig, getDbDiagnostics } from '../../server/dbConfig';
 
 describe('Safe te_balances & Currency Migration', () => {
   let pool: Pool;
